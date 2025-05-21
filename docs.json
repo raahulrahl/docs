@@ -1,23 +1,26 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Pebbling Docs 🐧",
+  "name": "Pebbling Docs ",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#FF4017",
+    "light": "#FF4017",
+    "dark": "#FF4017"
   },
-  "favicon": "/favicon.svg",
-  "feedback": {
-    "thumbsRating": true,
-    "suggestEdit": true
-  },
-  "topbarLinks": [
-    {
-      "name": "Discord",
-      "url": "https://discord.gg/pebbling"
+  "font": {
+    "headings": {
+      "family": "Inter",
+      "weight": 750
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
     }
-  ],
+  },
+  "layout": "topnav",
+  "sidebar": {
+    "items": "undecorated"
+  },
   "topbarCtaButton": {
     "type": "github",
     "url": "https://github.com/pebbling-ai/pebbling"
@@ -33,17 +36,6 @@
               "introduction",
               "quickstart",
               "development"
-            ]
-          },
-          {
-            "group": "Essentials",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/settings",
-              "essentials/navigation",
-              "essentials/reusable-snippets"
             ]
           }
         ]
@@ -125,26 +117,7 @@
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Community",
-          "href": "https://mintlify.com/community",
-          "icon": "slack"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    ]
   },
   "logo": {
     "light": "/logo/light.svg",
@@ -156,12 +129,7 @@
         "label": "Support",
         "href": "mailto:raahul@pebbling.ai"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Hibiscus",
-      "href": "https://pebbling.ai/hibiscus"
-    }
+    ]
   },
   "footer": {
     "socials": {
