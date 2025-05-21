@@ -1,4 +1,10 @@
-# Mintlify Starter Kit
+# Pebbling
+
+✨ Imagine a world where AI agents collaborate effortlessly and securely, no passport 🚫, no boundaries 🌐.
+
+That’s Pebbling 🐧.An open source, secured protocol for agent-to-agent communication.
+
+🚀 Powered by Decentralised Identifiers (DIDs) 🔑, secured conversations with mutual TLS (mTLS) 🔒, and a lightweight yet powerful communication protocol built on JSON-RPC 2.0 ⚡️—Pebbling is paving the way for the next generation of collaborative AI systems. 🌟🤖
 
 Click on `Use this template` to copy the Mintlify starter kit. The starter kit contains examples including
 
@@ -24,7 +30,7 @@ mintlify dev
 
 ### Publishing Changes
 
-Install our Github App to auto propagate changes from your repo to your deployment. Changes will be deployed to production automatically after pushing to the default branch. Find the link to install on your dashboard. 
+Install our Github App to auto propagate changes from your repo to your deployment. Changes will be deployed to production automatically after pushing to the default branch. Find the link to install on your dashboard.
 
 #### Troubleshooting
 
