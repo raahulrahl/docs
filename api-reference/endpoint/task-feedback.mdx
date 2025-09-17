@@ -1,0 +1,67 @@
+---
+title: 'Task Feedback'
+description: 'Submit feedback for a completed task'
+---
+
+## Task Feedback
+
+Submits feedback and rating for a completed task to help improve the AI agent system.
+
+### JSON-RPC Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "task_feedback",
+  "params": {
+    "task_id": "task-uuid-here",
+    "feedback": "The task was completed successfully and met my expectations.",
+    "rating": 5,
+    "metadata": {
+      "completion_time": "fast",
+      "accuracy": "high",
+      "user_satisfaction": "excellent"
+    }
+  },
+  "id": "unique-request-id"
+}
+```
+
+### Parameters
+
+- **task_id** (string, required): The UUID of the completed task
+- **feedback** (string, required): Textual feedback about the task execution
+- **rating** (integer, required): Numeric rating (typically 1-5 scale)
+- **metadata** (object, optional): Additional structured feedback data
+
+### Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "unique-request-id",
+  "result": {
+    "message": "Feedback submitted successfully",
+    "task_id": "task-uuid-here"
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "unique-request-id",
+  "error": {
+    "code": -32001,
+    "message": "Task not found"
+  }
+}
+```
+
+### Notes
+
+- Feedback is stored with a timestamp for analytics
+- Only completed tasks can receive feedback
+- Feedback helps improve the AI agent's performance over time
