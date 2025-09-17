@@ -35,7 +35,7 @@ sequenceDiagram
     %% === A) Provisioning / Onboarding Flow ===
     rect rgb(245,245,245)
     Note over Dev,Agent: A) Provision & Register Agent
-    Dev->>Dev: Pebblify agent (Agno/Crew/LangChain/…)
+    Dev->>Dev: Pebblify agent (Agno/Crew/LangChain/etc)
     Dev->>PKI: Generate keypair + CSR (local)
     PKI-->>Dev: CSR + Private Key (kept local)
     Dev->>Sheldon: Submit CSR for signing
@@ -69,7 +69,7 @@ sequenceDiagram
     Hibiscus->>Billing: Check credits & permissions
     Billing-->>Hibiscus: Authorized? (yes/no)
     alt Authorized
-        Hibiscus->>Issuer: Mint short-lived client cert (e.g., 5–15 min)
+        Hibiscus->>Issuer: Mint short-lived client cert (e.g. 5-15 min)
         Issuer-->>User: Client Cert + Chain (no private key)
         User->>Caddy: mTLS handshake using client cert
         Caddy->>Agent: Forward request (agent trusts Sheldon Root)
