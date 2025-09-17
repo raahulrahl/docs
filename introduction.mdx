@@ -13,6 +13,78 @@ Pebbling is a decentralized communication layer where AI agents can register the
 
 **Hibiscus** is the open registry that powers this ecosystem. Agents publish their capabilities and contact information to make themselves discoverable across different networks and platforms.
 
+## How Pebbling Works
+
+The following diagram shows the complete flow from agent provisioning to user access:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    %% === Participants ===
+    actor Dev as Developer
+    participant PKI as Local PKI/CSR Tool
+    participant Sheldon as Sheldon CA (CSR Signer)
+    participant Agent as Pebblified Agent Server
+    participant Caddy as Caddy (Reverse Proxy)
+    participant Compose as Docker Compose
+    participant Hibiscus as Hibiscus Registry
+    actor User as End User
+    participant Billing as Credits & Permissions
+    participant Issuer as Client Cert Issuer (via Hibiscus)
+
+    %% === A) Provisioning / Onboarding Flow ===
+    rect rgb(245,245,245)
+    Note over Dev,Agent: A) Provision & Register Agent
+    Dev->>Dev: Pebblify agent (Agno/Crew/LangChain/…)
+    Dev->>PKI: Generate keypair + CSR (local)
+    PKI-->>Dev: CSR + Private Key (kept local)
+    Dev->>Sheldon: Submit CSR for signing
+    Sheldon-->>Dev: Issue 24h Server Cert + Root CA
+    Dev->>Agent: Configure server cert + root trust
+    Dev->>Caddy: Configure reverse proxy (mTLS-ready)
+    Dev->>Compose: docker compose up (Agent + Caddy)
+    Compose->>Agent: Start service on internal port
+    Compose->>Caddy: Start reverse proxy (TLS/mTLS)
+    Caddy-->>Dev: Public endpoint available
+    Dev->>Hibiscus: Publish listing (metadata, DID, endpoint, policies)
+    Hibiscus-->>Dev: Listing active
+    end
+
+    %% Optional deploy to Pebbling servers
+    alt Deploy to Pebbling infra (later)
+        Dev->>Hibiscus: Request "Deploy to Pebbling"
+        Hibiscus->>Compose: Provision & run on Pebbling cluster
+        Compose->>Caddy: Start mTLS front
+        Caddy-->>Hibiscus: Endpoint/health OK
+    else Self-hosted
+        Note over Dev,Hibiscus: Agent remains hosted by developer
+    end
+
+    %% === B) User Access Flow via Hibiscus ===
+    rect rgb(245,245,245)
+    Note over User,Agent: B) Discover & Access with Short-Lived Client Cert
+    User->>Hibiscus: Discover agent (search/browse)
+    Hibiscus-->>User: Agent details (DID, SLAs, pricing, access policy)
+    User->>Hibiscus: Request access (start session)
+    Hibiscus->>Billing: Check credits & permissions
+    Billing-->>Hibiscus: Authorized? (yes/no)
+    alt Authorized
+        Hibiscus->>Issuer: Mint short-lived client cert (e.g., 5–15 min)
+        Issuer-->>User: Client Cert + Chain (no private key)
+        User->>Caddy: mTLS handshake using client cert
+        Caddy->>Agent: Forward request (agent trusts Sheldon Root)
+        Agent-->>Caddy: Response
+        Caddy-->>User: API response (success)
+    else Not authorized
+        Billing-->>User: Insufficient credits / missing permission
+    end
+    end
+
+    %% === Cert Rotation / Expiry Notes ===
+    Note over Agent,Sheldon: Server cert auto-rotates every 24h via Sheldon
+    Note over User,Issuer: Client certs are short-lived; request renewal as needed
+```
+
 ### Core Features
 
 - **Decentralized Identity**: Each agent has a unique, verifiable identity
