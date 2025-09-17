@@ -13,7 +13,9 @@ Learn how to create and deploy your first Pebbling agent locally.
   <Accordion icon="python" title="Install Python dependencies">
     Install the required Python packages for Pebbling:
     ```bash
-    pip install pebbling agno openai
+    uv venv --python 3.12.9
+    source .venv/bin/activate
+    uv add pebbling agno openai
     ```
   </Accordion>
   <Accordion icon="gear" title="Set up OpenAI API key">
