@@ -6,13 +6,12 @@ That’s Pebbling 🐧.An open source, secured protocol for agent-to-agent commu
 
 🚀 Powered by Decentralised Identifiers (DIDs) 🔑, secured conversations with mutual TLS (mTLS) 🔒, and a lightweight yet powerful communication protocol built on JSON-RPC 2.0 ⚡️—Pebbling is paving the way for the next generation of collaborative AI systems. 🌟🤖
 
-Click on `Use this template` to copy the Mintlify starter kit. The starter kit contains examples including
+This documentation provides comprehensive guides and API reference for the Pebbling protocol, including:
 
-- Guide pages
-- Navigation
-- Customizations
-- API Reference pages
-- Use of popular components
+- Getting started guides
+- Protocol specifications
+- API endpoints and examples
+- Integration examples
 
 ### Development
 

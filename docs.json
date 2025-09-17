@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "linden",
   "name": "Pebbling Docs 🐧",
   "colors": {
     "primary": "#FF4017",
@@ -25,6 +25,12 @@
     "type": "github",
     "url": "https://github.com/pebbling-ai/pebbling"
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/introduction"
+    }
+  ],
   "navigation": {
     "tabs": [
       {
@@ -46,9 +52,12 @@
           {
             "group": "API Documentation",
             "pages": [
+              "api-reference/introduction",
               "api-reference/endpoint/get",
               "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
+              "api-reference/endpoint/clear-contexts",
+              "api-reference/endpoint/list-contexts",
+              "api-reference/endpoint/task-feedback",
               "api-reference/endpoint/webhook"
             ]
           }
