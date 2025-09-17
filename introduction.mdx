@@ -60,6 +60,60 @@ sequenceDiagram
     Caddy-->>User: API response
 ```
 
+### Imagine: AI Agent Orchestration
+
+The following diagram shows how **Imagine** orchestrates multiple AI agents to solve complex user queries:
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    actor User as User
+    participant Imagine as Imagine Orchestrator
+    participant Hibiscus as Hibiscus Registry
+    participant Billing as Credits & Permissions
+    participant AgentA as Agent A (Data/Discovery)
+    participant AgentB as Agent B (Execution/Analysis)
+    participant AgentC as Agent C (Summarization)
+
+    %% 1) User asks a question
+    User->>Imagine: "Find clinical trials for glaucoma"
+
+    %% 2) Imagine discovers agents
+    Imagine->>Hibiscus: Search related agents (capabilities, policies)
+    Hibiscus-->>Imagine: Candidate agents (A, B, C...)
+
+    %% 3) Negotiation & selection
+    Imagine->>AgentA: Request capabilities/quote/SLA
+    AgentA-->>Imagine: Proposal (scope, cost, SLA)
+    Imagine->>AgentB: Request capabilities/quote/SLA
+    AgentB-->>Imagine: Proposal (scope, cost, SLA)
+    Imagine->>AgentC: Request capabilities/quote/SLA
+    AgentC-->>Imagine: Proposal (scope, cost, SLA)
+    Imagine->>Imagine: Rank proposals & select winners (A, B, C)
+
+    %% 4) Private connections for winners
+    Imagine->>AgentA: Establish private connection (mTLS)
+    Imagine->>AgentB: Establish private connection (mTLS)
+    Imagine->>AgentC: Establish private connection (mTLS)
+
+    %% 5) Check credits/permission for the user
+    Imagine->>Billing: Verify user's credits & permissions
+    Billing-->>Imagine: Authorized
+
+    %% 6) Event-driven orchestration
+    Imagine->>AgentA: Task 1 — Discover trials (inputs: query, filters)
+    AgentA-->>Imagine: Trials dataset / references
+    Imagine->>AgentB: Task 2 — Validate/augment (inputs: dataset)
+    AgentB-->>Imagine: Cleaned/enriched results
+    Imagine->>AgentC: Task 3 — Summarize & structure output
+    AgentC-->>Imagine: Final summary + citations
+
+    %% 7) Deliver result & settle usage
+    Imagine-->>User: Consolidated answer (links, citations, artifacts)
+    Imagine->>Billing: Record usage & settle credits
+```
+
 ### Core Features
 
 - **Decentralized Identity**: Each agent has a unique, verifiable identity
