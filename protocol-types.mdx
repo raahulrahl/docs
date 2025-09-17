@@ -140,6 +140,32 @@ class Context(TypedDict):
 - **Context Continuity**: Preserve conversation state and references
 - **Metadata Tracking**: Store session-level information and preferences
 
+## File Types
+
+### FileWithBytes
+```python
+class FileWithBytes(TypedDict):
+    bytes: Required[str]
+    mimeType: NotRequired[str]
+    name: NotRequired[str]
+    embeddings: NotRequired[list[float]]
+```
+
+### FileWithUri
+```python
+class FileWithUri(FileWithBytes):
+    uri: Required[str]
+```
+
+## Task Status
+
+```python
+class TaskStatus(TypedDict):
+    message: NotRequired[Message]
+    state: Required[TaskState]
+    timestamp: Required[str]  # ISO datetime value
+```
+
 ## Type Aliases
 
 ### Task States
@@ -173,6 +199,22 @@ TrustLevel: TypeAlias = Literal[
     "admin", "analyst", "auditor", "editor", "guest",
     "manager", "operator", "super_admin", "support", "viewer"
 ]
+```
+
+### Error Codes
+```python
+ErrorCode: TypeAlias = Literal["server_error", "invalid_input", "not_found"]
+```
+
+### Negotiation Status
+```python
+NegotiationStatus: TypeAlias = Literal["proposed", "accepted", "rejected", "countered"]
+NegotiationSessionStatus: TypeAlias = Literal["initiated", "ongoing", "completed", "rejected"]
+```
+
+### Identity Provider
+```python
+IdentityProvider: TypeAlias = Literal["keycloak", "azure_ad", "okta", "auth0", "custom"]
 ```
 
 ## Security & Authentication
@@ -303,6 +345,260 @@ class TaskArtifactUpdateEvent(TypedDict):
     task_id: Required[UUID]
 ```
 
+## JSON-RPC Protocol
+
+The protocol uses JSON-RPC 2.0 for communication:
+
+### Base JSON-RPC Types
+```python
+class JSONRPCMessage(TypedDict):
+    jsonrpc: Required[Literal["2.0"]]
+    id: Required[UUID]
+
+class JSONRPCRequest(JSONRPCMessage, Generic[Method, Params]):
+    method: Required[Method]
+    params: Required[Params]
+
+class JSONRPCResponse(JSONRPCMessage, Generic[ResultT, ErrorT]):
+    result: NotRequired[ResultT]
+    error: NotRequired[ErrorT]
+
+class JSONRPCError(TypedDict, Generic[CodeT, MessageT]):
+    code: Required[CodeT]
+    message: Required[MessageT]
+    data: NotRequired[Any]
+```
+
+### Predefined Error Types
+- **JSONParseError** (-32700): Failed to parse JSON payload
+- **InvalidRequestError** (-32600): Request validation failed
+- **MethodNotFoundError** (-32601): Method not available
+- **InvalidParamsError** (-32602): Invalid parameters
+- **InternalError** (-32603): Internal server error
+- **TaskNotFoundError** (-32001): Task ID not found
+- **TaskNotCancelableError** (-32002): Task cannot be canceled
+- **ContextNotFoundError** (-32003): Context ID not found
+- **ContextNotCancelableError** (-32004): Context cannot be canceled
+- **PushNotificationNotSupportedError** (-32005): Push notifications not supported
+- **UnsupportedOperationError** (-32006): Operation not supported
+- **ContentTypeNotSupportedError** (-32007): Content type not supported
+- **InvalidAgentResponseError** (-32008): Agent response invalid
+
+### Request/Response Types
+```python
+# Message operations
+SendMessageRequest = JSONRPCRequest[Literal["message/send"], MessageSendParams]
+StreamMessageRequest = JSONRPCRequest[Literal["message/stream"], MessageSendParams]
+
+# Task operations
+GetTaskRequest = JSONRPCRequest[Literal["tasks/get"], TaskQueryParams]
+CancelTaskRequest = JSONRPCRequest[Literal["tasks/cancel"], TaskIdParams]
+ListTasksRequest = JSONRPCRequest[Literal["tasks/list"], ListTasksParams]
+TaskFeedbackRequest = JSONRPCRequest[Literal["tasks/feedback"], TaskFeedbackParams]
+
+# Context operations
+ListContextsRequest = JSONRPCRequest[Literal["contexts/list"], ListContextsParams]
+ClearContextsRequest = JSONRPCRequest[Literal["contexts/clear"], ContextIdParams]
+
+# Push notification operations
+SetTaskPushNotificationRequest = JSONRPCRequest[Literal["tasks/pushNotification/set"], TaskPushNotificationConfig]
+GetTaskPushNotificationRequest = JSONRPCRequest[Literal["tasks/pushNotification/get"], TaskIdParams]
+```
+
+## Agent System
+
+### Agent Identity
+```python
+class AgentIdentity(TypedDict):
+    did: Required[str]  # Decentralized Identifier
+    did_document: Required[Dict[str, Any]]
+    agentdns_url: NotRequired[str]
+    endpoint: NotRequired[str]
+    public_key: Required[str]
+    csr: Required[str]  # Certificate Signing Request
+```
+
+### Agent Trust
+```python
+class KeycloakRole(TypedDict):
+    role_id: Required[UUID]
+    role_name: Required[str]
+    permissions: Required[List[str]]
+    trust_level: Required[TrustLevel]
+    realm_name: Required[str]
+    external_mappings: Optional[Dict[str, str]]
+    operation_permissions: Optional[Dict[str, TrustLevel]]
+
+class AgentTrust(TypedDict):
+    identity_provider: Required[IdentityProvider]
+    inherited_roles: Required[List[KeycloakRole]]
+    certificate: Optional[str]
+    certificate_fingerprint: Optional[str]
+    creator_id: Union[UUID, int, str]
+    creation_timestamp: int
+    trust_verification_required: bool
+    allowed_operations: Dict[str, TrustLevel]
+```
+
+### Agent Capabilities
+```python
+class AgentSkill(TypedDict):
+    id: Required[UUID]
+    description: NotRequired[str]
+    examples: NotRequired[list[str]]
+    name: Required[str]
+    tags: NotRequired[list[str]]
+
+class AgentExtension(TypedDict):
+    description: NotRequired[str]
+    params: NotRequired[dict[str, Any]]
+    required: Required[bool]
+    uri: Required[str]
+
+class AgentCapabilities(TypedDict):
+    extensions: NotRequired[list[AgentExtension]]
+    push_notifications: NotRequired[bool]
+    state_transition_history: NotRequired[bool]
+    streaming: NotRequired[bool]
+```
+
+### Agent Card
+```python
+class AgentCard(TypedDict):
+    id: Required[UUID]
+    name: Required[str]
+    description: Required[str]
+    url: Required[str]
+    version: Required[str]
+    protocol_version: Required[str]
+    documentation_url: NotRequired[str]
+    
+    identity: Required[AgentIdentity]
+    agent_trust: Required[AgentTrust]
+    
+    capabilities: Required[AgentCapabilities]
+    skills: Required[List[AgentSkill]]
+    
+    kind: Required[Literal["agent", "team", "workflow"]]
+    
+    execution_cost: NotRequired[AgentExecutionCost]
+    
+    num_history_sessions: Required[int]
+    extra_data: Required[Dict[str, Any]]
+    
+    debug_mode: Required[bool]
+    debug_level: Required[Literal[1, 2]]
+    
+    monitoring: Required[bool]
+    telemetry: Required[bool]
+```
+
+## Parameter Types
+
+### Message Configuration
+```python
+class MessageSendConfiguration(TypedDict):
+    accepted_output_modes: Required[list[str]]
+    blocking: NotRequired[bool]
+    history_length: NotRequired[int]
+    push_notification_config: NotRequired[PushNotificationConfig]
+
+class MessageSendParams(TypedDict):
+    configuration: Required[MessageSendConfiguration]
+    message: Required[Message]
+    metadata: NotRequired[dict[str, Any]]
+```
+
+### Task Parameters
+```python
+class TaskSendParams(TypedDict):
+    task_id: Required[UUID]
+    context_id: Required[UUID]
+    message: NotRequired[Message]
+    history_length: NotRequired[int]
+    metadata: NotRequired[dict[str, Any]]
+
+class TaskIdParams(TypedDict):
+    task_id: Required[UUID]
+    metadata: NotRequired[dict[str, Any]]
+
+class TaskQueryParams(TaskIdParams):
+    length: NotRequired[int]
+
+class ListTasksParams(TypedDict):
+    length: NotRequired[int]
+    metadata: NotRequired[dict[str, Any]]
+
+class TaskFeedbackParams(TypedDict):
+    task_id: Required[UUID]
+    feedback: Required[str]
+    rating: NotRequired[int]  # Rating 1-5
+    metadata: NotRequired[dict[str, Any]]
+```
+
+### Context Parameters
+```python
+class ContextIdParams(TypedDict):
+    context_id: Required[UUID]
+    metadata: NotRequired[dict[str, Any]]
+
+class ContextQueryParams(ContextIdParams):
+    history_length: NotRequired[int]
+
+class ListContextsParams(TypedDict):
+    length: NotRequired[int]
+    metadata: NotRequired[dict[str, Any]]
+```
+
+### Push Notification Parameters
+```python
+class TaskPushNotificationConfig(TypedDict):
+    id: Required[UUID]
+    push_notification_config: Required[PushNotificationConfig]
+
+class ListTaskPushNotificationConfigParams(TypedDict):
+    id: Required[UUID]
+    metadata: NotRequired[dict[str, Any]]
+
+class DeleteTaskPushNotificationConfigParams(TypedDict):
+    id: Required[UUID]
+    push_notification_config_id: Required[UUID]
+    metadata: NotRequired[dict[str, Any]]
+```
+
+## Union Types
+
+### Discriminated Unions
+```python
+# All message parts
+Part = Annotated[Union[TextPart, FilePart, DataPart], Field(discriminator="kind")]
+
+# All security schemes
+SecurityScheme = Annotated[
+    Union[HttpSecurityScheme, ApiKeySecurityScheme, OAuth2SecurityScheme, OpenIdConnectSecurityScheme],
+    Discriminator("type")
+]
+
+# All request types
+PebblingRequest = Annotated[
+    Union[
+        SendMessageRequest, StreamMessageRequest, GetTaskRequest, CancelTaskRequest,
+        ListTasksRequest, TaskFeedbackRequest, ListContextsRequest, ClearContextsRequest,
+        SetTaskPushNotificationRequest, GetTaskPushNotificationRequest, ResubscribeTaskRequest,
+        ListTaskPushNotificationConfigRequest, DeleteTaskPushNotificationConfigRequest
+    ],
+    Discriminator("method")
+]
+
+# All response types
+PebblingResponse: TypeAlias = Union[
+    SendMessageResponse, StreamMessageResponse, GetTaskResponse, CancelTaskResponse,
+    ListTasksResponse, TaskFeedbackResponse, ListContextsResponse, ClearContextsResponse,
+    SetTaskPushNotificationResponse, GetTaskPushNotificationResponse, ResubscribeTaskResponse,
+    ListTaskPushNotificationConfigResponse, DeleteTaskPushNotificationConfigResponse
+]
+```
+
 ## Implementation Notes
 
 - All types use **Pydantic** for validation and serialization
@@ -310,5 +606,7 @@ class TaskArtifactUpdateEvent(TypedDict):
 - **UUID** types ensure unique identification across the system
 - **TypedDict** provides static type checking while maintaining runtime flexibility
 - **Discriminated unions** enable type-safe polymorphism for different message/artifact types
+- **Generic types** allow for flexible request/response patterns
+- **TypeAdapters** are provided for runtime validation and serialization
 
 The protocol is designed to be **extensible**, **type-safe**, and **backwards-compatible**, ensuring robust communication between all system components.
