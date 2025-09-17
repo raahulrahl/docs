@@ -1,36 +1,15 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "linden",
+  "theme": "mint",
   "name": "Pebbling Docs 🐧",
-  "colors": {
-    "primary": "#FF4017",
-    "light": "#FF4017",
-    "dark": "#FF4017"
-  },
+  "colors": { "primary": "#FF4017", "light": "#FF4017", "dark": "#FF4017" },
   "font": {
-    "headings": {
-      "family": "Inter",
-      "weight": 750
-    },
-    "body": {
-      "family": "Inter",
-      "weight": 400
-    }
+    "headings": { "family": "Inter", "weight": 750 },
+    "body": { "family": "Inter", "weight": 400 }
   },
   "layout": "topnav",
-  "sidebar": {
-    "items": "undecorated"
-  },
-  "topbarCtaButton": {
-    "type": "github",
-    "url": "https://github.com/pebbling-ai/pebbling"
-  },
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/introduction"
-    }
-  ],
+  "sidebar": { "items": "undecorated" },
+  "topbarCtaButton": { "type": "github", "url": "https://github.com/pebbling-ai/pebbling" },
   "navigation": {
     "tabs": [
       {
@@ -52,12 +31,9 @@
           {
             "group": "API Documentation",
             "pages": [
-              "api-reference/introduction",
               "api-reference/endpoint/get",
               "api-reference/endpoint/create",
-              "api-reference/endpoint/clear-contexts",
-              "api-reference/endpoint/list-contexts",
-              "api-reference/endpoint/task-feedback",
+              "api-reference/endpoint/delete",
               "api-reference/endpoint/webhook"
             ]
           }
@@ -65,18 +41,8 @@
       }
     ]
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:raahul@pebbling.ai"
-      }
-    ]
-  },
+  "logo": { "light": "/logo/light.svg", "dark": "/logo/dark.svg" },
+  "navbar": { "links": [{ "label": "Support", "href": "mailto:raahul@pebbling.ai" }] },
   "footer": {
     "socials": {
       "x": "https://x.com/pebbling",
