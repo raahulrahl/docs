@@ -34,32 +34,7 @@
             "group": "Get Started",
             "pages": [
               "introduction",
-              "quickstart",
-              "development"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Hibiscus",
-        "groups": [
-          {
-            "group": "Get Started",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Essentials",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/settings",
-              "essentials/navigation",
-              "essentials/reusable-snippets"
+              "quickstart"
             ]
           }
         ]
@@ -80,39 +55,6 @@
               "api-reference/endpoint/create",
               "api-reference/endpoint/delete",
               "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Examples",
-        "groups": [
-          {
-            "group": "Examples",
-            "pages": [
-              "examples/overview"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "FAQ",
-        "groups": [
-          {
-            "group": "FAQ",
-            "pages": [
-              "faq/overview"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Changelog",
-        "groups": [
-          {
-            "group": "Changelog",
-            "pages": [
-              "changelog/overview"
             ]
           }
         ]
