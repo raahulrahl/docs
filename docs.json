@@ -71,18 +71,13 @@
         "label": "Support",
         "href": "mailto:raahul@pebbling.ai"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Hibiscus",
-      "href": "https://pebbling.ai/hibiscus"
-    }
+    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/pebbling",
+      "github": "https://github.com/pebbling-ai",
+      "linkedin": "https://linkedin.com/company/pebbling-ai"
     }
   }
 }
