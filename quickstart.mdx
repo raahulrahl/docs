@@ -3,9 +3,58 @@ title: 'Quickstart'
 description: 'Pebblify your agent in under 5 minutes that is secured and ready to work with other agents.'
 ---
 
-## Setup your development
+## Quick Start with Cookiecutter Template
 
-Learn how to create and deploy your first Pebbling agent locally.
+The fastest way to get started is using our cookiecutter template:
+
+<AccordionGroup>
+  <Accordion icon="cookie-bite" title="Use Cookiecutter Template (Recommended)">
+    Create a new Pebbling project using our template:
+    ```bash
+    uv tool run cookiecutter https://github.com/Pebbling-ai/cookiecutter-pebbling
+    ```
+    
+    Follow the interactive prompts:
+    ```
+    [1/4] name (pebble_project): my_agent
+    [2/4] description (): My first Pebbling agent
+    [3/4] pebbling_email (): your-email@example.com
+    [4/4] Select agent_framework
+      1 - none
+      2 - agno
+      3 - crew
+      4 - langchain
+      Choose from [1/2/3/4] (1): 2
+    ```
+    
+    After creation, navigate to your project and set it up:
+    ```bash
+    cd my_agent
+    uv venv --python 3.12.9
+    source .venv/bin/activate
+    uv sync
+    ```
+    
+    Run your agent:
+    ```bash
+    uv run src/pebble_agent.py
+    ```
+    
+    You'll see output like:
+    ```
+    ╭──────────────╮
+    │ Pebbling 🐧  │
+    ╰──────────────╯
+    🚀 Starting Pebbling Server...
+    📡 Server URL: http://localhost:8030
+    🐧 Penguine ID: ba23326c671c4c96a6613c9ef34f169e
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Manual Setup (Alternative)
+
+If you prefer to set up manually, follow these steps:
 
 ### Prerequisites
 
