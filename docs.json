@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Pebbling Docs 🐧",
+  "name": "SapthaMe Docs ",
   "colors": { "primary": "#FF4017", "light": "#FF4017", "dark": "#FF4017" },
   "font": {
     "headings": { "family": "Inter", "weight": 750 },
@@ -9,11 +9,37 @@
   },
   "layout": "topnav",
   "sidebar": { "items": "undecorated" },
-  "topbarCtaButton": { "type": "github", "url": "https://github.com/pebbling-ai/pebbling" },
+  "topbarCtaButton": { "type": "github", "url": "https://github.com/saptha-me/bindu/" },
   "navigation": {
     "tabs": [
       {
-        "tab": "Lets Pebble",
+        "tab": "Bindu",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "protocol-types"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SapthaMe",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "protocol-types"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
         "groups": [
           {
             "group": "Get Started",
@@ -38,11 +64,41 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Changelog",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "protocol-types"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "FAQ",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "protocol-types"
+            ]
+          }
+        ]
       }
     ]
   },
-  "logo": { "light": "/logo/light.svg", "dark": "/logo/dark.svg" },
-  "navbar": { "links": [{ "label": "Support", "href": "mailto:raahul@pebbling.ai" }] },
+  "logo": { "light": "/logo/light.svg", "dark": "/logo/light.svg" },
+  "navbar": { "links": [
+    { "label": "GitHub", "href": "https://github.com/saptha-me/bindu" },
+    { "label": "Support", "href": "mailto:raahul@saptha.me" },
+    { "label": "Discord", "href": "https://discord.gg/3w5zuYUuwt" }
+  ] },
   "footer": {
     "socials": {
       "x": "https://x.com/pebbling",
