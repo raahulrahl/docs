@@ -16,7 +16,7 @@
         "tab": "Bindu",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "Lets Explore",
             "pages": [
               "introduction",
               "quickstart",
@@ -29,7 +29,7 @@
         "tab": "SapthaMe",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "WIP",
             "pages": [
               "introduction",
               "quickstart",
@@ -39,14 +39,23 @@
         ]
       },
       {
+        "tab": "Protocol",
+        "groups": [
+          {
+            "group": "Protocol",
+            "pages": [
+              "protocol"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Examples",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "Examples",
             "pages": [
-              "introduction",
-              "quickstart",
-              "protocol-types"
+              "examples"
             ]
           }
         ]
@@ -69,11 +78,8 @@
         "tab": "Changelog",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "WIP",
             "pages": [
-              "introduction",
-              "quickstart",
-              "protocol-types"
             ]
           }
         ]
@@ -82,11 +88,8 @@
         "tab": "FAQ",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "WIP",
             "pages": [
-              "introduction",
-              "quickstart",
-              "protocol-types"
             ]
           }
         ]
