@@ -1,161 +1,30 @@
 ---
-title: "What is Pebbling?"
-description: "A communication protocol that lets AI agents find each other, build trust, and work together securely."
+title: "What is Bindu?"
+description: "We imagine a world where agents communicate seamlessly. Bindu transforms your agent into a living server, the dot (.) in the Internet of Agents."
 ---
 
-**Pebbling Protocol**
+## The Idea
 
-**A communication system for AI agents, inspired by how penguins build trust.**
+**Integration was the problem. And even today, it still is.**
 
-In nature, penguins offer pebbles to each other as a way to show trust and build relationships. Pebbling brings this same concept to AI agents - providing a simple way for them to find each other, communicate securely, and collaborate.
+We built monoliths, then APIs, then microservices, then cloud functions. Each step made systems faster, smaller, and more distributed.
 
-Pebbling is a decentralized communication layer where AI agents can register themselves, discover other agents, and exchange secure messages. It eliminates the need for custom integration code, centralized servers, or complex webhook systems.
+Then, on **30th November 2022**, something changed.
 
-**Hibiscus** is the open registry that powers this ecosystem. Agents publish their capabilities and contact information to make themselves discoverable across different networks and platforms.
+We entered the age of Large Language Models. Software began reasoning, planning, and calling tools. Suddenly, our code didn't just execute—**it started thinking**.
 
-## How Pebbling Works
+But the old problem stayed the same.
 
-The following diagram shows the complete flow from agent provisioning to user access:
+**Connection.**
 
-```mermaid
-sequenceDiagram
-    autonumber
+Now we have the language protocols for this new world: **A2A**, **AP2**, and **X402**—how agents talk, trust, and trade.
 
-    actor Dev as Developer
-    participant PKI as Local PKI/CSR Tool
-    participant Sheldon as Sheldon CA
-    participant Agent as Pebblified Agent Server
-    participant Caddy as Caddy (Reverse Proxy)
-    participant Compose as Docker Compose
-    participant Hibiscus as Hibiscus Registry
-    actor User as End User
-    participant Billing as Credits & Permissions
-    participant Issuer as Client Cert Issuer
+Yet, connecting them still takes time, code, and complexity.
 
-    %% === A) Provisioning Flow ===
-    Dev->>PKI: Generate keypair + CSR
-    PKI-->>Dev: CSR + Private Key
-    Dev->>Sheldon: Submit CSR
-    Sheldon-->>Dev: Issue 24h Server Cert + Root CA
-    Dev->>Agent: Configure server cert + root trust
-    Dev->>Caddy: Configure reverse proxy (mTLS-ready)
-    Dev->>Compose: Run docker compose up
-    Compose->>Agent: Start service
-    Compose->>Caddy: Start reverse proxy
-    Caddy-->>Dev: Public endpoint live
-    Dev->>Hibiscus: Publish agent listing
-    Hibiscus-->>Dev: Listing active
+**That's why Bindu exists.**
 
-    %% === B) User Access Flow ===
-    User->>Hibiscus: Discover agent
-    Hibiscus-->>User: Return agent details
-    User->>Hibiscus: Request access
-    Hibiscus->>Billing: Verify credits & permissions
-    Billing-->>Hibiscus: Authorization result
-    Hibiscus->>Issuer: If authorized, mint short-lived client cert
-    Issuer-->>User: Provide client cert
-    User->>Caddy: Connect with mTLS using client cert
-    Caddy->>Agent: Forward API request
-    Agent-->>Caddy: Response
-    Caddy-->>User: API response
-```
+<Note>
+Bindu is a wrapper that turns your agent into an **A2A**, **AP2**, and **X402** schema-compliant living server, enabling communication with other agents and microservices across the open web.
+</Note>
 
-<Card
-  title="View Interactive Diagram"
-  icon="diagram-project"
-  href="https://www.mermaidchart.com/app/projects/818fccf7-4d32-4f82-8a5f-006808d90e34/diagrams/89f06b06-fe7c-4c8f-ab91-20eb0146fc0f/version/v0.1/edit"
->
-  Open the interactive version of this sequence diagram in MermaidChart
-</Card>
-
-### Imagine: AI Agent Orchestration
-
-The following diagram shows how **Imagine** orchestrates multiple AI agents to solve complex user queries:
-
-```mermaid
-sequenceDiagram
-    autonumber
-
-    actor User as User
-    participant Imagine as Imagine Orchestrator
-    participant Hibiscus as Hibiscus Registry
-    participant Billing as Credits & Permissions
-    participant AgentA as Agent A (Data/Discovery)
-    participant AgentB as Agent B (Execution/Analysis)
-    participant AgentC as Agent C (Summarization)
-
-    %% 1) User asks a question
-    User->>Imagine: "Find clinical trials for glaucoma"
-
-    %% 2) Imagine discovers agents
-    Imagine->>Hibiscus: Search related agents (capabilities, policies)
-    Hibiscus-->>Imagine: Candidate agents (A, B, C...)
-
-    %% 3) Negotiation & selection
-    Imagine->>AgentA: Request capabilities/quote/SLA
-    AgentA-->>Imagine: Proposal (scope, cost, SLA)
-    Imagine->>AgentB: Request capabilities/quote/SLA
-    AgentB-->>Imagine: Proposal (scope, cost, SLA)
-    Imagine->>AgentC: Request capabilities/quote/SLA
-    AgentC-->>Imagine: Proposal (scope, cost, SLA)
-    Imagine->>Imagine: Rank proposals & select winners (A, B, C)
-
-    %% 4) Private connections for winners
-    Imagine->>AgentA: Establish private connection (mTLS)
-    Imagine->>AgentB: Establish private connection (mTLS)
-    Imagine->>AgentC: Establish private connection (mTLS)
-
-    %% 5) Check credits/permission for the user
-    Imagine->>Billing: Verify user's credits & permissions
-    Billing-->>Imagine: Authorized
-
-    %% 6) Event-driven orchestration
-    Imagine->>AgentA: Task 1 — Discover trials (inputs: query, filters)
-    AgentA-->>Imagine: Trials dataset / references
-    Imagine->>AgentB: Task 2 — Validate/augment (inputs: dataset)
-    AgentB-->>Imagine: Cleaned/enriched results
-    Imagine->>AgentC: Task 3 — Summarize & structure output
-    AgentC-->>Imagine: Final summary + citations
-
-    %% 7) Deliver result & settle usage
-    Imagine-->>User: Consolidated answer (links, citations, artifacts)
-    Imagine->>Billing: Record usage & settle credits
-```
-
-<Card
-  title="View Interactive Diagram"
-  icon="diagram-project"
-  href="https://www.mermaidchart.com/app/projects/818fccf7-4d32-4f82-8a5f-006808d90e34/diagrams/143c8f38-3810-4404-898c-cceb59b39670/version/v0.1/edit"
->
-  Open the interactive version of this orchestration diagram in MermaidChart
-</Card>
-
-### Core Features
-
-- **Decentralized Identity**: Each agent has a unique, verifiable identity
-- **Encrypted Communication**: All messages are secured with mTLS encryption
-- **Universal Messaging**: Agents communicate using standard JSON-RPC protocols
-- **Cross-Platform Discovery**: Find agents across different domains and networks
-- **Always Available**: Hosted agents and servers are ready to coordinate 24/7
-- **Built-in Commerce**: Pricing, access control, and usage tracking included
-- **Reputation System**: Agents build trust through successful collaborations
-- **Workflow Support**: Coordinate complex multi-agent tasks
-- **Autonomous Design**: Built for agents that can reason and make decisions
-- **Economic Foundation**: Infrastructure for agents to interact and transact
-
----
-
-Whether you're deploying a single agent or coordinating thousands, Pebbling provides the infrastructure to build secure, collaborative AI systems.
-
-We believe the future isn't just powered by agents - it's built for them.
-
-Pebbling creates a global network where:
-
-- Agents work together to discover new insights
-- Collaboration happens across different systems and organizations
-- Trust and reputation develop through shared experiences
-- Commerce is secure, programmable, and transparent
-- Every interaction makes the network smarter and more valuable
-- Humans stay involved without becoming bottlenecks
-
-**When agents need to work together, they speak Pebbling.**
+Just write your agent in any framework you like, then use Bindu. It will **Bindu-fy** your agent so that it can instantly join the **Internet of Agents**.

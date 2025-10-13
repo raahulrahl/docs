@@ -1,0 +1,387 @@
+---
+title: "Examples"
+description: "Example implementations and use cases for Bindu agents"
+---
+
+# Examples
+
+Explore practical examples of Bindu agents and learn how to implement common patterns and use cases.
+
+## Getting Started Examples
+
+### Simple Chat Agent
+
+A basic conversational agent:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from bindu.penguin.pebblify import pebblify
+
+@pebblify(
+    author="Your Name",
+    name="Chat Agent",
+    description="A simple conversational agent",
+    version="1.0.0"
+)
+def chat_agent(messages: list[str]) -> str:
+    agent = Agent(
+        instructions="You are a helpful and friendly assistant",
+        model=OpenAIChat(id="gpt-4o")
+    )
+    
+    result = agent.run(input=messages)
+    return result.to_dict()['content']
+```
+
+### Agent with Tools
+
+An agent that can use external tools:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.tools.duckduckgo import DuckDuckGoTools
+from bindu.penguin.pebblify import pebblify
+
+@pebblify(
+    author="Your Name",
+    name="Research Agent",
+    description="An agent that can search the web",
+    version="1.0.0"
+)
+def research_agent(messages: list[str]) -> str:
+    agent = Agent(
+        instructions="You are a research assistant. Use web search to find accurate information.",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[DuckDuckGoTools()]
+    )
+    
+    result = agent.run(input=messages)
+    return result.to_dict()['content']
+```
+
+## Multi-Agent Examples
+
+### Research Team
+
+Multiple agents working together:
+
+```python
+from bindu.penguin.pebblify import pebblify
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+
+# Data Collection Agent
+@pebblify(
+    name="Data Collector",
+    description="Collects information from various sources"
+)
+def data_collector(query: str) -> dict:
+    agent = Agent(
+        instructions="Find and collect relevant information",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[web_search, database_query]
+    )
+    return agent.run(input=query).to_dict()
+
+# Analysis Agent
+@pebblify(
+    name="Analyst",
+    description="Analyzes collected data"
+)
+def analyst(data: dict) -> dict:
+    agent = Agent(
+        instructions="Analyze the data and extract insights",
+        model=OpenAIChat(id="gpt-4o")
+    )
+    return agent.run(input=data).to_dict()
+
+# Report Generator
+@pebblify(
+    name="Report Generator",
+    description="Creates formatted reports"
+)
+def report_generator(analysis: dict) -> str:
+    agent = Agent(
+        instructions="Create a well-structured report",
+        model=OpenAIChat(id="gpt-4o")
+    )
+    return agent.run(input=analysis).to_dict()['content']
+```
+
+## Use Case Examples
+
+### Customer Support Agent
+
+```python
+@pebblify(
+    name="Support Agent",
+    description="Handles customer inquiries",
+    skills=[
+        {
+            "name": "ticket-resolution",
+            "description": "Resolve customer support tickets",
+            "tags": ["support", "customer-service"]
+        }
+    ]
+)
+def support_agent(messages: list[str]) -> str:
+    agent = Agent(
+        instructions="""You are a customer support agent. 
+        Be helpful, empathetic, and professional.
+        If you cannot resolve an issue, escalate to a human agent.""",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[knowledge_base, ticket_system, escalation_tool]
+    )
+    
+    result = agent.run(input=messages)
+    return result.to_dict()['content']
+```
+
+### Code Review Agent
+
+```python
+@pebblify(
+    name="Code Reviewer",
+    description="Reviews code for quality and best practices"
+)
+def code_reviewer(code: str, language: str) -> dict:
+    agent = Agent(
+        instructions=f"""You are an expert code reviewer for {language}.
+        Review the code for:
+        - Bugs and errors
+        - Performance issues
+        - Security vulnerabilities
+        - Best practices
+        - Code style
+        
+        Provide specific, actionable feedback.""",
+        model=OpenAIChat(id="gpt-4o")
+    )
+    
+    result = agent.run(input=code)
+    return {
+        "review": result.to_dict()['content'],
+        "language": language,
+        "timestamp": datetime.now().isoformat()
+    }
+```
+
+### Data Analysis Agent
+
+```python
+@pebblify(
+    name="Data Analyst",
+    description="Analyzes datasets and generates insights"
+)
+def data_analyst(dataset: dict) -> dict:
+    agent = Agent(
+        instructions="""You are a data analyst.
+        Analyze the provided dataset and:
+        - Identify patterns and trends
+        - Calculate key statistics
+        - Generate visualizations
+        - Provide actionable insights""",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[pandas_tool, visualization_tool, statistics_tool]
+    )
+    
+    result = agent.run(input=dataset)
+    return result.to_dict()
+```
+
+## Advanced Patterns
+
+### Streaming Agent
+
+Agent that streams responses:
+
+```python
+from typing import AsyncGenerator
+
+@pebblify(
+    name="Streaming Agent",
+    description="Streams responses in real-time"
+)
+async def streaming_agent(messages: list[str]) -> AsyncGenerator[str, None]:
+    agent = Agent(
+        instructions="Provide detailed responses",
+        model=OpenAIChat(id="gpt-4o"),
+        stream=True
+    )
+    
+    async for chunk in agent.run(input=messages, stream=True):
+        yield chunk.to_dict()['content']
+```
+
+### Agent with Memory
+
+Agent that remembers past conversations:
+
+```python
+from agno.memory import Memory
+from agno.storage.postgres import PostgresStorage
+
+@pebblify(
+    name="Memory Agent",
+    description="Remembers past conversations",
+    num_history_sessions=10
+)
+def memory_agent(messages: list[str], user_id: str) -> str:
+    storage = PostgresStorage(
+        connection_string="postgresql://user:pass@localhost:5432/agents"
+    )
+    
+    memory = Memory(
+        storage=storage,
+        user_id=user_id
+    )
+    
+    agent = Agent(
+        instructions="You remember past conversations with users",
+        model=OpenAIChat(id="gpt-4o"),
+        memory=memory
+    )
+    
+    result = agent.run(input=messages)
+    return result.to_dict()['content']
+```
+
+### Agent with Custom Tools
+
+Create custom tools for your agent:
+
+```python
+from agno.tools import tool
+
+@tool
+def calculate_roi(investment: float, return_amount: float) -> float:
+    """Calculate return on investment percentage"""
+    return ((return_amount - investment) / investment) * 100
+
+@tool
+def fetch_stock_price(symbol: str) -> dict:
+    """Fetch current stock price"""
+    # Implementation here
+    return {"symbol": symbol, "price": 150.25, "currency": "USD"}
+
+@pebblify(
+    name="Financial Advisor",
+    description="Provides financial advice and calculations"
+)
+def financial_advisor(messages: list[str]) -> str:
+    agent = Agent(
+        instructions="You are a financial advisor. Use tools to provide accurate calculations.",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[calculate_roi, fetch_stock_price]
+    )
+    
+    result = agent.run(input=messages)
+    return result.to_dict()['content']
+```
+
+## Testing Examples
+
+### Unit Testing
+
+```python
+import pytest
+from your_agent import chat_agent
+
+def test_chat_agent_response():
+    response = chat_agent(["Hello, how are you?"])
+    assert response is not None
+    assert len(response) > 0
+
+def test_chat_agent_context():
+    messages = [
+        "My name is Alice",
+        "What is my name?"
+    ]
+    response = chat_agent(messages)
+    assert "Alice" in response
+```
+
+### Integration Testing
+
+```python
+import requests
+import uuid
+
+def test_agent_api():
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "message/send",
+        "params": {
+            "message": {
+                "role": "user",
+                "parts": [{"kind": "text", "text": "Hello"}],
+                "kind": "message",
+                "messageId": str(uuid.uuid4()),
+                "contextId": str(uuid.uuid4()),
+                "taskId": str(uuid.uuid4())
+            },
+            "configuration": {
+                "acceptedOutputModes": ["application/json"]
+            }
+        },
+        "id": str(uuid.uuid4())
+    }
+    
+    response = requests.post("http://localhost:8030/", json=payload)
+    assert response.status_code == 200
+    assert "result" in response.json()
+```
+
+## Deployment Examples
+
+### Docker Deployment
+
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 8030
+
+CMD ["python", "agent.py"]
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    ports:
+      - "8030:8030"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first agent
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore the API
+  </Card>
+  <Card title="Protocol" icon="network-wired" href="/protocol">
+    Learn the protocol
+  </Card>
+  <Card title="Community" icon="users" href="/introduction/community">
+    Join the community
+  </Card>
+</CardGroup>

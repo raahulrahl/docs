@@ -1,109 +1,129 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "SapthaMe Docs ",
-  "colors": { "primary": "#FF4017", "light": "#FF4017", "dark": "#FF4017" },
-  "font": {
-    "headings": { "family": "Inter", "weight": 750 },
-    "body": { "family": "Inter", "weight": 400 }
+  "name": "Bindu",
+  "banner": {
+    "content": "You are viewing v1 docs. For the latest documentation, visit [docs.saptha.me](https://docs.saptha.me)",
+    "dismissible": true
   },
-  "layout": "topnav",
-  "sidebar": { "items": "undecorated" },
-  "topbarCtaButton": { "type": "github", "url": "https://github.com/saptha-me/bindu/" },
+  "colors": {
+    "primary": "#FF4017",
+    "light": "#FF4017",
+    "dark": "#FF4017"
+  },
+  "favicon": "/favicon.png",
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Bindu",
+        "tab": "User Guide",
         "groups": [
           {
-            "group": "Lets Explore",
+            "group": "Introduction",
             "pages": [
               "introduction",
-              "quickstart",
-              "protocol-types"
+              "introduction/agents",
+              "introduction/multi-agent-systems",
+              "introduction/playground",
+              "introduction/monitoring",
+              "introduction/community"
             ]
           }
+        ]
+      },
+      {
+        "tab": "Bindu",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "protocol-types"
         ]
       },
       {
         "tab": "SapthaMe",
-        "groups": [
-          {
-            "group": "WIP",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "protocol-types"
-            ]
-          }
+        "pages": [
+          "introduction",
+          "quickstart",
+          "protocol-types"
         ]
       },
       {
         "tab": "Protocol",
-        "groups": [
-          {
-            "group": "Protocol",
-            "pages": [
-              "protocol"
-            ]
-          }
+        "pages": [
+          "protocol"
         ]
       },
       {
         "tab": "Examples",
-        "groups": [
-          {
-            "group": "Examples",
-            "pages": [
-              "examples"
-            ]
-          }
+        "pages": [
+          "examples"
         ]
       },
       {
         "tab": "API Reference",
-        "groups": [
-          {
-            "group": "API Documentation",
-            "pages": [
-              "api-reference"
-            ]
-          }
+        "pages": [
+          "api-reference"
         ]
       },
       {
         "tab": "Changelog",
-        "groups": [
-          {
-            "group": "WIP",
-            "pages": [
-            ]
-          }
+        "pages": [
+          "changelog"
         ]
       },
       {
         "tab": "FAQ",
-        "groups": [
-          {
-            "group": "WIP",
-            "pages": [
-            ]
-          }
+        "pages": [
+          "faq"
         ]
       }
     ]
   },
-  "logo": { "light": "/logo/light.svg", "dark": "/logo/light.svg" },
-  "navbar": { "links": [
-    { "label": "GitHub", "href": "https://github.com/saptha-me/bindu" },
-    { "label": "Support", "href": "mailto:raahul@saptha.me" },
-    { "label": "Discord", "href": "https://discord.gg/3w5zuYUuwt" }
-  ] },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#111113"
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Discord",
+        "href": "https://discord.gg/3w5zuYUuwt"
+      },
+      {
+        "label": "Support",
+        "href": "mailto:raahul@saptha.me"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/saptha-me/bindu"
+    }
+  },
   "footer": {
     "socials": {
       "x": "https://x.com/pebbling",
-      "github": "https://github.com/pebbling-ai",
-      "linkedin": "https://linkedin.com/company/pebbling-ai"
+      "github": "https://github.com/saptha-me/bindu",
+      "discord": "https://discord.gg/3w5zuYUuwt",
+      "linkedin": "https://linkedin.com/company/pebbling-ai",
+      "website": "https://saptha.me"
+    }
+  },
+  "fonts": {
+    "heading": {
+      "family": "Inter",
+      "weight": 750
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
     }
   }
 }
