@@ -30,6 +30,13 @@
             ]
           },
           {
+            "group": "Create Bindu Agent",
+            "pages": [
+              "bindu/create-bindu-agent/overview",
+              "bindu/create-bindu-agent/configuration"
+            ]
+          },
+          {
             "group": "Protocol",
             "pages": [
               "protocol/overview",

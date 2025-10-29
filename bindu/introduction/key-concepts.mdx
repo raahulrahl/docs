@@ -1,0 +1,102 @@
+---
+title: 'Key Concepts'
+description: 'Core features and capabilities that make Bindu production-ready'
+---
+
+# Built for the Internet of Agents
+
+Bindu is engineered for real-world **Agent Engineering**, helping engineers transform any agent into a production-ready server that speaks universal protocols. Here are the key features that make Bindu stand out:
+
+### Protocol-Native Architecture
+
+* **Universal Protocol Support**: Native A2A, AP2, and X402 compliance out of the box. Your agent speaks the language of the Internet of Agents from day one.
+
+* **Framework Agnostic**: Works seamlessly with Agno, LangChain, CrewAI, LlamaIndex, FastAgent, and any Python-based agent framework.
+
+* **DID Authentication**: Built-in Decentralized Identity (DID) support for secure, verifiable agent-to-agent communication.
+
+* **Type Safe**: Enforce structured I/O through schema validation for predictable, composable agent behavior.
+
+### Infrastructure & Deployment
+
+* **Zero-Config Server**: Transform any agent into a live FastAPI server with a single `bindufy()` call—no infrastructure setup required.
+
+* **Production-Ready from Day 1**: Pre-configured with error handling, retry logic, health monitoring, and automatic failover.
+
+* **Deploy Anywhere**: From localhost to cloud in minutes. Your agent becomes a discoverable node in the distributed agent network.
+
+* **Containerization Ready**: Built-in Docker and Podman support for seamless deployment across any environment.
+
+### Observability & Monitoring
+
+* **Built-in Tracing**: Native integration with Phoenix, Langfuse, and Jaeger for complete visibility into agent behavior.
+
+* **Real-time Monitoring**: Track agent health, performance metrics, and execution flows in production.
+
+* **Error Tracking**: Comprehensive error handling and logging for debugging distributed agent systems.
+
+* **Test Coverage**: Thoroughly tested with 70%+ coverage to ensure reliability in production.
+
+### Storage & Scheduling
+
+* **Flexible Storage Options**: Choose between in-memory, PostgreSQL, or Redis for context and conversation history.
+
+* **Distributed Scheduling**: Redis-based scheduler for coordinating tasks across multiple agent instances.
+
+* **Persistent Context**: Maintain conversation state and shared context across distributed agents.
+
+* **Session Management**: Built-in support for multi-session workflows and long-running agent tasks.
+
+### Payment & Commerce
+
+* **X402 Payment Rails**: Native support for agent-to-agent payments and micropayment infrastructure.
+
+* **AP2 Commerce Protocol**: Enable your agents to participate in agentic commerce ecosystems.
+
+* **Facilitator Integration**: Connect to payment facilitators for real-world transaction processing.
+
+### Security & Authentication
+
+* **Multi-Provider Auth**: Support for AuthKit, GitHub, AWS Cognito, Google, and Azure (Microsoft Entra).
+
+* **Secure by Design**: Built-in authentication, authorization, and secure communication between agents.
+
+* **Private by Default**: Your agent runs in your infrastructure—no external data sharing or vendor lock-in.
+
+### Developer Experience
+
+* **2-Minute Setup**: From zero to production-ready agent with `create-bindu-agent` cookiecutter template.
+
+* **Best Practices Built-in**: Pre-configured with ruff, mypy, pytest, pre-commit hooks, and code quality tools.
+
+* **CI/CD Ready**: GitHub Actions workflows for testing, coverage, and automated PyPI publishing.
+
+* **Comprehensive Documentation**: MkDocs-powered documentation with examples and API references.
+
+### Agent Orchestration (Saptha Integration)
+
+* **Intelligent Task Routing**: Analyze tasks and route to agents based on capabilities and availability.
+
+* **Flexible Execution Modes**: Sequential, parallel, or collaborative execution patterns for complex workflows.
+
+* **Load Balancing**: Distribute work across multiple agent instances for scalability.
+
+* **Agent Capabilities**: Pre-defined capability types including web search, knowledge base, data analysis, code generation, text/image processing, and reasoning.
+
+### Tooling & Ecosystem
+
+* **Modern Python Stack**: Built on uv for fast, reliable dependency management.
+
+* **113+ Built-in Toolkits**: Access thousands of tools across domains—data, code, web, and enterprise APIs (via supported frameworks).
+
+* **MCP Integration**: First-class support for Model Context Protocol to connect agents with external systems.
+
+* **Community-Driven**: Open-source with active Discord community and regular workshops.
+
+---
+
+Every part of Bindu is built for real-world deployment, where developer experience meets production performance. From a single agent to a distributed swarm, Bindu handles the complexity so you can focus on what your agents do best.
+
+<Card title="Start Building" icon="code" href="/bindu/introduction/create-agent">
+  Create your first Bindu agent →
+</Card>

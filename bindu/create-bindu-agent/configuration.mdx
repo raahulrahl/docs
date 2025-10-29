@@ -1,0 +1,333 @@
+---
+title: 'Configuration Reference'
+description: 'Complete reference for all create-bindu-agent configuration options'
+---
+
+# Configuration Reference
+
+Complete guide to all configuration options available when creating a Bindu agent with cookiecutter.
+
+## Basic Information
+
+<ParamField path="author" type="string" default="Your Name">
+  Your name or organization name
+</ParamField>
+
+<ParamField path="email" type="string" default="your.email@example.com">
+  Your contact email address
+</ParamField>
+
+<ParamField path="author_github_handle" type="string" default="your_github_handle">
+  Your GitHub username
+</ParamField>
+
+<ParamField path="project_name" type="string" default="my-bindu-agent">
+  The name of your agent project (will be used for directory name)
+</ParamField>
+
+<ParamField path="project_description" type="string" default="A Bindu AI agent for intelligent task handling">
+  Brief description of what your agent does
+</ParamField>
+
+<ParamField path="agent_version" type="string" default="1.0.0">
+  Initial version number for your agent
+</ParamField>
+
+<ParamField path="bindu_version" type="string" default="0.3.19">
+  Version of Bindu to use
+</ParamField>
+
+## Agent Framework
+
+<ParamField path="agent_framework" type="select" default="agno">
+  Choose your preferred agent framework:
+  - **agno** - Lightweight and fast
+  - **langchain** - Full-featured with extensive integrations
+  - **crew** - Multi-agent orchestration
+  - **fastagent** - High-performance agents
+  - **openai agent** - OpenAI's native agent framework
+  - **google adk agent** - Google's Agent Development Kit
+  - **custom** - Bring your own framework
+</ParamField>
+
+## Skills & Capabilities
+
+<ParamField path="include_example_skills" type="select" default="y">
+  Include example skills to get started quickly
+  - **y** - Include example skills
+  - **n** - Start with a blank slate
+</ParamField>
+
+<ParamField path="skill_names" type="string" default="question-answering,pdf-processing">
+  Comma-separated list of skill names (e.g., `question-answering,pdf-processing,web-search`)
+</ParamField>
+
+## Authentication & Security
+
+<ParamField path="enable_auth" type="select" default="y">
+  Enable authentication for your agent
+  - **y** - Enable authentication
+  - **n** - No authentication (not recommended for production)
+</ParamField>
+
+<ParamField path="auth_provider" type="select" default="auth0">
+  Choose authentication provider:
+  - **auth0** - Auth0 authentication
+  - **cognito** (not implemented yet)
+  - **azure ad** (not implemented yet)
+  - **google** (not implemented yet)
+  - **custom** (not implemented yet)
+  - **none** - No authentication
+</ParamField>
+
+## Identity & Cryptography
+
+<ParamField path="enable_did" type="select" default="y">
+  Enable Decentralized Identifier (DID) for your agent
+  - **y** - Enable DID
+  - **n** - Disable DID
+</ParamField>
+
+<ParamField path="enable_pki" type="select" default="y">
+  Enable Public Key Infrastructure
+  - **y** - Enable PKI
+  - **n** - Disable PKI
+</ParamField>
+
+<ParamField path="recreate_keys" type="select" default="y">
+  Recreate cryptographic keys on each deployment
+  - **y** - Recreate keys
+  - **n** - Reuse existing keys
+</ParamField>
+
+<ParamField path="verification_key_type" type="select" default="rsa">
+  Type of verification key:
+  - **rsa** - RSA encryption
+  - **ecdsa** - Elliptic Curve Digital Signature Algorithm
+</ParamField>
+
+## Agent Behavior
+
+<ParamField path="enable_system_message" type="select" default="y">
+  Enable system message for agent instructions
+  - **y** - Enable system message
+  - **n** - Disable system message
+</ParamField>
+
+<ParamField path="enable_context_based_history" type="select" default="n">
+  Enable context-based conversation history
+  - **y** - Enable context-based history
+  - **n** - Use simple history
+</ParamField>
+
+## Observability & Monitoring
+
+<ParamField path="enable_telemetry" type="select" default="y">
+  Enable telemetry for monitoring
+  - **y** - Enable telemetry
+  - **n** - Disable telemetry
+</ParamField>
+
+<ParamField path="enable_llm_observability" type="select" default="y">
+  Enable LLM-specific observability
+  - **y** - Enable LLM observability
+  - **n** - Disable LLM observability
+</ParamField>
+
+<ParamField path="llm_observability_provider" type="select" default="phoenix">
+  Choose LLM observability provider:
+  - **phoenix** - Arize Phoenix
+  - **langfuse** - Langfuse
+</ParamField>
+
+<ParamField path="use_jaeger" type="select" default="y">
+  Enable Jaeger for distributed tracing
+  - **y** - Enable Jaeger
+  - **n** - Disable Jaeger
+</ParamField>
+
+<ParamField path="enable_execution_cost" type="select" default="n">
+  Track execution costs
+  - **y** - Enable cost tracking
+  - **n** - Disable cost tracking
+</ParamField>
+
+## Storage & Scheduling
+
+<ParamField path="storage_type" type="select" default="memory">
+  Choose storage backend:
+  - **memory** - In-memory storage (development)
+  - **postgres** (not implemented yet)
+</ParamField>
+
+<ParamField path="scheduler_type" type="select" default="memory">
+  Choose scheduler backend:
+  - **memory** - In-memory scheduler (development)
+  - **redis** (not implemented yet)
+</ParamField>
+
+## Deployment
+
+<ParamField path="deployment_host" type="string" default="0.0.0.0">
+  Host address for deployment
+</ParamField>
+
+<ParamField path="deployment_port" type="string" default="3773">
+  Port number for deployment
+</ParamField>
+
+<ParamField path="log_level" type="select" default="info">
+  Logging level:
+  - **info** - Standard information
+  - **debug** - Detailed debugging
+  - **warning** - Warnings only
+  - **error** - Errors only
+</ParamField>
+
+## Development Tools
+
+<ParamField path="type_checker" type="select" default="ty">
+  Choose type checker:
+  - **ty** - Astral's type checker
+  - **none** - No type checking
+</ParamField>
+
+<ParamField path="include_github_actions" type="select" default="y">
+  Include GitHub Actions CI/CD workflows
+  - **y** - Include workflows
+  - **n** - Skip workflows
+</ParamField>
+
+<ParamField path="mkdocs" type="select" default="y">
+  Include MkDocs documentation setup
+  - **y** - Include MkDocs
+  - **n** - Skip documentation
+</ParamField>
+
+<ParamField path="codecov" type="select" default="y">
+  Include Codecov integration
+  - **y** - Include Codecov
+  - **n** - Skip Codecov
+</ParamField>
+
+<ParamField path="devcontainer" type="select" default="n">
+  Include VS Code devcontainer configuration
+  - **y** - Include devcontainer
+  - **n** - Skip devcontainer
+</ParamField>
+
+<ParamField path="dockerfile" type="select" default="y">
+  Include Dockerfile for containerization
+  - **y** - Include Dockerfile
+  - **n** - Skip Dockerfile
+</ParamField>
+
+## License
+
+<ParamField path="open_source_license" type="select" default="MIT license">
+  Choose open source license:
+  - **MIT license**
+  - **Apache Software License 2.0**
+  - **BSD license**
+  - **ISC license**
+  - **GNU General Public License v3**
+  - **Not open source**
+</ParamField>
+
+## Internal Defaults
+
+These values are set automatically and not prompted during setup:
+
+<ParamField path="_telemetry_backend" type="string" default="jaeger">
+  Telemetry backend (internal)
+</ParamField>
+
+<ParamField path="_oltp_endpoint" type="string" default="http://localhost:4318/v1/traces">
+  OTLP endpoint for telemetry (internal)
+</ParamField>
+
+<ParamField path="_phoenix_endpoint" type="string" default="http://localhost:6006">
+  Phoenix endpoint (internal)
+</ParamField>
+
+<ParamField path="_langfuse_endpoint" type="string" default="http://localhost:3000">
+  Langfuse endpoint (internal)
+</ParamField>
+
+<ParamField path="_storage_type" type="string" default="memory">
+  Storage type (internal)
+</ParamField>
+
+<ParamField path="_scheduler_type" type="string" default="memory">
+  Scheduler type (internal)
+</ParamField>
+
+<ParamField path="_verification_key_type" type="string" default="rsa">
+  Verification key type (internal)
+</ParamField>
+
+## Configuration Examples
+
+### Minimal Development Setup
+
+```json
+{
+  "project_name": "my-agent",
+  "agent_framework": "agno",
+  "enable_auth": "n",
+  "enable_did": "n",
+  "enable_telemetry": "n",
+  "storage_type": "memory",
+  "scheduler_type": "memory"
+}
+```
+
+### Production Setup
+
+```json
+{
+  "project_name": "production-agent",
+  "agent_framework": "langchain",
+  "enable_auth": "y",
+  "auth_provider": "auth0",
+  "enable_did": "y",
+  "enable_pki": "y",
+  "enable_telemetry": "y",
+  "enable_llm_observability": "y",
+  "llm_observability_provider": "phoenix",
+  "use_jaeger": "y",
+  "include_github_actions": "y",
+  "dockerfile": "y"
+}
+```
+
+### Multi-Agent Setup
+
+```json
+{
+  "project_name": "crew-agent",
+  "agent_framework": "crew",
+  "include_example_skills": "y",
+  "skill_names": "research,writing,analysis",
+  "enable_auth": "y",
+  "enable_did": "y",
+  "enable_llm_observability": "y"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/bindu/introduction/create-agent">
+    Create your first agent
+  </Card>
+  <Card title="Overview" icon="book" href="/bindu/create-bindu-agent/overview">
+    Learn more about create-bindu-agent
+  </Card>
+  <Card title="Authentication" icon="shield" href="/bindu/learn/auth">
+    Configure authentication
+  </Card>
+  <Card title="DID Setup" icon="fingerprint" href="/bindu/learn/did">
+    Set up Decentralized Identifiers
+  </Card>
+</CardGroup>
