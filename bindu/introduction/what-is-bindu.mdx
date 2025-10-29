@@ -3,6 +3,88 @@ title: 'What is Bindu'
 description: 'Learn about Bindu and its core concepts'
 ---
 
-# What is Bindu
+> "Every dot connects."
 
-Bindu is a powerful framework for building and deploying AI agents.
+Turn any agent into a live server in seconds.
+
+Bindu takes care of the software engineering and ops so your agent can think, plan, and act in the real world with DID identity, A2A/AP2-compatible I/O, observability & tracing, auth, payments (X402), distributed scheduling, context and  memory etc built in.
+
+You write the prompt. **Bindu makes it fly.**
+
+## See It In Action
+
+Here's a complete example—from agent definition to live server:
+
+```python
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.models.openai import OpenAIChat
+
+# Define your agent
+agent = Agent(
+    instructions="You are a research assistant that finds and summarizes information.",
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[DuckDuckGoTools()]
+)
+
+# Configuration
+config = {
+    "author": "your.email@example.com",
+    "name": "research_agent",
+    "description": "A research assistant agent",
+    "version": "1.0.0",
+    "capabilities": {},
+    "auth": {"enabled": False},
+    "storage": {"type": "memory"},
+    "scheduler": {"type": "memory"},
+    "deployment": {
+        "url": "http://localhost:8030",
+        "expose": True
+    }
+}
+
+# Handler function
+def handler(messages: list[dict[str, str]]):
+    result = agent.run(input=messages)
+    return result
+
+# Bindu-fy it
+bindufy(agent, config, handler)
+
+# Your agent is now live at http://localhost:8030 with:
+# ✅ A2A/AP2 protocol compliance
+# ✅ DID authentication
+# ✅ Observability & tracing
+# ✅ Payment support (X402)
+# ✅ Production-ready infrastructure
+```
+
+**That's it.** No infrastructure setup. No protocol implementation. No DevOps complexity.
+
+Your agent is now a discoverable, connectable node in the Internet of Agents.
+
+---
+
+<video controls className="w-full aspect-video rounded-xl" src="/assets/bindu.mp4"></video>
+
+
+---
+
+## The 1-Minute Pitch
+
+We've evolved from monoliths to microservices. Now, with LLMs, software can **think, plan, and implement**. But connecting intelligent agents still requires weeks of glue work.
+
+**Bindu solves this.**
+
+We built a lightweight wrapper that transforms any agent into an **A2A/AP2/X402-compliant server** in seconds. No protocol implementation. No DevOps complexity. Just add `bindufy()` to your agent code.
+
+Your agent instantly gets: DID authentication, observability, payments, scheduling, and memory—ready to join the **Internet of Agents**.
+
+Think microservices, but for AI Agents. **Bindu is the dot that connects them all.**
+
+---
+
+<Card title="Ready to Build?" icon="rocket" href="/bindu/introduction/create-agent">
+  Create your first Bindu agent in 2 minutes →
+</Card>

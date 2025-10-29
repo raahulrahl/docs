@@ -1,17 +1,17 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "aspen",
   "name": "Bindu",
   "banner": {
-    "content": "You are viewing v1 docs. For the latest documentation, visit [docs.saptha.me](https://docs.saptha.me)",
+    "content": "🌻 Where AI agents bloom and ideas take flight - [Discover what's new](https://docs.agno.com)",
     "dismissible": true
   },
   "colors": {
-    "primary": "#FF4017",
-    "light": "#FF4017",
-    "dark": "#FF4017"
+    "primary": "#8B5CF6",
+    "light": "#A78BFA",
+    "dark": "#7C3AED"
   },
-  "favicon": "/favicon.png",
+  "favicon": "/logo/light.svg",
   "contextual": {
     "options": ["copy", "view", "chatgpt", "claude"]
   },
@@ -24,99 +24,113 @@
             "group": "Introduction",
             "pages": [
               "bindu/introduction/what-is-bindu",
-              "bindu/introduction/create-agent",
+              "bindu/introduction/create-agent", 
+              "bindu/introduction/key-concepts",
               "bindu/introduction/getting-help"
-            ]
-          },
-          {
-            "group": "Create Bindu Agent",
-            "pages": [
-              "bindu/create-bindu-agent"
-
             ]
           },
           {
             "group": "Protocol",
             "pages": [
-              "bindu/protocol-types",
-              "bindu/protocol-entities"
+              "protocol/overview",
+              "protocol/"
             ]
           },
           {
             "group": "Skills",
             "pages": [
-              "bindu/skills"
+              "skills/overview",
+              "skills"
             ]
           },
           {
             "group": "Learn",
             "pages": [
-              "bindu/learn/auth",
               {
                 "group": "Observability",
                 "pages": [
-                  "bindu/learn/observability/overview",
-                  "bindu/learn/observability/jaeger",
-                  "bindu/learn/observability/phoenix",
-                  "bindu/learn/observability/langfuse"
+                  "observability/introduction",
+                  "observability/run"
                 ]
               },
-              "bindu/learn/payment",
-              "bindu/learn/did",
-              "bindu/learn/pki",
-              "bindu/learn/trust",
-              "bindu/learn/negotiation",
-              "bindu/learn/scheduler",
-              "bindu/learn/storage",
-              "bindu/learn/others"
+              {
+                "group": "Authentication",
+                "pages": [
+                  "auth/auth0",
+                  "auth/azure"
+                ]
+              },
+              {
+                "group": "DID",
+                "pages": [
+                  "did/introduction",
+                  "did/compatibility"
+                ] 
+              },
+              {
+                "group": "Payment",
+                "pages": [
+                  "payment/introduction",
+                  "payment/"
+                ] 
+              }
+
             ]
           },
           {
-            "group": "Help",
+            "group": "How to",
             "pages": [
-              "bindu/help/bindu-install-setup",
-              "bindu/help/roadmap",
-              "bindu/help/contribute"
+              "how-to/install",
+              "how-to/contribute",
+              "how-to/phidata-to-agno",
+              "how-to/authentication"
             ]
           }
         ]
       },
       {
-        "tab": "Sapthame",
-        "pages": [
-          "introduction",
-          "quickstart",
-          "protocol-types"
+        "tab": "Saptha-me",
+        "groups": [
+          {
+            "group": "Docs",
+            "pages": [
+              "docs/overview",
+              "docs/"
+            ]
+          }
         ]
       },
       {
         "tab": "Examples",
-        "pages": [
-          "examples"
-        ]
-      },
-      {
-        "tab": "Reference",
-        "pages": [
-          "protocol"
-        ]
-      },
-      {
-        "tab": "Api Reference",
-        "pages": [
-          "api-reference"
+        "groups": [
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/overview",
+              "api/"
+            ]
+          }
         ]
       },
       {
         "tab": "Changelog",
-        "pages": [
-          "changelog"
+        "groups": [
+          {
+            "group": "Changelog",
+            "pages": ["changelog/overview"]
+          }
         ]
       },
       {
-        "tab": "Faqs",
-        "pages": [
-          "faq"
+        "tab": "FAQ",
+        "groups": [
+          {
+            "group": "FAQ",
+            "pages": [
+              "api/overview",
+              "api/"
+            ]
+          }
         ]
       }
     ]
@@ -135,24 +149,19 @@
     "links": [
       {
         "label": "Discord",
-        "href": "https://discord.gg/3w5zuYUuwt"
-      },
-      {
-        "label": "Support",
-        "href": "mailto:raahul@saptha.me"
+        "href": "https://discord.com/invite/3w5zuYUuwt"
       }
     ],
     "primary": {
       "type": "github",
-      "href": "https://github.com/saptha-me/bindu"
+      "href": "https://github.com/Saptha-me/bindu"
     }
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/pebbling",
-      "github": "https://github.com/saptha-me/bindu",
-      "discord": "https://discord.gg/3w5zuYUuwt",
-      "linkedin": "https://linkedin.com/company/pebbling-ai",
+      "x": "https://x.com/raahulrahl",
+      "github": "https://github.com/Saptha-me",
+      "discord": "https://discord.com/invite/3w5zuYUuwt",
       "website": "https://saptha.me"
     }
   },
@@ -164,6 +173,11 @@
     "body": {
       "family": "Inter",
       "weight": 400
+    }
+  },
+  "integrations": {
+    "posthog": {
+      "apiKey": "phc_MjuWiUsZe9racJUG1IpiikP0gPInPwL0206gjfsBWSk"
     }
   }
 }
