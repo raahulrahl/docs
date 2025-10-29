@@ -18,41 +18,75 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "User Guide",
+        "tab": "Bindu",
         "groups": [
           {
             "group": "Introduction",
             "pages": [
-              "introduction",
-              "introduction/agents",
-              "introduction/multi-agent-systems",
-              "introduction/playground",
-              "introduction/monitoring",
-              "introduction/community"
+              "bindu/introduction/what-is-bindu",
+              "bindu/introduction/create-agent",
+              "bindu/introduction/getting-help"
+            ]
+          },
+          {
+            "group": "Create Bindu Agent",
+            "pages": [
+              "bindu/create-bindu-agent"
+
+            ]
+          },
+          {
+            "group": "Protocol",
+            "pages": [
+              "bindu/protocol-types",
+              "bindu/protocol-entities"
+            ]
+          },
+          {
+            "group": "Skills",
+            "pages": [
+              "bindu/skills"
+            ]
+          },
+          {
+            "group": "Learn",
+            "pages": [
+              "bindu/learn/auth",
+              {
+                "group": "Observability",
+                "pages": [
+                  "bindu/learn/observability/overview",
+                  "bindu/learn/observability/jaeger",
+                  "bindu/learn/observability/phoenix",
+                  "bindu/learn/observability/langfuse"
+                ]
+              },
+              "bindu/learn/payment",
+              "bindu/learn/did",
+              "bindu/learn/pki",
+              "bindu/learn/trust",
+              "bindu/learn/negotiation",
+              "bindu/learn/scheduler",
+              "bindu/learn/storage",
+              "bindu/learn/others"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "bindu/help/bindu-install-setup",
+              "bindu/help/roadmap",
+              "bindu/help/contribute"
             ]
           }
         ]
       },
       {
-        "tab": "Bindu",
+        "tab": "Sapthame",
         "pages": [
           "introduction",
           "quickstart",
           "protocol-types"
-        ]
-      },
-      {
-        "tab": "SapthaMe",
-        "pages": [
-          "introduction",
-          "quickstart",
-          "protocol-types"
-        ]
-      },
-      {
-        "tab": "Protocol",
-        "pages": [
-          "protocol"
         ]
       },
       {
@@ -62,7 +96,13 @@
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "Reference",
+        "pages": [
+          "protocol"
+        ]
+      },
+      {
+        "tab": "Api Reference",
         "pages": [
           "api-reference"
         ]
@@ -74,7 +114,7 @@
         ]
       },
       {
-        "tab": "FAQ",
+        "tab": "Faqs",
         "pages": [
           "faq"
         ]
