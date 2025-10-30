@@ -37,10 +37,10 @@
             ]
           },
           {
-            "group": "Protocol",
+            "group": "Concepts",
             "pages": [
-              "protocol/overview",
-              "protocol/"
+              "bindu/concepts/core-architecture",
+              "bindu/concepts/protocol"
             ]
           },
           {
