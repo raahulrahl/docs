@@ -1,0 +1,494 @@
+---
+title: 'Deploy Your Agent'
+---
+
+Complete guide to deploying your Bindu agent using Docker Compose, Makefile commands, and various deployment options.
+
+## Prerequisites
+
+Before deploying your agent, ensure you have:
+
+- Docker and Docker Compose installed
+- Python 3.12+ (for local development)
+- [uv](https://docs.astral.sh/uv/) package manager installed
+- Your `.env` file configured with required API keys
+
+## Environment Setup
+
+### 1. Configure Environment Variables
+
+Copy the example environment file and add your API keys:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your credentials:
+
+```bash
+# OpenRouter API Configuration
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Get your API key from: https://openrouter.ai/keys
+```
+
+<Note>
+Never commit your `.env` file to version control. It's already included in `.gitignore`.
+</Note>
+
+## Docker Compose Deployment
+
+Your agent comes with a complete Docker Compose setup that includes:
+- **Main Agent Service** - Your Bindu agent
+- **Jaeger** - Distributed tracing and monitoring
+- **Phoenix** - LLM observability and debugging
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` file defines three services:
+
+```yaml
+services:
+  my_bindu_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: my_bindu_agent
+    ports:
+      - "3773:3773"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:4317
+    env_file:
+      - .env
+    volumes:
+      - ./my_bindu_agent:/app/my_bindu_agent
+      - ./agent_config.json:/app/agent_config.json
+    restart: unless-stopped
+    networks:
+      - my_bindu_agent-network
+    depends_on:
+      - jaeger
+      - phoenix
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: my_bindu_agent-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP receiver
+      - "4317:4317"    # OTLP gRPC receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - my_bindu_agent-network
+    restart: unless-stopped
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: my_bindu_agent-phoenix
+    ports:
+      - "6006:6006"  # Phoenix UI and OTLP HTTP collector
+      - "4319:4317"  # OTLP gRPC collector
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    networks:
+      - my_bindu_agent-network
+    restart: unless-stopped
+
+networks:
+  my_bindu_agent-network:
+    driver: bridge
+
+volumes:
+  phoenix_data:
+    driver: local
+```
+
+### Docker Compose Commands
+
+<Steps>
+  <Step title="Build and Start Services">
+    Build the Docker images and start all services:
+
+    ```bash
+    docker-compose up --build
+    ```
+
+    Or run in detached mode (background):
+
+    ```bash
+    docker-compose up -d --build
+    ```
+  </Step>
+
+  <Step title="View Logs">
+    View logs from all services:
+
+    ```bash
+    docker-compose logs -f
+    ```
+
+    View logs from a specific service:
+
+    ```bash
+    docker-compose logs -f my_bindu_agent
+    docker-compose logs -f jaeger
+    docker-compose logs -f phoenix
+    ```
+  </Step>
+
+  <Step title="Stop Services">
+    Stop all running services:
+
+    ```bash
+    docker-compose down
+    ```
+
+    Stop and remove volumes (clears all data):
+
+    ```bash
+    docker-compose down -v
+    ```
+  </Step>
+
+  <Step title="Restart Services">
+    Restart all services:
+
+    ```bash
+    docker-compose restart
+    ```
+
+    Restart a specific service:
+
+    ```bash
+    docker-compose restart my_bindu_agent
+    ```
+  </Step>
+</Steps>
+
+### Access Your Services
+
+Once deployed, access your services at:
+
+<CardGroup cols={3}>
+  <Card title="Agent API" icon="robot" href="http://localhost:3773">
+    Your Bindu agent endpoint
+  </Card>
+  <Card title="Jaeger UI" icon="chart-line" href="http://localhost:16686">
+    Distributed tracing dashboard
+  </Card>
+  <Card title="Phoenix UI" icon="eye" href="http://localhost:6006">
+    LLM observability dashboard
+  </Card>
+</CardGroup>
+
+## Makefile Commands
+
+Your agent includes a Makefile with common development tasks. Use `make help` to see all available commands.
+
+### Development Commands
+
+<AccordionGroup>
+  <Accordion title="make install" icon="download">
+    Install the virtual environment and pre-commit hooks:
+
+    ```bash
+    make install
+    ```
+
+    This command:
+    - Creates a virtual environment using `uv`
+    - Installs all dependencies
+    - Sets up pre-commit hooks for code quality
+  </Accordion>
+
+  <Accordion title="make check" icon="check">
+    Run all code quality checks:
+
+    ```bash
+    make check
+    ```
+
+    This command runs:
+    - Lock file consistency check
+    - Pre-commit hooks (linting, formatting)
+    - Static type checking with `ty`
+    - Dependency analysis with `deptry`
+  </Accordion>
+
+  <Accordion title="make test" icon="flask">
+    Run tests with coverage:
+
+    ```bash
+    make test
+    ```
+
+    This command:
+    - Runs pytest with coverage reporting
+    - Generates XML coverage report
+    - Uses configuration from `pyproject.toml`
+  </Accordion>
+
+  <Accordion title="make build" icon="box">
+    Build wheel distribution file:
+
+    ```bash
+    make build
+    ```
+
+    This command:
+    - Cleans previous build artifacts
+    - Creates a new wheel file in `dist/`
+    - Uses `uv` as the installer
+  </Accordion>
+
+  <Accordion title="make docs" icon="book">
+    Build and serve documentation:
+
+    ```bash
+    make docs
+    ```
+
+    This starts a local documentation server. Access it at `http://localhost:8000`
+
+    To test documentation build without serving:
+
+    ```bash
+    make docs-test
+    ```
+  </Accordion>
+
+  <Accordion title="make clean-build" icon="trash">
+    Clean build artifacts:
+
+    ```bash
+    make clean-build
+    ```
+
+    Removes the `dist/` directory and all build artifacts.
+  </Accordion>
+
+  <Accordion title="make help" icon="question">
+    Display all available commands:
+
+    ```bash
+    make help
+    ```
+
+    Shows a formatted list of all Makefile targets with descriptions.
+  </Accordion>
+</AccordionGroup>
+
+## Dockerfile Overview
+
+The Dockerfile uses a multi-stage approach optimized for Python 3.12 and `uv`:
+
+```dockerfile
+# Install uv
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# Change the working directory to the `app` directory
+WORKDIR /app
+
+# Copy the lockfile and `pyproject.toml` into the image
+COPY uv.lock /app/uv.lock
+COPY pyproject.toml /app/pyproject.toml
+
+# Install dependencies
+RUN uv sync --frozen --no-install-project
+
+# Copy the project into the image
+COPY . /app
+
+# Sync the project
+RUN uv sync --frozen
+
+CMD ["uv", "run", "python", "-m", "my_bindu_agent.main"]
+```
+
+### Key Features
+
+- **Slim Base Image** - Uses `python:3.12-slim` for minimal size
+- **UV Package Manager** - Fast dependency resolution and installation
+- **Frozen Dependencies** - Ensures reproducible builds with `--frozen` flag
+- **Layer Caching** - Dependencies installed before code copy for faster rebuilds
+
+## Deployment Workflows
+
+### Local Development
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    make install
+    ```
+  </Step>
+
+  <Step title="Run Quality Checks">
+    ```bash
+    make check
+    ```
+  </Step>
+
+  <Step title="Run Tests">
+    ```bash
+    make test
+    ```
+  </Step>
+
+  <Step title="Start Agent Locally">
+    ```bash
+    uv run python -m my_bindu_agent.main
+    ```
+  </Step>
+</Steps>
+
+### Docker Development
+
+<Steps>
+  <Step title="Configure Environment">
+    ```bash
+    cp .env.example .env
+    # Edit .env with your API keys
+    ```
+  </Step>
+
+  <Step title="Build and Run">
+    ```bash
+    docker-compose up --build
+    ```
+  </Step>
+
+  <Step title="Monitor Logs">
+    ```bash
+    docker-compose logs -f my_bindu_agent
+    ```
+  </Step>
+
+  <Step title="Test Agent">
+    Access your agent at `http://localhost:3773`
+  </Step>
+</Steps>
+
+### Production Deployment
+
+<Steps>
+  <Step title="Build Production Image">
+    ```bash
+    docker build -t my-bindu-agent:latest .
+    ```
+  </Step>
+
+  <Step title="Tag for Registry">
+    ```bash
+    docker tag my-bindu-agent:latest your-registry/my-bindu-agent:latest
+    ```
+  </Step>
+
+  <Step title="Push to Registry">
+    ```bash
+    docker push your-registry/my-bindu-agent:latest
+    ```
+  </Step>
+
+  <Step title="Deploy to Production">
+    Use your preferred orchestration platform (Kubernetes, ECS, etc.)
+  </Step>
+</Steps>
+
+## Monitoring and Observability
+
+### Jaeger Tracing
+
+Access Jaeger UI at `http://localhost:16686` to:
+- View distributed traces across your agent
+- Analyze request latency and performance
+- Debug issues with detailed span information
+- Monitor service dependencies
+
+### Phoenix LLM Observability
+
+Access Phoenix UI at `http://localhost:6006` to:
+- Track LLM calls and token usage
+- Analyze prompt and response quality
+- Monitor model performance metrics
+- Debug LLM-specific issues
+
+<Note>
+Phoenix uses the [OpenInference](https://github.com/Arize-ai/openinference) standard, which is compatible with many observability providers.
+</Note>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port Already in Use">
+    If you see port conflict errors:
+
+    ```bash
+    # Check what's using the port
+    lsof -i :3773
+
+    # Kill the process or change the port in docker-compose.yml
+    ```
+  </Accordion>
+
+  <Accordion title="Environment Variables Not Loading">
+    Ensure your `.env` file exists and is in the project root:
+
+    ```bash
+    # Verify .env file exists
+    ls -la .env
+
+    # Check environment variables are loaded
+    docker-compose config
+    ```
+  </Accordion>
+
+  <Accordion title="Build Failures">
+    Clear Docker cache and rebuild:
+
+    ```bash
+    docker-compose down -v
+    docker system prune -a
+    docker-compose up --build
+    ```
+  </Accordion>
+
+  <Accordion title="Agent Not Responding">
+    Check agent logs for errors:
+
+    ```bash
+    docker-compose logs -f my_bindu_agent
+    ```
+
+    Verify the agent is healthy:
+
+    ```bash
+    docker-compose ps
+    curl http://localhost:3773/health
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configure Agent" icon="gear" href="/bindu/create-bindu-agent/configuration">
+    Customize your agent's behavior and capabilities
+  </Card>
+  <Card title="Learn Observability" icon="chart-mixed" href="/bindu/learn/observability">
+    Deep dive into monitoring and debugging
+  </Card>
+  <Card title="Join Community" icon="users" href="/bindu/introduction/join-the-internet-agents">
+    Connect with other agent developers
+  </Card>
+  <Card title="Get Help" icon="life-ring" href="/bindu/introduction/getting-help">
+    Find support and resources
+  </Card>
+</CardGroup>
