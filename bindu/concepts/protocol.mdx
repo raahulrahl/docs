@@ -477,46 +477,73 @@ class Artifact(TypedDict):
 Understanding the relationship between Messages, Tasks, and Artifacts:
 
 **Basic Task Execution Flow:**
-```
-1. Client sends Message (user instruction)
-   → Server creates Task (state: "submitted")
-   ↓
-2. Task transitions to "working"
-   → Agent processes the request
-   ↓
-3. Task produces Artifact (final result)
-   ↓
-4. Task transitions to "completed"
-   → Client receives Task with Artifact
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Agent
+
+    Client->>Server: Send Message (user instruction)
+    Server->>Server: Create Task (state: submitted)
+    Server-->>Client: Task created
+    
+    Server->>Agent: Process request
+    Note over Agent: Task state: working
+    Agent->>Agent: Generate result
+    
+    Agent->>Server: Return Artifact
+    Server->>Server: Task state: completed
+    Server-->>Client: Task with Artifact
 ```
 
 **Streaming Task Execution Flow:**
-```
-1. Client sends Message via message/stream
-   → Server creates Task (state: "submitted")
-   ↓
-2. Task transitions to "working"
-   → Server sends status-update events
-   ↓
-3. Agent produces Artifact chunks
-   → Server sends artifact-update events (append: true/false)
-   ↓
-4. Task transitions to "completed"
-   → Server sends final status-update (final: true)
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Agent
+
+    Client->>Server: message/stream
+    Server->>Server: Create Task (state: submitted)
+    Server-->>Client: SSE: status-update (submitted)
+    
+    Server->>Agent: Process request
+    Note over Agent: Task state: working
+    Server-->>Client: SSE: status-update (working)
+    
+    loop Artifact chunks
+        Agent->>Server: Artifact chunk
+        Server-->>Client: SSE: artifact-update (append: true)
+    end
+    
+    Agent->>Server: Final chunk
+    Server-->>Client: SSE: artifact-update (append: false)
+    Server->>Server: Task state: completed
+    Server-->>Client: SSE: status-update (final: true)
 ```
 
 **Multi-Turn Interaction Flow:**
-```
-1. Client sends Message (initial request)
-   → Server creates Task (state: "submitted")
-   ↓
-2. Task transitions to "input-required"
-   → Server includes agent Message asking for clarification
-   ↓
-3. Client sends Message (with taskId, providing input)
-   → Task resumes processing
-   ↓
-4. Task produces Artifact and transitions to "completed"
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Agent
+
+    Client->>Server: Send Message (initial request)
+    Server->>Server: Create Task (state: submitted)
+    Server->>Agent: Process request
+    
+    Agent->>Server: Need more info
+    Server->>Server: Task state: input-required
+    Server-->>Client: Task + Agent Message (asking for clarification)
+    
+    Client->>Server: Send Message (with taskId, providing input)
+    Server->>Agent: Resume with input
+    Note over Agent: Task state: working
+    
+    Agent->>Server: Return Artifact
+    Server->>Server: Task state: completed
+    Server-->>Client: Task with Artifact
 ```
 
 **Key Concepts:**
@@ -2255,44 +2282,56 @@ class ListContextsParams(TypedDict):
 
 ### Context Best Practices
 
-**When to Create a New Context:**
-- Starting a new conversation or session
-- Beginning a new project or workflow
-- Switching to a different topic or domain
-- Requiring different agent roles or capabilities
+**Context Decision Flow:**
+```mermaid
+flowchart TD
+    Start[New Task Request] --> Question{Same topic/conversation?}
+    
+    Question -->|Yes| Reuse[Reuse Existing Context]
+    Question -->|No| NewTopic{New project/domain?}
+    
+    NewTopic -->|Yes| Create[Create New Context]
+    NewTopic -->|No| Roles{Different agent roles needed?}
+    
+    Roles -->|Yes| Create
+    Roles -->|No| Reuse
+    
+    Reuse --> Continue[Continue with context_id]
+    Create --> Name[Name: 'Project - Purpose']
+    
+    Name --> Metadata[Add metadata: owner, timestamps]
+    Metadata --> Active[Status: active]
+    
+    style Reuse fill:#90EE90
+    style Create fill:#87CEEB
+```
 
-**When to Reuse an Existing Context:**
-- Continuing an ongoing conversation
-- Adding follow-up tasks to existing work
-- Maintaining conversation continuity
-- Preserving historical context
+**Lifecycle States:**
+```mermaid
+stateDiagram-v2
+    [*] --> active: Create context
+    active --> paused: Temporarily inactive
+    paused --> active: Resume work
+    active --> completed: All work done
+    paused --> completed: Finish without resuming
+    completed --> [*]: Archive
+    
+    note right of active
+        Working on tasks
+        Adding messages
+    end note
+    
+    note right of completed
+        Historical reference
+        Ready for cleanup
+    end note
+```
 
-**Context Naming Conventions:**
-- Use descriptive, human-readable names
-- Include key identifiers (project name, date, purpose)
-- Keep names concise but informative
-- Examples: "Q4 Sales Analysis", "Customer Support - Ticket #1234"
-
-**Metadata Best Practices:**
-- Store application-specific data in metadata
-- Use consistent key naming conventions
-- Include relevant business context
-- Add timestamps for important events
-- Track ownership and permissions
-
-**Context Lifecycle Management:**
-- Set status to `paused` for temporarily inactive contexts
-- Mark as `completed` when all work is done
-- Archive old contexts for historical reference
-- Clean up archived contexts periodically
-- Monitor context age and activity
-
-**Performance Considerations:**
-- Use `historyLength` to limit payload size
-- Filter contexts by status to reduce query load
-- Paginate large context lists
-- Archive completed contexts regularly
-- Index frequently queried metadata fields
+**Quick Tips:**
+- **Naming**: Use format `"Project - Purpose"` (e.g., "Q4 Sales - Analysis", "Support - Ticket #1234")
+- **Metadata**: Store business context, ownership, timestamps for filtering and tracking
+- **Performance**: Use `historyLength` parameter to limit payload size when fetching contexts
+- **Cleanup**: Regularly archive completed contexts to maintain system performance
 
 ---
 
@@ -2423,41 +2462,63 @@ class NegotiationContext(TypedDict):
 Understanding how agents negotiate and reach agreements:
 
 **Basic Negotiation Flow:**
-```
-1. Agent A identifies need for collaboration
-   → Creates NegotiationContext
-   ↓
-2. Agent A sends NegotiationProposal to Agent B
-   → Proposal status: "proposed"
-   ↓
-3. Agent B evaluates proposal
-   → Option 1: Accept (status: "accepted")
-   → Option 2: Reject (status: "rejected")
-   → Option 3: Counter (status: "countered", new proposal created)
-   ↓
-4. If accepted: Task execution begins
-   If rejected: Negotiation ends
-   If countered: Return to step 3 with Agent A evaluating
+```mermaid
+sequenceDiagram
+    participant AgentA as Agent A
+    participant AgentB as Agent B
+
+    AgentA->>AgentA: Identify need for collaboration
+    AgentA->>AgentA: Create NegotiationContext
+    
+    AgentA->>AgentB: Send NegotiationProposal
+    Note over AgentB: Status: proposed
+    
+    AgentB->>AgentB: Evaluate proposal
+    
+    alt Accept
+        AgentB->>AgentA: Accept (status: accepted)
+        Note over AgentA,AgentB: Task execution begins
+    else Reject
+        AgentB->>AgentA: Reject (status: rejected)
+        Note over AgentA,AgentB: Negotiation ends
+    else Counter
+        AgentB->>AgentA: Counter (status: countered)
+        Note over AgentA: Evaluate counter-proposal
+        AgentA->>AgentB: Response (accept/reject/counter)
+    end
 ```
 
 **Multi-Agent Negotiation Flow:**
-```
-1. Coordinator Agent initiates negotiation context
-   → Identifies required specialist agents
-   ↓
-2. Coordinator sends proposals to multiple agents
-   → Parallel negotiation tracks
-   ↓
-3. Each agent responds independently
-   → Some accept, some counter, some reject
-   ↓
-4. Coordinator evaluates responses
-   → Adjusts terms based on feedback
-   → Sends counter-proposals as needed
-   ↓
-5. Negotiation converges
-   → All required agents accept terms
-   → Collaborative task execution begins
+```mermaid
+sequenceDiagram
+    participant Coord as Coordinator
+    participant AgentA as Agent A
+    participant AgentB as Agent B
+    participant AgentC as Agent C
+
+    Coord->>Coord: Initiate NegotiationContext
+    Note over Coord: Identify required specialists
+    
+    par Parallel negotiation tracks
+        Coord->>AgentA: Send Proposal
+        Coord->>AgentB: Send Proposal
+        Coord->>AgentC: Send Proposal
+    end
+    
+    par Independent responses
+        AgentA-->>Coord: Accept
+        AgentB-->>Coord: Counter-proposal
+        AgentC-->>Coord: Reject
+    end
+    
+    Coord->>Coord: Evaluate responses
+    Note over Coord: Adjust terms based on feedback
+    
+    Coord->>AgentB: Send counter-proposal
+    AgentB-->>Coord: Accept
+    
+    Note over Coord,AgentC: All required agents accepted
+    Note over Coord,AgentC: Collaborative task execution begins
 ```
 
 **Negotiation Statuses (Individual Proposals):**
@@ -2476,504 +2537,427 @@ Understanding how agents negotiate and reach agreements:
 
 ## Security & Authentication
 
-### Security Schemes
-Bindu supports multiple authentication methods:
+Security schemes define how agents authenticate requests and establish trust. Bindu supports multiple authentication methods following the [A2A Protocol specification](https://a2a-protocol.org/latest/specification/).
 
-#### HTTP Authentication
+### HTTPAuthSecurityScheme
+
+**Schema:**
+```python
+class HTTPAuthSecurityScheme(TypedDict):
+    """HTTP security scheme supporting various authentication methods.
+    
+    Supports standard HTTP authentication schemes including Basic, Bearer,
+    Digest, and custom schemes. Commonly used for token-based authentication
+    with JWTs or other bearer token formats.
+    """
+    
+    type: Required[Literal["http"]]
+    """The type of the security scheme. Always "http"."""
+    
+    scheme: Required[str]
+    """The HTTP authentication scheme (e.g., "basic", "bearer", "digest")."""
+    
+    bearer_format: NotRequired[str]
+    """Format hint for bearer tokens (e.g., "JWT")."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Bearer Token with JWT**
 ```json
 {
   "type": "http",
   "scheme": "bearer",
-  "bearer_format": "JWT"
+  "bearerFormat": "JWT",
+  "description": "JWT bearer token authentication for API access"
 }
 ```
 
-#### API Key
+**Use Case 2: Basic Authentication**
+```json
+{
+  "type": "http",
+  "scheme": "basic",
+  "description": "HTTP Basic authentication with username and password"
+}
+```
+
+**What it's for:** Token-based authentication using standard HTTP authentication schemes. Most commonly used with Bearer tokens (JWT) for stateless API authentication, but also supports Basic auth for simple username/password scenarios.
+
+---
+
+### APIKeySecurityScheme
+
+**Schema:**
+```python
+class APIKeySecurityScheme(TypedDict):
+    """API Key security scheme for key-based authentication.
+    
+    Supports passing API keys through query parameters, HTTP headers, or
+    cookies. Commonly used for simple service-to-service authentication
+    or public API access control.
+    """
+    
+    type: Required[Literal["apiKey"]]
+    """The type of the security scheme. Always "apiKey"."""
+    
+    name: Required[str]
+    """The name of the header, query parameter, or cookie."""
+    
+    in_: Required[Literal["query", "header", "cookie"]]
+    """Location of the API key: "query", "header", or "cookie"."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Header-based API Key**
 ```json
 {
   "type": "apiKey",
   "name": "X-API-Key",
-  "in_": "header"
+  "in": "header",
+  "description": "API key passed in custom X-API-Key header"
 }
 ```
 
-#### OAuth2
+**What it's for:** Simple key-based authentication where a static or rotating API key is passed in requests. Ideal for service-to-service communication, webhook authentication, or public API rate limiting and access control.
+
+---
+
+### OAuth2SecurityScheme
+
+**Schema:**
+```python
+class OAuth2SecurityScheme(TypedDict):
+    """OAuth2 security scheme for delegated authorization.
+    
+    Supports multiple OAuth 2.0 flows including authorization code, implicit,
+    password credentials, and client credentials. Used for secure delegated
+    access where users authorize agents to act on their behalf.
+    """
+    
+    type: Required[Literal["oauth2"]]
+    """The type of the security scheme. Always "oauth2"."""
+    
+    flows: Required[dict[str, Any]]
+    """OAuth2 flow configurations. Supported flows:
+    - authorizationCode: Authorization code flow (most secure)
+    - implicit: Implicit flow (browser-based)
+    - password: Resource owner password credentials flow
+    - clientCredentials: Client credentials flow (service-to-service)
+    """
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Authorization Code Flow (User Authorization)**
 ```json
 {
   "type": "oauth2",
   "flows": {
     "authorizationCode": {
       "authorizationUrl": "https://auth.example.com/oauth/authorize",
-      "tokenUrl": "https://auth.example.com/oauth/token"
+      "tokenUrl": "https://auth.example.com/oauth/token",
+      "scopes": {
+        "read": "Read access to user data",
+        "write": "Write access to user data",
+        "admin": "Administrative access"
+      }
     }
-  }
+  },
+  "description": "OAuth2 authorization code flow for user-delegated access"
 }
 ```
 
-#### OpenID Connect
+**What it's for:** Delegated authorization where agents need to access resources on behalf of users or other services. Authorization code flow is used when users need to grant permission, while client credentials flow is used for direct service-to-service authentication without user involvement.
+
+---
+
+### OpenIdConnectSecurityScheme
+
+**Schema:**
+```python
+class OpenIdConnectSecurityScheme(TypedDict):
+    """OpenID Connect security scheme for identity authentication.
+    
+    Built on top of OAuth 2.0, OpenID Connect adds an identity layer for
+    user authentication. Uses discovery documents for automatic configuration
+    of endpoints and supported features.
+    """
+    
+    type: Required[Literal["openIdConnect"]]
+    """The type of the security scheme. Always "openIdConnect"."""
+    
+    open_id_connect_url: Required[str]
+    """URL to the OpenID Connect discovery document.
+    Typically: https://auth.example.com/.well-known/openid-configuration
+    """
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case: Enterprise SSO with OpenID Connect**
 ```json
 {
   "type": "openIdConnect",
-  "open_id_connect_url": "https://auth.example.com/.well-known/openid-configuration"
+  "openIdConnectUrl": "https://auth.example.com/.well-known/openid-configuration",
+  "description": "OpenID Connect authentication with automatic discovery for enterprise SSO"
 }
 ```
 
-#### Mutual TLS
+**What it's for:** Identity authentication using OpenID Connect, typically for enterprise single sign-on (SSO) scenarios. The discovery URL automatically configures authentication endpoints, supported scopes, and token formats, making it easier to integrate with identity providers like Keycloak, Azure AD, or Okta.
+
+---
+
+### MutualTLSSecurityScheme
+
+**Schema:**
+```python
+class MutualTLSSecurityScheme(TypedDict):
+    """Mutual TLS security scheme for certificate-based authentication.
+    
+    Uses client certificates for mutual authentication where both client
+    and server verify each other's identity. Provides strong cryptographic
+    authentication for high-security service-to-service communication.
+    """
+    
+    type: Required[Literal["mutualTLS"]]
+    """The type of the security scheme. Always "mutualTLS"."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case: High-Security Service Communication**
 ```json
 {
   "type": "mutualTLS",
-  "description": "Client certificate authentication"
+  "description": "Client certificate authentication for secure service-to-service communication"
 }
 ```
 
-### Trust Levels
-Bindu uses role-based trust levels to control what agents can do:
+**What it's for:** High-security authentication using client certificates where both parties verify each other's identity through TLS. Commonly used in zero-trust architectures, financial services, healthcare systems, or any scenario requiring strong cryptographic authentication without relying on passwords or tokens.
 
-- **super_admin**: Full system access
-- **admin**: Administrative operations
-- **manager**: Management operations with elevated permissions
-- **operator**: System operations, moderate risk
-- **editor**: Edit operations, moderate risk
-- **analyst**: Standard operations
-- **auditor**: Sensitive operations (read-only)
-- **support**: Troubleshooting access
-- **viewer**: View-only, minimal permissions
-- **guest**: Limited read-only access
+---
 
-### Identity Providers
-Supported authentication providers:
-- **keycloak**: Open-source identity management
-- **azure_ad**: Microsoft Azure Active Directory
-- **okta**: Okta identity platform
-- **auth0**: Auth0 authentication service
-- **custom**: Custom identity provider
+### SecurityScheme: Union Type
+
+The `SecurityScheme` type is a discriminated union of all security scheme types:
+
+```python
+SecurityScheme = Annotated[
+    Union[
+        HTTPAuthSecurityScheme,
+        APIKeySecurityScheme,
+        OAuth2SecurityScheme,
+        OpenIdConnectSecurityScheme,
+        MutualTLSSecurityScheme,
+    ],
+    Discriminator("type"),
+]
+```
+
+The `type` field acts as a discriminator to determine which security scheme is being used. All security schemes use camelCase for field names (e.g., `bearerFormat`, `openIdConnectUrl`) following the A2A Protocol specification.
+
+### Choosing the Right Security Scheme
+
+**Quick Reference:**
+
+| Scheme | Best For | Complexity | Security Level |
+|--------|----------|------------|----------------|
+| **HTTP Auth (Bearer)** | API tokens, JWTs | Low | Medium-High |
+| **HTTP Auth (Basic)** | Simple username/password | Very Low | Low-Medium |
+| **API Key** | Service-to-service, webhooks | Very Low | Low-Medium |
+| **OAuth2** | User authorization, delegated access | High | High |
+| **OpenID Connect** | Enterprise SSO, identity verification | Medium | High |
+| **Mutual TLS** | Zero-trust, high-security services | High | Very High |
+
+**Decision Guide:**
+
+- **Need simple token authentication?** → Use HTTP Auth with Bearer tokens (JWT)
+- **Building a public API?** → Use API Key for rate limiting and access control
+- **Users need to authorize agents?** → Use OAuth2 Authorization Code flow
+- **Service-to-service without users?** → Use OAuth2 Client Credentials or API Key
+- **Enterprise SSO integration?** → Use OpenID Connect
+- **Maximum security required?** → Use Mutual TLS with client certificates
+- **Legacy system with Basic auth?** → Use HTTP Auth with Basic scheme
+
+**Security Best Practices:**
+
+- Always use HTTPS/TLS for all authentication schemes except Mutual TLS (which provides its own transport security)
+- Rotate API keys regularly and never commit them to version control
+- Use short-lived tokens (15-60 minutes) with refresh token rotation for OAuth2
+- Implement rate limiting regardless of authentication method
+- Log authentication attempts and monitor for suspicious patterns
+- Use the principle of least privilege - grant only necessary scopes/permissions
 
 ---
 
 ## Notifications
 
-### Push Notifications
-For real-time updates when tasks change state:
+Push notification configurations define how servers send real-time updates to clients outside of active sessions. Bindu supports multiple notification patterns following the [A2A Protocol specification](https://a2a-protocol.org/latest/specification/).
 
-```typescript
+### PushNotificationConfig
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class PushNotificationConfig(TypedDict):
+    """Configuration for push notifications.
+    
+    When the server needs to notify the client of an update outside of a connected session.
+    """
+    
+    id: NotRequired[str]
+    """A unique identifier (e.g. UUID) for the push notification configuration.
+    Set by the client to support multiple notification callbacks."""
+    
+    url: Required[str]
+    """The callback URL where the agent should send push notifications."""
+    
+    token: NotRequired[str]
+    """A unique token for this task or session to validate incoming push notifications."""
+    
+    authentication: NotRequired[PushNotificationAuthenticationInfo]
+    """Optional authentication details for the agent to use when calling the notification URL."""
+```
+
+**Use Case: Webhook-based Push Notifications**
+```json
 {
-  "id": "uuid",
-  "url": "https://client.example.com/webhook",
-  "token": "secret-token",
+  "url": "https://client.example.com/webhook/notifications",
+  "token": "secure-webhook-token",
   "authentication": {
-    "type": "http",
-    "scheme": "bearer"
+    "schemes": ["Bearer"],
+    "credentials": "optional-bearer-token"
   }
 }
 ```
 
-**Use Cases:**
-- Notify client when task completes
-- Alert on errors or state changes
-- Stream progress updates
+**What it's for:** Configuring push notification endpoints where the server can send real-time updates to clients outside of active sessions. Used for notifying clients about task state changes, completion events, or errors without requiring constant polling.
 
-### Task Events
+---
 
-#### Status Update Event
-```typescript
+### PushNotificationAuthenticationInfo
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class PushNotificationAuthenticationInfo(TypedDict):
+    """Authentication information for push notifications.
+    
+    Defines supported authentication schemes and credentials for push notification endpoints.
+    """
+    
+    schemes: list[str]
+    """A list of supported authentication schemes (e.g., 'Basic', 'Bearer')."""
+    
+    credentials: NotRequired[str]
+    """Optional credentials required by the push notification endpoint."""
+```
+
+**Use Case: Multi-scheme Authentication Support**
+```json
 {
-  "task_id": "uuid",
-  "context_id": "uuid",
-  "kind": "status-update",
+  "schemes": ["Bearer", "Basic"],
+  "credentials": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**What it's for:** Specifying authentication requirements for push notification endpoints. Allows clients to declare which authentication schemes they support and provide necessary credentials for the server to authenticate when sending notifications.
+
+---
+
+### TaskPushNotificationConfig
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class TaskPushNotificationConfig(TypedDict):
+    """Configuration for task push notifications.
+    
+    Links a specific task to a push notification configuration for receiving updates.
+    """
+    
+    task_id: Required[str]
+    """The unique identifier (e.g. UUID) of the task."""
+    
+    push_notification_config: Required[PushNotificationConfig]
+    """The push notification configuration for this task."""
+```
+
+**Use Case: Task-specific Notification Setup**
+```json
+{
+  "taskId": "43667960-d455-4453-b0cf-1bae4955270d",
+  "pushNotificationConfig": {
+    "url": "https://client.example.com/webhook/a2a-notifications",
+    "token": "secure-client-token-for-task-aaa",
+    "authentication": {
+      "schemes": ["Bearer"]
+    }
+  }
+}
+```
+
+**What it's for:** Associating specific tasks with push notification configurations. Enables task-level notification routing where different tasks can send updates to different endpoints or use different authentication methods.
+
+### How Push Notifications Work
+
+**Workflow:**
+1. **Client configures** push notifications when sending a message via `message/send`
+2. **Server acknowledges** the task and begins processing
+3. **Server completes** the task and POSTs notification to the client's webhook URL
+4. **Client validates** the notification using the token and authentication
+5. **Client processes** the task update (e.g., updates UI, notifies user)
+
+**Notification Delivery:**
+When a task state changes, the server sends an HTTP POST to the configured webhook URL:
+
+```http
+POST /webhook/a2a-notifications HTTP/1.1
+Host: client.example.com
+Authorization: Bearer <server_jwt_for_webhook_audience>
+Content-Type: application/json
+X-A2A-Notification-Token: secure-client-token-for-task-aaa
+
+{
+  "id": "43667960-d455-4453-b0cf-1bae4955270d",
+  "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
   "status": {
     "state": "completed",
-    "timestamp": "2025-10-10T10:00:00Z"
+    "timestamp": "2024-03-15T18:30:00Z"
   },
-  "final": true
+  "kind": "task"
 }
 ```
 
-#### Artifact Update Event
-```typescript
-{
-  "task_id": "uuid",
-  "context_id": "uuid",
-  "kind": "artifact-update",
-  "artifact": {/* artifact object */},
-  "append": false,
-  "last_chunk": true
-}
+### Summary
+
+Push notifications solve a simple problem: instead of constantly asking "Is it done yet?", the agent calls you when it's finished.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Agent
+    participant Webhook as Client Webhook
+
+    Client->>Agent: Send task + PushNotificationConfig
+    Note over Client,Agent: url, token, authentication
+    Agent-->>Client: Task accepted (submitted)
+    
+    Note over Agent: Processing...<br/>(hours/minutes)
+    
+    Agent->>Webhook: POST /webhook<br/>X-A2A-Notification-Token: token<br/>Task completed
+    Webhook-->>Agent: 200 OK
+    Note over Webhook: Update UI, notify user
 ```
 
----
+You configure a **PushNotificationConfig** with your webhook URL and token—like giving the agent your callback number. Add **PushNotificationAuthenticationInfo** to specify how the agent should authenticate when calling your webhook. Use **TaskPushNotificationConfig** to route different tasks to different endpoints with their own security requirements.
 
-## Payment & Commerce (AP2 Protocol)
+This eliminates polling overhead and enables real-time updates for long-running operations—report generation, batch processing, or workflows needing human confirmation.
 
-### Payment Types
-
-#### Contact Address
-Physical address for shipping:
-
-```typescript
-{
-  "recipient": "John Doe",
-  "address_line": ["123 Main St", "Apt 4B"],
-  "city": "San Francisco",
-  "region": "CA",
-  "postal_code": "94102",
-  "country": "US",
-  "phone_number": "+1-555-0123"
-}
-```
-
-#### Payment Currency Amount
-```typescript
-{
-  "currency": "USD",
-  "value": 29.99
-}
-```
-
-#### Payment Item
-```typescript
-{
-  "label": "Premium Subscription",
-  "amount": {
-    "currency": "USD",
-    "value": 29.99
-  },
-  "pending": false,
-  "refund_period": 30
-}
-```
-
-### Payment Request
-Complete payment request structure:
-
-```typescript
-{
-  "method_data": [{
-    "supported_methods": "basic-card",
-    "data": {
-      "supportedNetworks": ["visa", "mastercard"]
-    }
-  }],
-  "details": {
-    "id": "order-123",
-    "total": {
-      "label": "Total",
-      "amount": {"currency": "USD", "value": 29.99}
-    },
-    "display_items": [
-      {"label": "Subscription", "amount": {"currency": "USD", "value": 29.99}}
-    ]
-  },
-  "options": {
-    "request_payer_email": true,
-    "request_shipping": false
-  }
-}
-```
-
-### Mandates: Authorization Framework
-
-#### Intent Mandate
-User's purchase intent and constraints:
-
-```typescript
-{
-  "user_cart_confirmation_required": true,
-  "natural_language_description": "Buy a laptop under $1500 from trusted retailers",
-  "merchants": ["BestBuy", "Amazon"],
-  "requires_refundability": true,
-  "intent_expiry": "2025-12-31T23:59:59Z"
-}
-```
-
-**What it means:** "I authorize the agent to buy a laptop, but I want to confirm the cart before purchase, it must be refundable, and only from these merchants."
-
-#### Cart Mandate
-Merchant's signed cart with guaranteed prices:
-
-```typescript
-{
-  "contents": {
-    "id": "cart-456",
-    "merchant_name": "BestBuy",
-    "user_cart_confirmation_required": true,
-    "payment_request": {/* payment details */},
-    "cart_expiry": "2025-10-10T12:00:00Z"
-  },
-  "merchant_authorization": "eyJhbGc..."
-}
-```
-
-**What it means:** Merchant guarantees these items at these prices until expiry. The JWT proves authenticity.
-
-#### Payment Mandate
-Final payment authorization with user signature:
-
-```typescript
-{
-  "payment_mandate_contents": {
-    "payment_mandate_id": "pm-789",
-    "payment_details_id": "order-123",
-    "payment_details_total": {/* total amount */},
-    "payment_response": {/* chosen payment method */},
-    "merchant_agent": "bestbuy-agent-did",
-    "timestamp": "2025-10-10T10:30:00Z"
-  },
-  "user_authorization": "eyJhbGc..."
-}
-```
-
-**What it means:** User's cryptographic signature authorizing the payment. Shared with payment networks for trust.
-
----
-
-## Agent Discovery & Capabilities
-
-### Agent Card
-The "business card" that describes an agent:
-
-```typescript
-{
-  "id": "uuid",
-  "name": "Data Analysis Agent",
-  "description": "Analyzes datasets and generates insights",
-  "url": "https://agent.example.com",
-  "version": "1.0.0",
-  "protocol_version": "0.3.0",
-  "kind": "agent",
-  
-  "skills": [{
-    "id": "data-analysis",
-    "name": "Data Analysis",
-    "description": "Analyze CSV and JSON datasets",
-    "tags": ["analytics", "data", "statistics"],
-    "input_modes": ["text/csv", "application/json"],
-    "output_modes": ["text/plain", "application/json"],
-    "examples": [
-      "Analyze this sales data and find trends",
-      "Calculate statistics for this dataset"
-    ]
-  }],
-  
-  "capabilities": {
-    "streaming": true,
-    "push_notifications": true,
-    "extensions": [{
-      "uri": "https://bindu.me/extensions/advanced-analytics",
-      "required": false
-    }]
-  },
-  
-  "agent_trust": {
-    "identity_provider": "keycloak",
-    "inherited_roles": [],
-    "creator_id": "creator-uuid",
-    "trust_verification_required": true
-  },
-  
-  "default_input_modes": ["text/plain"],
-  "default_output_modes": ["text/plain"]
-}
-```
-
-### Skills
-Skills define what an agent can do. Two styles are supported:
-
-#### Inline Skills (Simple)
-All metadata in the config:
-
-```typescript
-{
-  "id": "email-sender",
-  "name": "Email Sender",
-  "description": "Send emails to recipients",
-  "tags": ["communication", "email"],
-  "input_modes": ["text/plain"],
-  "output_modes": ["text/plain"],
-  "examples": ["Send an email to john@example.com"]
-}
-```
-
-#### File-Based Skills (Rich Documentation)
-Claude-style with detailed SKILL.md files:
-
-```typescript
-{
-  "id": "pdf-processor",
-  "name": "PDF Processor",
-  "description": "Extract and process PDF documents",
-  "tags": ["documents", "pdf", "extraction"],
-  "input_modes": ["application/pdf"],
-  "output_modes": ["text/plain", "application/json"],
-  
-  "documentation_path": "./skills/pdf-processor/SKILL.md",
-  "documentation_content": "# PDF Processor\n\n## When to Use...",
-  
-  "capabilities_detail": {
-    "text_extraction": {"supported": true, "types": ["standard", "ocr"]},
-    "form_filling": {"supported": true}
-  },
-  
-  "requirements": {
-    "packages": ["pypdf", "pdfplumber"],
-    "system": ["tesseract-ocr"],
-    "min_memory_mb": 512
-  },
-  
-  "performance": {
-    "avg_processing_time_ms": 2000,
-    "max_file_size_mb": 50
-  },
-  
-  "allowed_tools": ["Read", "Write"]
-}
-```
-
----
-
-## JSON-RPC Protocol
-
-All communication uses JSON-RPC 2.0 format.
-
-### Request Structure
-```typescript
-{
-  "jsonrpc": "2.0",
-  "id": "uuid",
-  "method": "message/send",
-  "params": {
-    "message": {/* message object */},
-    "configuration": {
-      "accepted_output_modes": ["text/plain"],
-      "blocking": false
-    }
-  }
-}
-```
-
-### Response Structure
-```typescript
-{
-  "jsonrpc": "2.0",
-  "id": "uuid",
-  "result": {/* success result */},
-  "error": {
-    "code": -32600,
-    "message": "Invalid request",
-    "data": {}
-  }
-}
-```
-
-### Available Methods
-
-**Task Operations:**
-- **message/send**: Send a message to create or update a task
-- **message/stream**: Stream a message for real-time updates
-- **tasks/get**: Retrieve task details
-- **tasks/list**: List all tasks
-- **tasks/cancel**: Cancel a running task
-- **tasks/feedback**: Provide feedback on completed task
-- **tasks/resubscribe**: Resubscribe to task updates
-
-**Context Operations:**
-- **contexts/list**: List all contexts
-- **contexts/clear**: Clear a context
-
-**Notification Operations:**
-- **tasks/pushNotification/set**: Configure push notifications
-- **tasks/pushNotification/get**: Get notification config
-- **tasks/pushNotificationConfig/list**: List all configs
-- **tasks/pushNotificationConfig/delete**: Remove a config
-
-### Error Codes
-
-#### Standard JSON-RPC Errors
-- **-32700**: Parse error (invalid JSON)
-- **-32600**: Invalid request (malformed structure)
-- **-32601**: Method not found
-- **-32602**: Invalid params
-- **-32603**: Internal error
-
-#### A2A Protocol Errors
-- **-32001**: Task not found
-- **-32002**: Task not cancelable
-- **-32003**: Push notifications not supported
-- **-32004**: Unsupported operation
-- **-32005**: Content type not supported
-- **-32006**: Invalid agent response
-- **-32007**: Authenticated card not configured
-- **-32008**: Task immutable (terminal state)
-
-#### Bindu Authentication Errors
-- **-32009**: Authentication required
-- **-32010**: Invalid token
-- **-32011**: Token expired
-- **-32012**: Invalid token signature
-- **-32013**: Insufficient permissions
-
-#### Bindu Context Errors
-- **-32020**: Context not found
-- **-32021**: Context not cancelable
-
-#### Bindu Skill Errors
-- **-32030**: Skill not found
-
----
-
-## Agent Execution & Credits
-
-### Execution Cost
-Define how much it costs to run an agent:
-
-```typescript
-{
-  "agent_id": "agent-123",
-  "agent_name": "Premium Analyzer",
-  "credits_per_request": 100,
-  "creator_did": "did:example:creator",
-  "minimum_trust_level": "analyst"
-}
-```
-
-### Execution Request
-```typescript
-{
-  "request_id": "uuid",
-  "executor_did": "did:example:user",
-  "agent_id": "agent-123",
-  "input_data": "Analyze this dataset...",
-  "estimated_credits": 100,
-  "trust_level": "analyst"
-}
-```
-
-### Execution Response
-```typescript
-{
-  "request_id": "uuid",
-  "execution_id": "uuid",
-  "success": true,
-  "credits_charged": 95,
-  "transaction_id": "uuid",
-  "output_data": "Analysis complete...",
-  "execution_time": "2025-10-10T10:05:00Z"
-}
-```
-
----
-
-## Summary
-
-The Bindu protocol types provide a complete vocabulary for agent communication:
-
-- **Parts** (Text, File, Data) - Content building blocks
-- **Messages** - Operational communication
-- **Artifacts** - Final deliverable results
-- **Tasks** - Work coordination units
-- **Contexts** - Conversation sessions
-- **Security** - Authentication and authorization
-- **Payments** - Commerce and transactions
-- **Agent Cards** - Capability discovery
-- **JSON-RPC** - Communication protocol
-
-Each type serves a specific purpose in enabling agents to work together effectively, securely, and transparently.
