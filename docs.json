@@ -24,7 +24,7 @@
             "group": "Introduction",
             "pages": [
               "bindu/introduction/what-is-bindu",
-              "bindu/introduction/create-agent", 
+              "bindu/introduction/join-the-internet-agents", 
               "bindu/introduction/key-concepts",
               "bindu/introduction/getting-help"
             ]
@@ -89,7 +89,6 @@
             "pages": [
               "how-to/install",
               "how-to/contribute",
-              "how-to/phidata-to-agno",
               "how-to/authentication"
             ]
           }

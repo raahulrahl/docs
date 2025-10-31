@@ -1,0 +1,210 @@
+---
+title: 'Join the Internet of Agents'
+---
+
+Your AI agent, production-ready in 120 seconds. Create Bindu Agent scaffolds intelligent agents that natively communicate in the Internet of Agents.
+
+## Quickstart - Cookiecutter Style
+
+Time to first agent: **~2 minutes** ⏱️
+
+Navigate to the directory where you want to create your agent project and run:
+
+```bash
+uvx cookiecutter https://github.com/Saptha-me/create-bindu-agent.git
+```
+
+<Note>
+Make sure you have [uv](https://docs.astral.sh/uv/) installed. If not, install it with:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+</Note>
+
+<Note>
+For detailed documentation, see the [Template Overview](/bindu/create-bindu-agent/overview).
+</Note>
+
+## Already Have an Agent? - Manual Setup
+
+If you have an existing agent and want to add Bindu capabilities, you'll need two things: a configuration file and the `bindufy` wrapper.
+
+### Step 1: Create `agent_config.json`
+
+```json
+{
+  "author": "your.email@example.com",
+  "name": "my_existing_agent",
+  "description": "My agent with Bindu superpowers",
+  "version": "1.0.0",
+  "deployment": {
+    "url": "http://localhost:8030",
+    "expose": true
+  }
+}
+```
+
+<Note>
+See the [Configuration Reference](/bindu/create-bindu-agent/configuration) for all available options including A2A, AP2, and X402 protocol settings.
+</Note>
+
+### Step 2: Wrap Your Agent with `bindufy`
+
+```python
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+import json
+
+# Load your config
+with open("agent_config.json", "r") as f:
+    config = json.load(f)
+
+# Your existing agent
+my_agent = Agent(
+    instructions="Your agent instructions",
+    model=OpenAIChat(id="gpt-4o"),
+)
+
+# Handler function
+def agent_handler(messages: list[dict[str, str]]):
+    result = my_agent.run(input=messages)
+    return result
+
+# Bindufy it!
+bindufy(my_agent, config, agent_handler)
+```
+
+That's it! Your agent is now live and ready to communicate with other agents in the Internet of Agents.
+
+<Tip>
+Check out [examples](https://github.com/Saptha-me/Bindu/tree/main/examples) for different agent frameworks like LangChain, CrewAI, and more.
+</Tip>
+
+## What Happens Next?
+
+You'll be prompted for:
+- **Project details** - Name, description, author info
+- **Agent framework** - Agno, LangChain, CrewAI, etc.
+- **Features** - Authentication, DID, observability, CI/CD
+- **License type** - MIT, Apache, BSD, GPL, ISC
+
+Then boom! 💥 Your agent project is ready with:
+
+```
+your-agent/
+├── agent_config.json          # Agent configuration with A2A/AP2/X402 settings
+├── your_agent/
+│   ├── main.py               # Agent entry point (Bindu-fied!)
+│   └── __init__.py
+├── skills/                   # Template for adding agent skills
+├── tests/                    # Pre-configured pytest tests
+├── pyproject.toml            # Dependencies managed by uv
+├── Dockerfile                # Ready for containerization
+├── .github/workflows/        # CI/CD pipelines
+└── README.md                 # Complete setup instructions
+```
+
+## Running Your Agent
+
+Navigate to your agent directory and install dependencies:
+
+```bash
+cd your-agent
+uv sync
+```
+
+Start your agent server:
+
+```bash
+uv run python -m your_agent.main
+```
+
+Your agent is now live at `http://localhost:3773` and ready to communicate using:
+- **A2A** - Agent-to-Agent protocol
+- **AP2** - Agentic Protocol 2
+- **X402** - Payment rails
+
+## What's Included
+
+<CardGroup cols={2}>
+  <Card title="Protocol Support" icon="network-wired">
+    Built-in A2A, AP2, and X402 protocol compliance
+  </Card>
+  <Card title="Authentication" icon="lock">
+    Secure authentication with Auth0 and DID support
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Phoenix, Langfuse, and Jaeger integration
+  </Card>
+  <Card title="CI/CD" icon="code-branch">
+    GitHub Actions workflows for testing and deployment
+  </Card>
+  <Card title="Testing" icon="flask">
+    Pre-configured pytest with coverage reporting
+  </Card>
+  <Card title="Documentation" icon="book">
+    MkDocs setup for beautiful documentation
+  </Card>
+  <Card title="Containerization" icon="docker">
+    Docker/Podman ready for easy deployment
+  </Card>
+  <Card title="Code Quality" icon="check-circle">
+    Ruff, ty, and pre-commit hooks configured
+  </Card>
+</CardGroup>
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Configuration Reference" icon="gear" href="/bindu/create-bindu-agent/configuration">
+    Complete guide to all configuration options
+  </Card>
+  <Card title="Template Overview" icon="book" href="/bindu/create-bindu-agent/overview">
+    Learn more about create-bindu-agent
+  </Card>
+  <Card title="Key Concepts" icon="lightbulb" href="/bindu/introduction/key-concepts">
+    Understand Bindu's core concepts
+  </Card>
+  <Card title="Authentication" icon="shield" href="/bindu/learn/auth">
+    Configure authentication for your agent
+  </Card>
+  <Card title="DID Setup" icon="fingerprint" href="/bindu/learn/did">
+    Set up Decentralized Identifiers
+  </Card>
+  <Card title="Observability" icon="eye" href="/bindu/learn/observability/phoenix">
+    Monitor your agent with Phoenix or Langfuse
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="uv not found">
+    Install uv using:
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+    Then restart your terminal.
+  </Accordion>
+  
+  <Accordion title="Port already in use">
+    Change the `deployment_port` in your `agent_config.json` or set a different port when prompted during setup.
+  </Accordion>
+  
+  <Accordion title="Authentication errors">
+    Make sure you've configured your Auth0 credentials in the environment variables. Check the generated README for details.
+  </Accordion>
+  
+  <Accordion title="Dependencies not installing">
+    Try removing the `.venv` directory and running `uv sync` again:
+    ```bash
+    rm -rf .venv
+    uv sync
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+**Need help?** Join our [Discord community](https://discord.gg/saptha) or check out the [GitHub repository](https://github.com/Saptha-me/create-bindu-agent) for more information.
+</Note>
