@@ -2,9 +2,9 @@
 title: 'Create a Bindu Agent'
 ---
 
-From zero to production-ready agent in 2 minutes. Create Bindu Agent is the fastest way to build AI agents that speak the language of the Internet of Agents.
+Your AI agent, production-ready in 120 seconds. Create Bindu Agent scaffolds intelligent agents that natively communicate in the Internet of Agents.
 
-## Quickstart
+## Quickstart - Cookiecutter Style
 
 Time to first agent: **~2 minutes** ⏱️
 
@@ -20,6 +20,66 @@ Make sure you have [uv](https://docs.astral.sh/uv/) installed. If not, install i
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 </Note>
+
+<Note>
+For detailed documentation, see the [Template Overview](/bindu/create-bindu-agent/overview).
+</Note>
+
+## Already Have an Agent? - Manual Setup
+
+If you have an existing agent and want to add Bindu capabilities, you'll need two things: a configuration file and the `bindufy` wrapper.
+
+### Step 1: Create `agent_config.json`
+
+```json
+{
+  "author": "your.email@example.com",
+  "name": "my_existing_agent",
+  "description": "My agent with Bindu superpowers",
+  "version": "1.0.0",
+  "deployment": {
+    "url": "http://localhost:8030",
+    "expose": true
+  }
+}
+```
+
+<Note>
+See the [Configuration Reference](/bindu/create-bindu-agent/configuration) for all available options including A2A, AP2, and X402 protocol settings.
+</Note>
+
+### Step 2: Wrap Your Agent with `bindufy`
+
+```python
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+import json
+
+# Load your config
+with open("agent_config.json", "r") as f:
+    config = json.load(f)
+
+# Your existing agent
+my_agent = Agent(
+    instructions="Your agent instructions",
+    model=OpenAIChat(id="gpt-4o"),
+)
+
+# Handler function
+def agent_handler(messages: list[dict[str, str]]):
+    result = my_agent.run(input=messages)
+    return result
+
+# Bindufy it!
+bindufy(my_agent, config, agent_handler)
+```
+
+That's it! Your agent is now live and ready to communicate with other agents in the Internet of Agents.
+
+<Tip>
+Check out [examples](https://github.com/Saptha-me/Bindu/tree/main/examples) for different agent frameworks like LangChain, CrewAI, and more.
+</Tip>
 
 ## What Happens Next?
 
