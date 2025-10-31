@@ -30,10 +30,11 @@
             ]
           },
           {
-            "group": "Create Bindu Agent",
+            "group": "Create Bindu Agent in 2 minutes",
             "pages": [
               "bindu/create-bindu-agent/overview",
-              "bindu/create-bindu-agent/configuration"
+              "bindu/create-bindu-agent/configuration",
+              "bindu/create-bindu-agent/deploy"
             ]
           },
           {
