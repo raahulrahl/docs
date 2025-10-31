@@ -4,23 +4,81 @@ title: 'Built for the Internet of Agents'
 
 Transform any agent into a production-ready server that speaks universal protocols.
 
+```mermaid
+graph TB
+    Client[Client/Orchestrator] --> Discovery[Skills Discovery<br/>Match Task to Agent]
+    
+    Discovery --> Request[HTTP Request<br/>A2A/X402]
+    
+    Request --> Payment{Payment<br/>Required?}
+    Payment -->|Yes| PayFlow[X402 Payment Flow<br/>Sign & Verify]
+    Payment -->|No| Auth[Auth & DID<br/>Verification]
+    PayFlow --> Auth
+    
+    Auth --> Server[BinduApplication<br/>Web Server]
+    
+    Server --> Manager[TaskManager<br/>Coordinates Everything]
+    
+    Manager --> Queue[Scheduler<br/>Task Queue]
+    Manager <--> Storage[(Storage<br/>PostgreSQL/Redis)]
+    
+    Queue --> Worker[Worker<br/>Executes Tasks]
+    
+    Worker --> Agent[Your AI Agent<br/>LangChain/CrewAI/etc]
+    
+    Agent --> Response[Response<br/>with Results]
+    
+    Manager -.Traces.-> Observability[Observability<br/>Phoenix/Langfuse/Jaeger]
+    Worker -.Traces.-> Observability
+    Agent -.Traces.-> Observability
+    
+    style Client fill:#e1f5ff
+    style Discovery fill:#d4f5e1
+    style Request fill:#e1f5ff
+    style Payment fill:#98fb98
+    style PayFlow fill:#98fb98
+    style Auth fill:#ffd4e1
+    style Server fill:#fff4e1
+    style Manager fill:#ffe1f5
+    style Queue fill:#e1ffe1
+    style Worker fill:#ffe1e1
+    style Agent fill:#e1f5ff
+    style Response fill:#e1f5ff
+    style Storage fill:#e1ffe1
+    style Observability fill:#ffd700
+```
+
+**How It Works**
+
+1. **Skills Discovery**: Find the right agent using `/agent/skills` API (YAML metadata)
+2. **HTTP Request**: Send task via A2A or X402 protocol
+3. **Payment Flow**: If required, X402 handles payment signing and verification
+4. **Auth & DID**: Verify identity and permissions (Auth0 + DID)
+5. **Web Server**: BinduApplication receives and routes the request
+6. **TaskManager**: Coordinates the entire operation (restaurant manager)
+7. **Scheduler**: Queues tasks for execution
+8. **Worker**: Executes your AI agent (LangChain, CrewAI, etc.)
+9. **Response**: Returns results with completion status
+10. **Observability**: Traces everything via Phoenix/Langfuse/Jaeger (dotted lines)
+11. **Storage**: PostgreSQL or Redis for persistence
+
 ### Protocol-Native Architecture
 
-- **Universal Protocol Support**: Native [A2A, AP2, and X402](/bindu/concepts/protocol) compliance out of the box.
+- **Universal Protocol Support**: Native [A2A](https://github.com/a2aproject/A2A), [AP2](https://github.com/google-agentic-commerce/AP2), and [X402](https://github.com/coinbase/x402) compliance out of the box.
 
-- **Framework Agnostic**: Works with Agno, LangChain, CrewAI, LlamaIndex, FastAgent, and any Python-based framework.
+- **Framework Agnostic**: Works with [Agno](https://github.com/agno-agi/agno), [LangChain](https://github.com/langchain-ai/langchain), [CrewAI](https://github.com/crewAIInc/crewAI), [LlamaIndex](https://developers.llamaindex.ai/python/framework/use_cases/agents/), [FastAgent](https://github.com/evalstate/fast-agent), and any Python-based framework.
 
-- **DID Authentication**: Built-in Decentralized Identity for secure agent-to-agent communication.
+- **DID Authentication**: Built-in Decentralized Identity for secure agent-to-agent communication. Influenced by [AT Protocol DID structure](https://atproto.com/specs/did).
 
 - **Type Safe**: Enforce structured I/O through schema validation for predictable behavior.
 
 ### Infrastructure & Deployment
 
-- **Zero-Config Server**: Transform any agent into a FastAPI server with a single `bindufy()` call.
+- **Simple Server Setup**: Turn your AI agent into [a web server using Starlette (a Python web framework)](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/applications.py). The `BinduApplication` class handles all the complex setup.You just provide your agent and it creates a fully functional server ready to receive requests.
 
-- **Production-Ready**: Pre-configured with error handling, retry logic, health monitoring, and automatic failover.
+- **Built-In Reliability**: Comes with automatic error handling, task retry mechanisms, health checks, and backup systems. If something fails, [Bindu knows how to recover gracefully without crashing your agent](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/task_manager.py).
 
-- **Deploy Anywhere**: From localhost to cloud in minutes. Containerization ready with Docker and Podman support.
+- **Run Anywhere**: Start on your local machine (localhost) and deploy to any cloud platform when ready. [Works with Docker and Podman containers](https://github.com/Saptha-me/create-bindu-agent/blob/main/%7B%7Bcookiecutter.project_name%7D%7D/docker-compose.yml), making it easy to package and ship your agent to production environments.
 
 ### Observability & Monitoring
 
@@ -29,15 +87,6 @@ Transform any agent into a production-ready server that speaks universal protoco
 - **Real-time Monitoring**: Track agent health, performance metrics, and execution flows.
 
 - **Error Tracking**: Comprehensive error handling and logging for distributed systems.
-
----
-
-<img 
-  src="/assets/key-concepts.gif" 
-  alt="Bindu agent architecture"
-/>
-
----
 
 ### Storage & Orchestration
 
