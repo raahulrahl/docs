@@ -18,13 +18,11 @@ Some types are marked as `<NotPartOfA2A>` - these are Bindu-specific extensions 
 
 ---
 
-## Core Building Blocks
-
-### Type Aliases & Enums
+## Type Aliases & Enums
 
 Protocol types use TypeAlias definitions for enums to ensure type safety and clear state management.
 
-#### TaskState
+### TaskState
 
 Defines all possible states a task can be in during its lifecycle:
 
@@ -49,7 +47,7 @@ Defines all possible states a task can be in during its lifecycle:
 - `negotiation-bid-lost` - Task bid was lost in negotiation
 - `negotiation-bid-won` - Task bid was won in negotiation
 
-#### NegotiationStatus `<NotPartOfA2A>`
+### NegotiationStatus `<NotPartOfA2A>`
 
 Defines the status of individual negotiation proposals:
 
@@ -58,7 +56,7 @@ Defines the status of individual negotiation proposals:
 - `rejected` - Negotiation is rejected
 - `countered` - Counter-offer made
 
-#### NegotiationSessionStatus `<NotPartOfA2A>`
+### NegotiationSessionStatus `<NotPartOfA2A>`
 
 Defines the overall status of a negotiation session:
 
@@ -67,7 +65,7 @@ Defines the overall status of a negotiation session:
 - `completed` - Negotiation session is completed
 - `rejected` - Negotiation session is rejected
 
-#### TrustLevel `<NotPartOfA2A>`
+### TrustLevel `<NotPartOfA2A>`
 
 Defines role-based trust levels for agent authorization (ordered by permission level):
 
@@ -82,7 +80,7 @@ Defines role-based trust levels for agent authorization (ordered by permission l
 - `viewer` - View-only access, minimal permissions
 - `guest` - Limited access, read-only operations
 
-#### IdentityProvider `<NotPartOfA2A>`
+### IdentityProvider `<NotPartOfA2A>`
 
 Supported authentication identity providers:
 
@@ -92,7 +90,7 @@ Supported authentication identity providers:
 - `auth0` - Auth0 identity provider
 - `custom` - Custom identity provider
 
-#### Data Key Constants
+### Data Key Constants `<NotPartOfA2A>`
 
 Standard keys for structured data in DataPart objects:
 
@@ -104,11 +102,11 @@ Standard keys for structured data in DataPart objects:
 
 These constants are used to identify specific data types within the protocol's DataPart structure.
 
-### Parts: The Content Pieces
+## Parts: The Content Pieces
 
 Parts are the fundamental building blocks for agent communication in A2A. Here's how they work in practice:
 
-#### TextPart: Simple Text Communication
+### TextPart: Simple Text Communication
 
 **Schema:**
 ```python
@@ -146,7 +144,7 @@ class TextPart(TypedDict):
 
 ---
 
-#### FilePart: Binary Content Exchange
+### FilePart: Binary Content Exchange
 
 **Schema:**
 ```python
@@ -209,7 +207,7 @@ class FilePart(TypedDict):
 
 ---
 
-#### DataPart: Structured Information Exchange
+### DataPart: Structured Information Exchange
 
 **Schema:**
 ```python
@@ -245,7 +243,7 @@ class DataPart(TypedDict):
 
 ---
 
-#### Key Takeaways: A2A Part Usage
+### Key Takeaways: A2A Part Usage
 
 **Part Types (A2A Standard):**
 
@@ -576,81 +574,1725 @@ Understanding the relationship between Messages, Tasks, and Artifacts:
 
 ## Task Management
 
-### Task
-A **Task** is the central coordination unit. It tracks the complete lifecycle of work from request to completion.
+Tasks are the fundamental coordination mechanism in the A2A protocol. They represent stateful execution units that manage the complete lifecycle of work from client request to agent completion. Every interaction between a client and an agent is organized around tasks.
 
-```typescript
+### Task Object
+
+A **Task** is the central coordination unit that tracks work execution. It encapsulates the entire interaction related to a specific goal or request, maintaining conversation history, execution state, and generated artifacts.
+
+**Schema:**
+```python
+class Task(TypedDict):
+    """Stateful execution unit coordinating client-agent interaction.
+    
+    Tasks serve as the primary coordination mechanism in the bindu protocol,
+    managing the complete lifecycle from request to completion. They maintain
+    conversation history, track execution state, and collect generated artifacts.
+    
+    Core Responsibilities:
+    - Message Exchange: Facilitate communication between clients and agents
+    - State Management: Track task progress and execution status
+    - Artifact Collection: Gather and organize agent-generated outputs
+    - History Tracking: Maintain complete conversation and decision trail
+    
+    Task Lifecycle:
+    1. Creation: Client initiates task with initial message/requirements
+    2. Processing: Agent processes messages and updates status
+    3. Communication: Bidirectional message exchange as needed
+    4. Artifact Generation: Agent produces deliverable outputs
+    5. Completion: Final status update and artifact delivery
+    
+    Key Properties:
+    - Client-Initiated: Always created by clients, never by agents
+    - Agent-Controlled: Status and progress determined by executing agent
+    - Stateful: Maintains complete execution context and history
+    - Traceable: Unique ID enables task tracking and reference
+    """
+    
+    id: Required[UUID]
+    """Unique identifier for the task, generated by the server."""
+    
+    context_id: Required[UUID]
+    """The context this task belongs to for session management."""
+    
+    kind: Required[Literal["task"]]
+    """Type discriminator, always "task"."""
+    
+    status: Required[TaskStatus]
+    """Current status including state, timestamp, and optional message."""
+    
+    artifacts: NotRequired[list[Artifact]]
+    """Collection of outputs generated during task execution."""
+    
+    history: NotRequired[list[Message]]
+    """Complete conversation history for this task."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Optional metadata for extensions and custom data."""
+```
+
+**Realistic Example: Data Analysis Task**
+
+A client requests sales data analysis. The task tracks the entire interaction:
+
+```json
 {
-  "id": "uuid",
-  "context_id": "uuid",
+  "id": "363422be-b0f9-4692-a24d-278670e7c7f1",
+  "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
   "kind": "task",
   "status": {
-    "state": "working",
-    "timestamp": "2025-10-10T10:00:00Z",
-    "message": {}
+    "state": "completed",
+    "timestamp": "2025-10-31T10:35:00Z",
+    "message": {
+      "messageId": "status-msg-001",
+      "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+      "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+      "kind": "message",
+      "role": "agent",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Analysis complete. Identified 3 key trends and generated comprehensive report."
+        }
+      ]
+    }
   },
-  "artifacts": [],
-  "history": [],
-  "metadata": {}
+  "artifacts": [
+    {
+      "artifactId": "9b6934dd-37e3-4eb1-8766-962efaab63a1",
+      "name": "Q4 Sales Analysis Report",
+      "description": "Comprehensive analysis of Q4 sales trends",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "# Q4 Sales Analysis\n\n## Executive Summary\nRevenue increased 23% compared to Q3, driven primarily by mobile sales growth of 45% year-over-year.\n\n## Key Findings\n1. **Revenue Growth**: Total revenue reached $2.45M, up 23% from Q3\n2. **Regional Performance**: West Coast dominated with 35% of total sales\n3. **Mobile Surge**: Mobile channel grew 45% YoY, now 28% of total revenue\n\n## Recommendations\n- Increase inventory allocation for top-performing products\n- Expand mobile marketing campaigns in Q1\n- Focus expansion efforts on West Coast market"
+        },
+        {
+          "kind": "data",
+          "data": {
+            "summary": {
+              "totalRevenue": 2450000,
+              "growthRate": 0.23,
+              "topRegion": "West Coast",
+              "mobileGrowth": 0.45
+            },
+            "monthlyTrends": [
+              {"month": "October", "revenue": 750000, "growth": 0.18},
+              {"month": "November", "revenue": 820000, "growth": 0.21},
+              {"month": "December", "revenue": 880000, "growth": 0.27}
+            ],
+            "topProducts": [
+              {"name": "Premium Widget", "revenue": 450000, "units": 1200},
+              {"name": "Standard Widget", "revenue": 380000, "units": 2500}
+            ]
+          }
+        }
+      ],
+      "metadata": {
+        "generatedAt": "2025-10-31T10:35:00Z",
+        "analysisType": "quarterly_sales",
+        "dataPoints": 15000
+      }
+    }
+  ],
+  "history": [
+    {
+      "messageId": "9229e770-767c-417b-a0b0-f0741243c589",
+      "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+      "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+      "kind": "message",
+      "role": "user",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Analyze Q4 sales data and identify key trends"
+        },
+        {
+          "kind": "file",
+          "file": {
+            "name": "sales_q4_2025.csv",
+            "mimeType": "text/csv",
+            "uri": "https://storage.example.com/data/sales_q4_2025.csv"
+          }
+        }
+      ],
+      "metadata": {
+        "priority": "high",
+        "deadline": "2025-11-01T00:00:00Z"
+      }
+    },
+    {
+      "messageId": "agent-msg-001",
+      "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+      "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+      "kind": "message",
+      "role": "agent",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Processing sales data... Analyzing 15,000 transactions across 3 months."
+        }
+      ],
+      "metadata": {
+        "timestamp": "2025-10-31T10:30:15Z",
+        "processingStage": "data_loading"
+      }
+    }
+  ],
+  "metadata": {
+    "estimatedDuration": "5 minutes",
+    "priority": "high",
+    "tags": ["analytics", "sales", "quarterly-report"]
+  }
 }
 ```
 
-**Task States:**
+**What This Example Shows:**
+- **Task Identity**: Unique `id` and `contextId` for tracking
+- **Status Tracking**: Current state (`completed`) with timestamp and agent message
+- **Artifact Delivery**: Complete analysis report with both text and structured data
+- **History Preservation**: Full conversation trail from initial request to completion
+- **Metadata Context**: Additional information about priority, duration, and categorization
 
-**Standard States:**
-- **submitted**: Task created, waiting to start
-- **working**: Agent actively processing
-- **input-required**: Paused, needs user input
-- **completed**: Successfully finished
-- **canceled**: User stopped the task
-- **failed**: Error occurred
-- **rejected**: Agent declined the task
-- **auth-required**: Needs authentication
+---
 
-**Bindu Extensions:**
-- **payment-required**: Needs payment to proceed
-- **unknown**: State unclear
-- **trust-verification-required**: Needs trust verification
-- **pending**: Queued for execution
-- **suspended**: Temporarily paused
-- **resumed**: Restarted after suspension
-- **negotiation-bid-submitted**: In negotiation
-- **negotiation-bid-won**: Won the bid
-- **negotiation-bid-lost**: Lost the bid
+### TaskStatus Object
 
-**Task Lifecycle:**
-1. **Creation**: Client sends initial message with requirements
-2. **Processing**: Agent works and updates status
-3. **Communication**: Back-and-forth messages as needed
-4. **Artifact Generation**: Agent produces results
-5. **Completion**: Final status and artifact delivery
+Represents the current state and context of a task at a specific point in time.
 
-### Context
-A **Context** groups related tasks into a conversation session. Think of it as a workspace where multiple tasks can share history and state.
+**Schema:**
+```python
+class TaskStatus(TypedDict):
+    """Status information for a task at a specific moment.
+    
+    TaskStatus captures the current execution state along with contextual
+    information like timestamps and optional status messages from the agent.
+    """
+    
+    state: Required[TaskState]
+    """Current lifecycle state of the task."""
+    
+    message: NotRequired[Message]
+    """Optional message providing status details or context."""
+    
+    timestamp: Required[str]
+    """ISO 8601 datetime when this status was recorded.
+    
+    Example: "2025-10-31T10:00:00Z"
+    """
+```
 
-```typescript
+**Example: Task Requiring Input**
+```json
 {
-  "context_id": "uuid",
-  "kind": "context",
-  "name": "Customer Support Session",
-  "description": "Helping user with billing issue",
-  "role": "support",
-  "tasks": [],
-  "status": "active",
-  "created_at": "2023-10-27T10:00:00Z",
-  "updated_at": "2023-10-27T10:00:00Z",
-  "tags": ["billing", "urgent"],
-  "metadata": {}
+  "state": "input-required",
+  "timestamp": "2025-10-31T10:32:00Z",
+  "message": {
+    "messageId": "clarification-001",
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "kind": "message",
+    "role": "agent",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "I found multiple data files. Which one should I analyze?\n\n1. sales_q4_2025_final.csv\n2. sales_q4_2025_draft.csv\n3. sales_q4_2025_corrected.csv"
+      }
+    ]
+  }
 }
 ```
 
-**Why Contexts Matter:**
-- **Continuity**: Maintain conversation across multiple tasks
-- **History**: Preserve what happened before
-- **Organization**: Group related work together
-- **References**: Tasks can reference earlier context
+---
 
-**Example:** A user debugging an issue might create multiple tasks (check logs, analyze error, propose fix) all within the same context, so each task has access to previous findings.
+### TaskState Enum
+
+Defines all possible lifecycle states a task can be in during execution.
+
+**Standard A2A States:**
+
+- **`submitted`** - Task has been submitted and is awaiting execution
+  - Initial state when task is created
+  - Agent has acknowledged receipt but hasn't started processing
+  
+- **`working`** - Agent is actively working on the task
+  - Task is being processed
+  - May transition to `input-required`, `completed`, or `failed`
+  
+- **`input-required`** - Task is paused, waiting for user input
+  - Agent needs clarification or additional information
+  - Task will resume once user provides required input
+  - This is an interrupted state, not terminal
+  
+- **`completed`** - Task has been successfully completed
+  - Final deliverables are available in `artifacts`
+  - This is a terminal state - task cannot be modified
+  
+- **`canceled`** - Task has been canceled by the user
+  - User explicitly stopped the task before completion
+  - This is a terminal state
+  
+- **`failed`** - Task failed due to an error during execution
+  - Agent encountered an unrecoverable error
+  - Error details typically included in status message
+  - This is a terminal state
+  
+- **`rejected`** - Task was rejected by the agent and was not started
+  - Agent determined it cannot or will not perform the task
+  - May occur during initial creation or after assessment
+  - This is a terminal state
+  
+- **`auth-required`** - Task requires authentication to proceed
+  - Additional authentication needed from the client
+  - Authentication expected to come out-of-band
+  - Not a terminal state - task can resume after auth
+
+**Bindu Extensions** `<NotPartOfA2A>`:
+
+- **`payment-required`** - Task requires payment to proceed
+- **`unknown`** - Task is in an unknown or indeterminate state
+- **`trust-verification-required`** - Task requires trust verification
+- **`pending`** - Task is pending execution (queued)
+- **`suspended`** - Task is suspended and not currently running
+- **`resumed`** - Task has been resumed after suspension
+- **`negotiation-bid-submitted`** - Task bid submitted for negotiation
+- **`negotiation-bid-lost`** - Task bid was lost in negotiation
+- **`negotiation-bid-won`** - Task bid was won in negotiation
+
+**State Transition Diagram:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> submitted: Task Created
+    
+    submitted --> working: Agent Starts
+    submitted --> rejected: Agent Declines
+    submitted --> canceled: User Cancels
+    
+    working --> completed: Success
+    working --> failed: Error
+    working --> input_required: Needs Input
+    working --> auth_required: Needs Auth
+    working --> canceled: User Cancels
+    
+    input_required --> working: Input Provided
+    input_required --> canceled: User Cancels
+    
+    auth_required --> working: Auth Completed
+    auth_required --> canceled: User Cancels
+    
+    completed --> [*]
+    failed --> [*]
+    rejected --> [*]
+    canceled --> [*]
+    
+    note right of completed
+        Terminal State
+        Task cannot be modified
+    end note
+    
+    note right of failed
+        Terminal State
+        Contains error details
+    end note
+    
+    note right of rejected
+        Terminal State
+        Agent declined task
+    end note
+    
+    note right of canceled
+        Terminal State
+        User stopped task
+    end note
+```
+
+**Legend:**
+- **Terminal States**: `completed`, `failed`, `rejected`, `canceled` - Cannot transition further
+- **Interrupted States**: `input-required`, `auth-required` - Can resume to `working`
+- **Active States**: `submitted`, `working` - Task is being processed
+
+---
+
+### Task Events
+
+Events notify clients of task state changes and artifact updates, typically used in streaming (SSE) or push notification scenarios to keep clients informed without polling.
+
+#### TaskStatusUpdateEvent
+
+Sent by the agent when a task's status changes, enabling real-time progress tracking.
+
+**Schema:**
+```python
+class TaskStatusUpdateEvent(TypedDict):
+    """Event sent by the agent to notify the client of a change in a task's status.
+    
+    This is typically used in streaming or subscription models to provide
+    real-time updates without requiring the client to poll for changes.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task being updated."""
+    
+    context_id: Required[UUID]
+    """The ID of the context the task is associated with."""
+    
+    kind: Required[Literal["status-update"]]
+    """The type of the event, always "status-update"."""
+    
+    status: Required[TaskStatus]
+    """The new status of the task."""
+    
+    final: Required[bool]
+    """Indicates if this is the final status update (terminal state reached)."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata about the event."""
+```
+
+**Example: Progress Update During Processing**
+```json
+{
+  "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+  "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+  "kind": "status-update",
+  "status": {
+    "state": "working",
+    "timestamp": "2025-10-31T10:30:15Z",
+    "message": {
+      "messageId": "progress-001",
+      "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+      "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+      "kind": "message",
+      "role": "agent",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Analyzing data... 45% complete"
+        }
+      ]
+    }
+  },
+  "final": false,
+  "metadata": {
+    "progressPercentage": 45,
+    "estimatedTimeRemaining": "2 minutes"
+  }
+}
+```
+
+**Example: Final Status Update (Completion)**
+```json
+{
+  "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+  "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+  "kind": "status-update",
+  "status": {
+    "state": "completed",
+    "timestamp": "2025-10-31T10:35:00Z"
+  },
+  "final": true
+}
+```
+
+**Use Cases:**
+- Real-time progress tracking for long-running tasks
+- Notifying clients when tasks require input or authentication
+- Alerting on task completion or failure
+- Streaming task execution updates via Server-Sent Events (SSE)
+
+---
+
+#### TaskArtifactUpdateEvent
+
+Sent by the agent when an artifact is generated or updated, enabling incremental delivery of large outputs.
+
+**Schema:**
+```python
+class TaskArtifactUpdateEvent(TypedDict):
+    """Event sent by the agent to notify the client that an artifact has been generated or updated.
+    
+    This is typically used in streaming models to deliver large artifacts
+    incrementally, improving user experience for long-running tasks.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task producing the artifact."""
+    
+    context_id: Required[UUID]
+    """The ID of the context the task is associated with."""
+    
+    kind: Required[Literal["artifact-update"]]
+    """The type of the event, always "artifact-update"."""
+    
+    artifact: Required[Artifact]
+    """The artifact that has been generated or updated."""
+    
+    append: NotRequired[bool]
+    """If true, append to existing artifact. If false, replace existing artifact."""
+    
+    last_chunk: NotRequired[bool]
+    """If true, this is the last chunk of the artifact."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata about the event."""
+```
+
+**Example: First Chunk (New Artifact)**
+```json
+{
+  "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+  "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+  "kind": "artifact-update",
+  "artifact": {
+    "artifactId": "9b6934dd-37e3-4eb1-8766-962efaab63a1",
+    "name": "Market Analysis Report",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "# Market Analysis Report\n\n## Executive Summary\n\nOur Q4 analysis reveals significant market shifts..."
+      }
+    ]
+  },
+  "append": false,
+  "lastChunk": false,
+  "metadata": {
+    "chunkNumber": 1,
+    "totalChunks": 5
+  }
+}
+```
+
+**Example: Subsequent Chunk (Append)**
+```json
+{
+  "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+  "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+  "kind": "artifact-update",
+  "artifact": {
+    "artifactId": "9b6934dd-37e3-4eb1-8766-962efaab63a1",
+    "name": "Market Analysis Report",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "## Competitive Landscape\n\nThree major competitors have entered the market..."
+      }
+    ]
+  },
+  "append": true,
+  "lastChunk": false,
+  "metadata": {
+    "chunkNumber": 3,
+    "totalChunks": 5
+  }
+}
+```
+
+**Example: Final Chunk**
+```json
+{
+  "taskId": "225d6247-06ba-4cda-a08b-33ae35c8dcfa",
+  "contextId": "05217e44-7e9f-473e-ab4f-2c2dde50a2b1",
+  "kind": "artifact-update",
+  "artifact": {
+    "artifactId": "9b6934dd-37e3-4eb1-8766-962efaab63a1",
+    "name": "Market Analysis Report",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "## Recommendations\n\n1. Increase marketing spend by 20%\n2. Focus on mobile channels\n3. Expand into West Coast markets"
+      }
+    ]
+  },
+  "append": true,
+  "lastChunk": true,
+  "metadata": {
+    "chunkNumber": 5,
+    "totalChunks": 5
+  }
+}
+```
+
+**Use Cases:**
+- Streaming large reports or documents in chunks
+- Progressive rendering of generated content
+- Real-time display of agent-generated outputs
+- Reducing memory overhead for large artifacts
+
+**Chunking Strategy:**
+- `append: false` - Start new artifact or replace existing
+- `append: true` - Add content to existing artifact
+- `lastChunk: true` - Signal completion of artifact delivery
+
+---
+
+### Task Operations & Parameters
+
+Parameters used for various task operations including execution, querying, and management.
+
+#### TaskSendParams `<NotPartOfA2A>`
+
+Internal parameters for task execution within the Bindu framework.
+
+**Schema:**
+```python
+class TaskSendParams(TypedDict):
+    """Internal parameters for task execution within the framework.
+    
+    These parameters are used internally by the Bindu framework to manage
+    task execution and are not part of the standard A2A protocol.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task to execute."""
+    
+    context_id: Required[UUID]
+    """The ID of the context the task is associated with."""
+    
+    message: NotRequired[Message]
+    """The message to send to the task."""
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to include."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for task execution."""
+```
+
+**Example:**
+```json
+{
+  "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+  "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+  "message": {
+    "messageId": "msg-002",
+    "role": "user",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "Use the final version of the data file"
+      }
+    ],
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1"
+  },
+  "historyLength": 10,
+  "metadata": {
+    "priority": "high"
+  }
+}
+```
+
+---
+
+#### TaskIdParams
+
+Simple parameters containing a task ID, used for basic task operations.
+
+**Schema:**
+```python
+class TaskIdParams(TypedDict):
+    """Defines parameters containing a task ID, used for simple task operations.
+    
+    This is a base parameter type for operations that only require a task ID,
+    such as cancellation or basic retrieval.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the operation."""
+```
+
+**Example: Cancel Task**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tasks/cancel",
+  "params": {
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "metadata": {
+      "reason": "User requested cancellation"
+    }
+  }
+}
+```
+
+---
+
+#### TaskQueryParams
+
+Parameters for querying task details with optional history limiting.
+
+**Schema:**
+```python
+class TaskQueryParams(TypedDict):
+    """Defines parameters for querying a task, with an option to limit history length.
+    
+    Extends TaskIdParams to add history length control for efficient
+    retrieval of task information.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task to query."""
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to return."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the query."""
+```
+
+**Example: Get Task with Limited History**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tasks/get",
+  "params": {
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "historyLength": 5
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "id": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "kind": "task",
+    "status": {
+      "state": "completed",
+      "timestamp": "2025-10-31T10:35:00Z"
+    },
+    "artifacts": [/* artifacts */],
+    "history": [/* last 5 messages only */]
+  }
+}
+```
+
+**Use Cases:**
+- Retrieving task status without full history
+- Reducing payload size for list operations
+- Efficient polling for task updates
+- Getting recent conversation context only
+
+---
+
+#### ListTasksParams `<NotPartOfA2A>`
+
+Parameters for listing multiple tasks with optional history limiting.
+
+**Schema:**
+```python
+class ListTasksParams(TypedDict):
+    """Defines parameters for listing tasks.
+    
+    This is a Bindu-specific extension for retrieving multiple tasks
+    with control over history size to optimize payload.
+    """
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to return for each task."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for filtering or controlling the list operation."""
+```
+
+**Example: List All Tasks with Limited History**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tasks/list",
+  "params": {
+    "historyLength": 3,
+    "metadata": {
+      "status": "completed",
+      "limit": 10
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "tasks": [
+      {
+        "id": "task-001",
+        "contextId": "ctx-001",
+        "kind": "task",
+        "status": {
+          "state": "completed",
+          "timestamp": "2025-10-31T10:35:00Z"
+        },
+        "artifacts": [/* artifacts */],
+        "history": [/* last 3 messages only */]
+      },
+      {
+        "id": "task-002",
+        "contextId": "ctx-001",
+        "kind": "task",
+        "status": {
+          "state": "working",
+          "timestamp": "2025-10-31T10:38:00Z"
+        },
+        "history": [/* last 3 messages only */]
+      }
+    ],
+    "total": 15,
+    "page": 1
+  }
+}
+```
+
+**Use Cases:**
+- Dashboard views showing multiple tasks
+- Task management interfaces
+- Batch status checking
+- Filtering tasks by status or context
+- Pagination with history control
+
+---
+
+#### TaskFeedbackParams `<NotPartOfA2A>`
+
+Parameters for providing feedback on completed tasks.
+
+**Schema:**
+```python
+class TaskFeedbackParams(TypedDict):
+    """Defines parameters for providing feedback on a task.
+    
+    This is a Bindu-specific extension that enables users to rate
+    and provide feedback on task execution quality.
+    """
+    
+    task_id: Required[UUID]
+    """The ID of the task to provide feedback for."""
+    
+    feedback: Required[str]
+    """Textual feedback about the task execution."""
+    
+    rating: NotRequired[int]
+    """Optional rating from 1 (lowest) to 5 (highest)."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata about the feedback."""
+```
+
+**Example: Positive Feedback**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tasks/feedback",
+  "params": {
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "feedback": "Excellent analysis with actionable insights. The regional breakdown was particularly helpful and the recommendations are clear and practical.",
+    "rating": 5,
+    "metadata": {
+      "helpful": true,
+      "accurate": true,
+      "timely": true,
+      "wouldUseAgain": true
+    }
+  }
+}
+```
+
+**Example: Constructive Feedback**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tasks/feedback",
+  "params": {
+    "taskId": "task-002",
+    "feedback": "The analysis was good but took longer than expected. Would appreciate more frequent progress updates.",
+    "rating": 3,
+    "metadata": {
+      "helpful": true,
+      "accurate": true,
+      "timely": false,
+      "suggestions": ["Add progress indicators", "Provide time estimates"]
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "success": true,
+    "feedbackId": "feedback-001",
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "timestamp": "2025-10-31T10:40:00Z"
+  }
+}
+```
+
+**Rating Scale:**
+- **5** - Excellent: Exceeded expectations
+- **4** - Good: Met expectations well
+- **3** - Satisfactory: Met basic expectations
+- **2** - Poor: Below expectations
+- **1** - Very Poor: Did not meet expectations
+
+**Use Cases:**
+- Quality assurance and agent improvement
+- User satisfaction tracking
+- Identifying areas for enhancement
+- Training data for agent optimization
+- Performance metrics and analytics
+
+**Best Practices:**
+- Provide specific, actionable feedback
+- Use ratings consistently across tasks
+- Include context in metadata
+- Submit feedback promptly after task completion
+- Be constructive in criticism
+
+---
+
+### Message Sending Parameters
+
+Parameters for sending messages to agents to initiate or continue task interactions.
+
+#### MessageSendConfiguration
+
+Configuration options for message sending behavior.
+
+**Schema:**
+```python
+class MessageSendConfiguration(TypedDict):
+    """Configuration for message sending.
+    
+    Controls how the agent processes the message and how the client
+    receives responses, including output format preferences and blocking behavior.
+    """
+    
+    accepted_output_modes: Required[list[str]]
+    """The accepted output modes (MIME types) for the response.
+    
+    Examples: ["text/plain", "application/json", "text/markdown"]
+    """
+    
+    blocking: NotRequired[bool]
+    """If true, the request blocks until the task completes or requires input.
+    If false, returns immediately with task in 'submitted' or 'working' state.
+    """
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to include in the response."""
+    
+    push_notification_config: NotRequired[PushNotificationConfig]
+    """Configuration for push notifications about task updates."""
+```
+
+**Example: Blocking Request with JSON Output**
+```json
+{
+  "acceptedOutputModes": ["application/json", "text/plain"],
+  "blocking": true,
+  "historyLength": 10
+}
+```
+
+**Example: Non-Blocking with Push Notifications**
+```json
+{
+  "acceptedOutputModes": ["text/markdown", "text/plain"],
+  "blocking": false,
+  "pushNotificationConfig": {
+    "id": "notif-001",
+    "url": "https://client.example.com/webhook/task-updates",
+    "token": "secret-webhook-token",
+    "authentication": {
+      "type": "http",
+      "scheme": "bearer"
+    }
+  }
+}
+```
+
+---
+
+#### MessageSendParams
+
+Parameters for sending a message to an agent.
+
+**Schema:**
+```python
+class MessageSendParams(TypedDict):
+    """Parameters for sending messages.
+    
+    Used to initiate a new task or continue an existing one by sending
+    a message to the agent. Cannot be used to restart terminal tasks.
+    """
+    
+    message: Required[Message]
+    """The message to send to the agent."""
+    
+    configuration: Required[MessageSendConfiguration]
+    """Configuration for how the message should be processed."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the request."""
+```
+
+**Example: Initiate New Task (Blocking)**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message/send",
+  "params": {
+    "message": {
+      "messageId": "9229e770-767c-417b-a0b0-f0741243c589",
+      "role": "user",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Analyze Q4 sales data and identify key trends"
+        },
+        {
+          "kind": "file",
+          "file": {
+            "name": "sales_q4.csv",
+            "mimeType": "text/csv",
+            "uri": "https://storage.example.com/data/sales_q4.csv"
+          }
+        }
+      ]
+    },
+    "configuration": {
+      "acceptedOutputModes": ["text/plain", "application/json"],
+      "blocking": true,
+      "historyLength": 5
+    },
+    "metadata": {
+      "priority": "high",
+      "source": "dashboard"
+    }
+  }
+}
+```
+
+**Response: Completed Task**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "id": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "kind": "task",
+    "status": {
+      "state": "completed",
+      "timestamp": "2025-10-31T10:35:00Z"
+    },
+    "artifacts": [/* analysis results */],
+    "history": [/* conversation */]
+  }
+}
+```
+
+**Example: Continue Existing Task (Provide Input)**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "message/send",
+  "params": {
+    "message": {
+      "messageId": "msg-002",
+      "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+      "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+      "role": "user",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Use the final version: sales_q4_2025_final.csv"
+        }
+      ]
+    },
+    "configuration": {
+      "acceptedOutputModes": ["text/plain"],
+      "blocking": false
+    }
+  }
+}
+```
+
+**Important Notes:**
+- Cannot restart tasks in terminal states (`completed`, `canceled`, `rejected`, `failed`)
+- Use `blocking: true` for quick operations, `false` for long-running tasks
+- `acceptedOutputModes` helps agent format response appropriately
+- Include `taskId` in message to continue existing task
+
+---
+
+### Push Notification Parameters
+
+Parameters for managing push notification configurations associated with tasks.
+
+#### ListTaskPushNotificationConfigParams
+
+Parameters for retrieving all push notification configurations for a task.
+
+**Schema:**
+```python
+class ListTaskPushNotificationConfigParams(TypedDict):
+    """Parameters for getting list of pushNotificationConfigurations associated with a Task.
+    
+    Retrieves all webhook configurations that receive updates for this task.
+    """
+    
+    id: Required[UUID]
+    """The ID of the task."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the request."""
+```
+
+**Example:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tasks/pushNotificationConfig/list",
+  "params": {
+    "id": "363422be-b0f9-4692-a24d-278670e7c7f1"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "configs": [
+      {
+        "id": "notif-001",
+        "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+        "url": "https://client.example.com/webhook/task-updates",
+        "authentication": {
+          "type": "http",
+          "scheme": "bearer"
+        }
+      },
+      {
+        "id": "notif-002",
+        "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1",
+        "url": "https://backup.example.com/notifications",
+        "authentication": {
+          "type": "http",
+          "scheme": "bearer"
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### DeleteTaskPushNotificationConfigParams
+
+Parameters for removing a push notification configuration from a task.
+
+**Schema:**
+```python
+class DeleteTaskPushNotificationConfigParams(TypedDict):
+    """Parameters for removing pushNotificationConfiguration associated with a Task.
+    
+    Removes a specific webhook configuration so it no longer receives
+    updates for this task.
+    """
+    
+    id: Required[UUID]
+    """The ID of the task."""
+    
+    push_notification_config_id: Required[UUID]
+    """The ID of the push notification configuration to remove."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the request."""
+```
+
+**Example:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tasks/pushNotificationConfig/delete",
+  "params": {
+    "id": "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "pushNotificationConfigId": "notif-001",
+    "metadata": {
+      "reason": "Webhook endpoint deprecated"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "success": true,
+    "deletedConfigId": "notif-001",
+    "taskId": "363422be-b0f9-4692-a24d-278670e7c7f1"
+  }
+}
+```
+
+**Use Cases:**
+- Clean up obsolete webhook endpoints
+- Remove notification configs after task completion
+- Update notification routing by removing old configs
+- Manage webhook lifecycle
+
+**Related Methods:**
+- `tasks/pushNotificationConfig/set` - Add or update notification config
+- `tasks/pushNotificationConfig/get` - Retrieve specific config
+- `tasks/pushNotificationConfig/list` - List all configs for a task
+
+---
+
+## Context Management
+
+Contexts serve as conversation containers in the Bindu protocol, managing the complete interaction lifecycle between clients and agents. They maintain conversation continuity, preserve context across multiple tasks, and provide session-level organization.
+
+<Note>
+Context is a Bindu-specific extension `<NotPartOfA2A>` that goes beyond the standard A2A protocol to enable sophisticated conversation management and session tracking.
+</Note>
+
+### Context Object
+
+A **Context** is a conversation session that groups related tasks and maintains interaction history. It provides the organizational structure for multi-turn conversations and enables agents to maintain state across multiple task executions.
+
+**Schema:**
+```python
+class Context(TypedDict):
+    """Conversation session that groups related tasks and maintains interaction history.
+    
+    Contexts serve as conversation containers in the bindu protocol, managing
+    the complete interaction lifecycle between clients and agents. They maintain
+    conversation continuity, preserve context across multiple tasks, and provide
+    session-level organization.
+    
+    Core Responsibilities:
+    - Session Management: Group related tasks under a unified conversation
+    - History Preservation: Maintain complete message history across tasks
+    - Context Continuity: Preserve conversation state and references
+    - Metadata Tracking: Store session-level information and preferences
+    
+    Context Lifecycle:
+    1. Creation: Client initiates conversation or system creates implicit context
+    2. Task Association: Multiple tasks can belong to the same context
+    3. History Building: Messages and artifacts accumulate over time
+    4. State Management: Track conversation status and metadata
+    5. Completion: Context can be closed or archived when conversation ends
+    
+    Key Properties:
+    - Multi-Task: Contains multiple related tasks over time
+    - Stateful: Maintains conversation history and context
+    - Client-Controlled: Clients can explicitly manage context lifecycle
+    - Traceable: Unique ID enables context tracking and reference
+    
+    Context Relationships:
+    - Contains: Multiple tasks (one-to-many relationship)
+    - Maintains: Complete conversation history across all tasks
+    - Preserves: Session-level metadata and preferences
+    - References: Can link to other contexts for complex workflows
+    """
+    
+    context_id: Required[UUID]
+    """Unique identifier for the context."""
+    
+    kind: Required[Literal["context"]]
+    """Type discriminator, always "context"."""
+    
+    tasks: NotRequired[list[UUID]]
+    """List of task IDs belonging to this context."""
+    
+    name: NotRequired[str]
+    """Human-readable context name."""
+    
+    description: NotRequired[str]
+    """Context purpose or summary."""
+    
+    role: Required[str]
+    """Role of the context (e.g., "assistant", "analyst", "coordinator")."""
+    
+    created_at: Required[str]
+    """ISO 8601 datetime when context was created.
+    
+    Example: "2023-10-27T10:00:00Z"
+    """
+    
+    updated_at: Required[str]
+    """ISO 8601 datetime when context was last updated.
+    
+    Example: "2023-10-27T10:00:00Z"
+    """
+    
+    status: NotRequired[Literal["active", "paused", "completed", "archived"]]
+    """Current status of the context:
+    - active: Context is currently in use
+    - paused: Context is temporarily suspended
+    - completed: Context has finished its purpose
+    - archived: Context is stored for historical reference
+    """
+    
+    tags: NotRequired[list[str]]
+    """Organizational tags for categorization and filtering."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Custom context metadata for extensions and application-specific data."""
+    
+    parent_context_id: NotRequired[UUID]
+    """For nested or hierarchical contexts."""
+    
+    reference_context_ids: NotRequired[list[UUID]]
+    """Related contexts for cross-referencing."""
+    
+    extensions: NotRequired[dict[str, Any]]
+    """Additional protocol extensions."""
+```
+
+**Realistic Example: Multi-Task Analysis Context**
+
+A client engages in a multi-turn conversation about market analysis:
+
+```json
+{
+  "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+  "kind": "context",
+  "name": "Q4 Market Analysis Session",
+  "description": "Comprehensive market analysis and strategic planning for Q4 2025",
+  "role": "analyst",
+  "createdAt": "2025-10-31T09:00:00Z",
+  "updatedAt": "2025-10-31T11:30:00Z",
+  "status": "active",
+  "tasks": [
+    "363422be-b0f9-4692-a24d-278670e7c7f1",
+    "8f7e6d5c-4b3a-2109-8765-fedcba098765",
+    "1a2b3c4d-5e6f-7890-abcd-ef1234567890"
+  ],
+  "tags": ["market-analysis", "q4-2025", "strategic-planning"],
+  "metadata": {
+    "department": "Strategy",
+    "priority": "high",
+    "stakeholders": ["CEO", "CMO", "CFO"],
+    "deadline": "2025-11-15T00:00:00Z",
+    "budget": 50000,
+    "region": "North America"
+  }
+}
+```
+
+**What This Example Shows:**
+- **Context Identity**: Unique `contextId` for tracking the conversation
+- **Session Organization**: Groups 3 related tasks under one conversation
+- **Temporal Tracking**: Creation and update timestamps
+- **Status Management**: Active status indicates ongoing work
+- **Metadata Context**: Business context like department, priority, and stakeholders
+- **Categorization**: Tags for filtering and organization
+
+**Context vs Task:**
+- **Context** = The conversation session (container)
+- **Task** = Individual work units within the conversation
+- One context can contain many tasks
+- Tasks inherit context from their parent context
+
+---
+
+### Context Status States
+
+Contexts can be in one of four states:
+
+**Active States:**
+
+- **`active`** - Context is currently in use
+  - New tasks can be added
+  - Conversation is ongoing
+  - Default state for new contexts
+  
+- **`paused`** - Context is temporarily suspended
+  - No new tasks should be created
+  - Existing tasks may continue
+  - Can be resumed to `active` state
+
+**Terminal States:**
+
+- **`completed`** - Context has finished its purpose
+  - All tasks are completed
+  - No new tasks should be added
+  - Context is considered closed
+  
+- **`archived`** - Context is stored for historical reference
+  - Preserved for audit or review
+  - Read-only access
+  - Cannot be modified or resumed
+
+**State Transition Diagram:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> active: Context Created
+    
+    active --> paused: Suspend
+    active --> completed: All Tasks Done
+    active --> archived: Archive
+    
+    paused --> active: Resume
+    paused --> completed: Complete
+    paused --> archived: Archive
+    
+    completed --> archived: Archive
+    
+    archived --> [*]
+    
+    note right of active
+        Default state
+        Tasks can be added
+    end note
+    
+    note right of completed
+        Terminal state
+        All work finished
+    end note
+    
+    note right of archived
+        Terminal state
+        Read-only
+    end note
+```
+
+---
+
+### Context Operations & Parameters
+
+Parameters used for various context operations including creation, querying, and management.
+
+#### ContextIdParams
+
+Simple parameters containing a context ID, used for basic context operations.
+
+**Schema:**
+```python
+class ContextIdParams(TypedDict):
+    """Parameters for context identification.
+    
+    Used for operations that only require a context ID, such as
+    retrieval, deletion, or basic status checks.
+    """
+    
+    context_id: Required[UUID]
+    """The ID of the context."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the operation."""
+```
+
+**Example: Get Context**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "contexts/get",
+  "params": {
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "kind": "context",
+    "name": "Q4 Market Analysis Session",
+    "role": "analyst",
+    "status": "active",
+    "tasks": ["363422be-b0f9-4692-a24d-278670e7c7f1"],
+    "createdAt": "2025-10-31T09:00:00Z",
+    "updatedAt": "2025-10-31T11:30:00Z"
+  }
+}
+```
+
+---
+
+#### ContextQueryParams
+
+Parameters for querying context details with optional history limiting.
+
+**Schema:**
+```python
+class ContextQueryParams(TypedDict):
+    """Query parameters for a context.
+    
+    Extends ContextIdParams to add history length control for efficient
+    retrieval of context information with task history.
+    """
+    
+    context_id: Required[UUID]
+    """The ID of the context to query."""
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to return per task."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for the query."""
+```
+
+**Example: Get Context with Limited Task History**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "contexts/get",
+  "params": {
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "historyLength": 5
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+    "kind": "context",
+    "name": "Q4 Market Analysis Session",
+    "role": "analyst",
+    "status": "active",
+    "tasks": [
+      "363422be-b0f9-4692-a24d-278670e7c7f1",
+      "8f7e6d5c-4b3a-2109-8765-fedcba098765"
+    ],
+    "createdAt": "2025-10-31T09:00:00Z",
+    "updatedAt": "2025-10-31T11:30:00Z",
+    "metadata": {
+      "taskCount": 2,
+      "lastActivity": "2025-10-31T11:30:00Z"
+    }
+  }
+}
+```
+
+**Use Cases:**
+- Retrieving context status without full task history
+- Reducing payload size for context queries
+- Getting recent conversation context only
+- Efficient context monitoring
+
+---
+
+#### ListContextsParams
+
+Parameters for listing multiple contexts with optional history limiting.
+
+**Schema:**
+```python
+class ListContextsParams(TypedDict):
+    """Parameters for listing contexts.
+    
+    Used to retrieve multiple contexts with control over history size
+    and filtering options to optimize payload and query performance.
+    """
+    
+    history_length: NotRequired[int]
+    """The maximum number of history messages to return for each task in each context."""
+    
+    metadata: NotRequired[dict[str, Any]]
+    """Additional metadata for filtering or controlling the list operation.
+    
+    Common filters:
+    - status: Filter by context status (active, paused, completed, archived)
+    - tags: Filter by tags
+    - role: Filter by context role
+    - limit: Maximum number of contexts to return
+    - offset: Pagination offset
+    - sortBy: Sort field (createdAt, updatedAt, name)
+    - sortOrder: Sort direction (asc, desc)
+    """
+```
+
+**Example: List Active Contexts**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "contexts/list",
+  "params": {
+    "historyLength": 3,
+    "metadata": {
+      "status": "active",
+      "limit": 10,
+      "sortBy": "updatedAt",
+      "sortOrder": "desc"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "contexts": [
+      {
+        "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+        "kind": "context",
+        "name": "Q4 Market Analysis Session",
+        "role": "analyst",
+        "status": "active",
+        "tasks": ["363422be-b0f9-4692-a24d-278670e7c7f1"],
+        "createdAt": "2025-10-31T09:00:00Z",
+        "updatedAt": "2025-10-31T11:30:00Z",
+        "tags": ["market-analysis", "q4-2025"]
+      },
+      {
+        "contextId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "kind": "context",
+        "name": "Customer Support Session",
+        "role": "support",
+        "status": "active",
+        "tasks": ["task-001", "task-002"],
+        "createdAt": "2025-10-31T10:15:00Z",
+        "updatedAt": "2025-10-31T11:25:00Z",
+        "tags": ["support", "customer-inquiry"]
+      }
+    ],
+    "total": 15,
+    "page": 1,
+    "pageSize": 10
+  }
+}
+```
+
+**Use Cases:**
+- Dashboard views showing active conversations
+- Context management interfaces
+- Session monitoring and analytics
+- Filtering contexts by status, role, or tags
+- Pagination with history control
+- Finding contexts by criteria
+
+**Common Filtering Patterns:**
+
+**By Status:**
+```json
+{
+  "metadata": {
+    "status": "active"
+  }
+}
+```
+
+**By Tags:**
+```json
+{
+  "metadata": {
+    "tags": ["market-analysis", "high-priority"]
+  }
+}
+```
+
+**By Date Range:**
+```json
+{
+  "metadata": {
+    "createdAfter": "2025-10-01T00:00:00Z",
+    "createdBefore": "2025-10-31T23:59:59Z"
+  }
+}
+```
+
+**With Pagination:**
+```json
+{
+  "metadata": {
+    "limit": 20,
+    "offset": 40,
+    "sortBy": "updatedAt",
+    "sortOrder": "desc"
+  }
+}
+```
+
+---
+
+### Context Best Practices
+
+**When to Create a New Context:**
+- Starting a new conversation or session
+- Beginning a new project or workflow
+- Switching to a different topic or domain
+- Requiring different agent roles or capabilities
+
+**When to Reuse an Existing Context:**
+- Continuing an ongoing conversation
+- Adding follow-up tasks to existing work
+- Maintaining conversation continuity
+- Preserving historical context
+
+**Context Naming Conventions:**
+- Use descriptive, human-readable names
+- Include key identifiers (project name, date, purpose)
+- Keep names concise but informative
+- Examples: "Q4 Sales Analysis", "Customer Support - Ticket #1234"
+
+**Metadata Best Practices:**
+- Store application-specific data in metadata
+- Use consistent key naming conventions
+- Include relevant business context
+- Add timestamps for important events
+- Track ownership and permissions
+
+**Context Lifecycle Management:**
+- Set status to `paused` for temporarily inactive contexts
+- Mark as `completed` when all work is done
+- Archive old contexts for historical reference
+- Clean up archived contexts periodically
+- Monitor context age and activity
+
+**Performance Considerations:**
+- Use `historyLength` to limit payload size
+- Filter contexts by status to reduce query load
+- Paginate large context lists
+- Archive completed contexts regularly
+- Index frequently queried metadata fields
 
 ---
 
