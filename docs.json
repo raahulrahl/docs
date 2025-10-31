@@ -40,15 +40,15 @@
           {
             "group": "Concepts",
             "pages": [
-              "bindu/concepts/core-architecture",
-              "bindu/concepts/protocol"
+              "bindu/concepts/architecture",
+              "bindu/concepts/protocol",
+              "bindu/concepts/task-first-pattern"
             ]
           },
           {
             "group": "Skills",
             "pages": [
-              "skills/overview",
-              "skills"
+              "bindu/skills/overview"
             ]
           },
           {
@@ -57,29 +57,29 @@
               {
                 "group": "Observability",
                 "pages": [
-                  "observability/introduction",
-                  "observability/run"
+                  "bindu/observability/introduction",
+                  "bindu/observability/run"
                 ]
               },
               {
                 "group": "Authentication",
                 "pages": [
-                  "auth/auth0",
-                  "auth/azure"
+                  "bindu/auth/auth0",
+                  "bindu/auth/azure"
                 ]
               },
               {
                 "group": "DID",
                 "pages": [
-                  "did/introduction",
-                  "did/compatibility"
+                  "bindu/did/introduction",
+                  "bindu/did/compatibility"
                 ] 
               },
               {
                 "group": "Payment",
                 "pages": [
-                  "payment/introduction",
-                  "payment/"
+                  "bindu/payment/introduction",
+                  "bindu/payment/"
                 ] 
               }
 
@@ -88,9 +88,8 @@
           {
             "group": "How to",
             "pages": [
-              "how-to/install",
-              "how-to/contribute",
-              "how-to/authentication"
+              "bindu/how-to/install",
+              "bindu/how-to/contribute"
             ]
           }
         ]
@@ -101,8 +100,7 @@
           {
             "group": "Docs",
             "pages": [
-              "docs/overview",
-              "docs/"
+              "sapthame/introduction/overview"
             ]
           }
         ]
@@ -113,8 +111,7 @@
           {
             "group": "Examples",
             "pages": [
-              "examples/overview",
-              "api/"
+              "examples/overview"
             ]
           }
         ]

@@ -1,0 +1,756 @@
+---
+title: "Protocol Types"
+---
+
+# The Language of Agents
+
+Think of protocol types as the vocabulary that agents use to talk to each other. Just like humans need a common language to communicate, agents need a precise set of data structures to understand each other. This guide explains each type in simple terms.
+
+## Overview
+
+Bindu follows two main protocols:
+- **A2A (Agent-to-Agent) Protocol v0.3.0** - The standard for agent communication
+- **AP2 (Agent Protocol 2) v0.1.0** - Extensions for advanced features
+
+<Note>
+Some types are marked as `<NotPartOfA2A>` - these are Bindu-specific extensions that go beyond the standard A2A protocol.
+</Note>
+
+---
+
+## Core Building Blocks
+
+### Parts: The Content Pieces
+
+Messages and artifacts are made up of **Parts** - think of them as different types of content you can send:
+
+#### TextPart
+The simplest type - just plain text.
+
+```json
+{
+  "kind": "text",
+  "text": "Hello, I need help with a task",
+  "metadata": {},
+  "embeddings": []
+}
+```
+
+**What it's for:** Instructions, descriptions, status updates, or any text-based communication.
+
+#### FilePart
+Send files either as raw bytes or as a link.
+
+```json
+{
+  "kind": "file",
+  "file": {
+    "bytes": "base64-encoded-content",
+    "mimeType": "application/pdf",
+    "name": "document.pdf",
+    "uri": "https://example.com/file.pdf"
+  },
+  "metadata": {}
+}
+```
+
+**What it's for:** Sharing documents, images, data files, or any binary content.
+
+#### DataPart
+Structured data in JSON format.
+
+```json
+{
+  "kind": "data",
+  "data": {
+    "user_preferences": {
+      "theme": "dark",
+      "language": "en"
+    }
+  },
+  "metadata": {}
+}
+```
+
+**What it's for:** Configuration, structured parameters, or any JSON-serializable data.
+
+---
+
+## Communication Types
+
+### Message
+Messages are the primary way agents, users, and systems communicate. Unlike artifacts (which contain final results), messages carry operational content.
+
+```typescript
+{
+  "message_id": "uuid",
+  "context_id": "uuid",
+  "task_id": "uuid",
+  "kind": "message",
+  "role": "user" | "agent" | "system",
+  "parts": [/* array of TextPart, FilePart, or DataPart */],
+  "metadata": {},
+  "reference_task_ids": []
+}
+```
+
+**Message Roles:**
+- **user**: Messages from humans or client applications
+- **agent**: Messages from AI agents (status updates, thoughts, coordination)
+- **system**: Protocol-level messages (errors, warnings, notifications)
+
+**Common Use Cases:**
+- User sends instructions: "Please analyze this data"
+- Agent sends status: "I'm processing your request..."
+- System sends error: "Authentication required"
+
+### Artifact
+Artifacts are the **final outputs** produced by agents after completing work. They're immutable and uniquely identified.
+
+```typescript
+{
+  "artifact_id": "uuid",
+  "name": "Analysis Report",
+  "description": "Detailed analysis of the dataset",
+  "parts": [/* results as text, files, or data */],
+  "metadata": {},
+  "append": false,
+  "last_chunk": true
+}
+```
+
+**Key Differences from Messages:**
+- Messages = communication during work
+- Artifacts = deliverable results after work
+
+**Example:** An agent analyzing data might send multiple messages ("Starting analysis...", "Found 3 patterns...") but produce one artifact containing the final report.
+
+---
+
+## Task Management
+
+### Task
+A **Task** is the central coordination unit. It tracks the complete lifecycle of work from request to completion.
+
+```typescript
+{
+  "id": "uuid",
+  "context_id": "uuid",
+  "kind": "task",
+  "status": {
+    "state": "working",
+    "timestamp": "2025-10-10T10:00:00Z",
+    "message": {}
+  },
+  "artifacts": [],
+  "history": [],
+  "metadata": {}
+}
+```
+
+**Task States:**
+
+**Standard States:**
+- **submitted**: Task created, waiting to start
+- **working**: Agent actively processing
+- **input-required**: Paused, needs user input
+- **completed**: Successfully finished
+- **canceled**: User stopped the task
+- **failed**: Error occurred
+- **rejected**: Agent declined the task
+- **auth-required**: Needs authentication
+
+**Bindu Extensions:**
+- **payment-required**: Needs payment to proceed
+- **unknown**: State unclear
+- **trust-verification-required**: Needs trust verification
+- **pending**: Queued for execution
+- **suspended**: Temporarily paused
+- **resumed**: Restarted after suspension
+- **negotiation-bid-submitted**: In negotiation
+- **negotiation-bid-won**: Won the bid
+- **negotiation-bid-lost**: Lost the bid
+
+**Task Lifecycle:**
+1. **Creation**: Client sends initial message with requirements
+2. **Processing**: Agent works and updates status
+3. **Communication**: Back-and-forth messages as needed
+4. **Artifact Generation**: Agent produces results
+5. **Completion**: Final status and artifact delivery
+
+### Context
+A **Context** groups related tasks into a conversation session. Think of it as a workspace where multiple tasks can share history and state.
+
+```typescript
+{
+  "context_id": "uuid",
+  "kind": "context",
+  "name": "Customer Support Session",
+  "description": "Helping user with billing issue",
+  "role": "support",
+  "tasks": [],
+  "status": "active",
+  "created_at": "2023-10-27T10:00:00Z",
+  "updated_at": "2023-10-27T10:00:00Z",
+  "tags": ["billing", "urgent"],
+  "metadata": {}
+}
+```
+
+**Why Contexts Matter:**
+- **Continuity**: Maintain conversation across multiple tasks
+- **History**: Preserve what happened before
+- **Organization**: Group related work together
+- **References**: Tasks can reference earlier context
+
+**Example:** A user debugging an issue might create multiple tasks (check logs, analyze error, propose fix) all within the same context, so each task has access to previous findings.
+
+---
+
+## Security & Authentication
+
+### Security Schemes
+Bindu supports multiple authentication methods:
+
+#### HTTP Authentication
+```json
+{
+  "type": "http",
+  "scheme": "bearer",
+  "bearer_format": "JWT"
+}
+```
+
+#### API Key
+```json
+{
+  "type": "apiKey",
+  "name": "X-API-Key",
+  "in_": "header"
+}
+```
+
+#### OAuth2
+```json
+{
+  "type": "oauth2",
+  "flows": {
+    "authorizationCode": {
+      "authorizationUrl": "https://auth.example.com/oauth/authorize",
+      "tokenUrl": "https://auth.example.com/oauth/token"
+    }
+  }
+}
+```
+
+#### OpenID Connect
+```json
+{
+  "type": "openIdConnect",
+  "open_id_connect_url": "https://auth.example.com/.well-known/openid-configuration"
+}
+```
+
+#### Mutual TLS
+```json
+{
+  "type": "mutualTLS",
+  "description": "Client certificate authentication"
+}
+```
+
+### Trust Levels
+Bindu uses role-based trust levels to control what agents can do:
+
+- **super_admin**: Full system access
+- **admin**: Administrative operations
+- **manager**: Management operations with elevated permissions
+- **operator**: System operations, moderate risk
+- **editor**: Edit operations, moderate risk
+- **analyst**: Standard operations
+- **auditor**: Sensitive operations (read-only)
+- **support**: Troubleshooting access
+- **viewer**: View-only, minimal permissions
+- **guest**: Limited read-only access
+
+### Identity Providers
+Supported authentication providers:
+- **keycloak**: Open-source identity management
+- **azure_ad**: Microsoft Azure Active Directory
+- **okta**: Okta identity platform
+- **auth0**: Auth0 authentication service
+- **custom**: Custom identity provider
+
+---
+
+## Notifications
+
+### Push Notifications
+For real-time updates when tasks change state:
+
+```typescript
+{
+  "id": "uuid",
+  "url": "https://client.example.com/webhook",
+  "token": "secret-token",
+  "authentication": {
+    "type": "http",
+    "scheme": "bearer"
+  }
+}
+```
+
+**Use Cases:**
+- Notify client when task completes
+- Alert on errors or state changes
+- Stream progress updates
+
+### Task Events
+
+#### Status Update Event
+```typescript
+{
+  "task_id": "uuid",
+  "context_id": "uuid",
+  "kind": "status-update",
+  "status": {
+    "state": "completed",
+    "timestamp": "2025-10-10T10:00:00Z"
+  },
+  "final": true
+}
+```
+
+#### Artifact Update Event
+```typescript
+{
+  "task_id": "uuid",
+  "context_id": "uuid",
+  "kind": "artifact-update",
+  "artifact": {/* artifact object */},
+  "append": false,
+  "last_chunk": true
+}
+```
+
+---
+
+## Payment & Commerce (AP2 Protocol)
+
+### Payment Types
+
+#### Contact Address
+Physical address for shipping:
+
+```typescript
+{
+  "recipient": "John Doe",
+  "address_line": ["123 Main St", "Apt 4B"],
+  "city": "San Francisco",
+  "region": "CA",
+  "postal_code": "94102",
+  "country": "US",
+  "phone_number": "+1-555-0123"
+}
+```
+
+#### Payment Currency Amount
+```typescript
+{
+  "currency": "USD",
+  "value": 29.99
+}
+```
+
+#### Payment Item
+```typescript
+{
+  "label": "Premium Subscription",
+  "amount": {
+    "currency": "USD",
+    "value": 29.99
+  },
+  "pending": false,
+  "refund_period": 30
+}
+```
+
+### Payment Request
+Complete payment request structure:
+
+```typescript
+{
+  "method_data": [{
+    "supported_methods": "basic-card",
+    "data": {
+      "supportedNetworks": ["visa", "mastercard"]
+    }
+  }],
+  "details": {
+    "id": "order-123",
+    "total": {
+      "label": "Total",
+      "amount": {"currency": "USD", "value": 29.99}
+    },
+    "display_items": [
+      {"label": "Subscription", "amount": {"currency": "USD", "value": 29.99}}
+    ]
+  },
+  "options": {
+    "request_payer_email": true,
+    "request_shipping": false
+  }
+}
+```
+
+### Mandates: Authorization Framework
+
+#### Intent Mandate
+User's purchase intent and constraints:
+
+```typescript
+{
+  "user_cart_confirmation_required": true,
+  "natural_language_description": "Buy a laptop under $1500 from trusted retailers",
+  "merchants": ["BestBuy", "Amazon"],
+  "requires_refundability": true,
+  "intent_expiry": "2025-12-31T23:59:59Z"
+}
+```
+
+**What it means:** "I authorize the agent to buy a laptop, but I want to confirm the cart before purchase, it must be refundable, and only from these merchants."
+
+#### Cart Mandate
+Merchant's signed cart with guaranteed prices:
+
+```typescript
+{
+  "contents": {
+    "id": "cart-456",
+    "merchant_name": "BestBuy",
+    "user_cart_confirmation_required": true,
+    "payment_request": {/* payment details */},
+    "cart_expiry": "2025-10-10T12:00:00Z"
+  },
+  "merchant_authorization": "eyJhbGc..."
+}
+```
+
+**What it means:** Merchant guarantees these items at these prices until expiry. The JWT proves authenticity.
+
+#### Payment Mandate
+Final payment authorization with user signature:
+
+```typescript
+{
+  "payment_mandate_contents": {
+    "payment_mandate_id": "pm-789",
+    "payment_details_id": "order-123",
+    "payment_details_total": {/* total amount */},
+    "payment_response": {/* chosen payment method */},
+    "merchant_agent": "bestbuy-agent-did",
+    "timestamp": "2025-10-10T10:30:00Z"
+  },
+  "user_authorization": "eyJhbGc..."
+}
+```
+
+**What it means:** User's cryptographic signature authorizing the payment. Shared with payment networks for trust.
+
+---
+
+## Agent Discovery & Capabilities
+
+### Agent Card
+The "business card" that describes an agent:
+
+```typescript
+{
+  "id": "uuid",
+  "name": "Data Analysis Agent",
+  "description": "Analyzes datasets and generates insights",
+  "url": "https://agent.example.com",
+  "version": "1.0.0",
+  "protocol_version": "0.3.0",
+  "kind": "agent",
+  
+  "skills": [{
+    "id": "data-analysis",
+    "name": "Data Analysis",
+    "description": "Analyze CSV and JSON datasets",
+    "tags": ["analytics", "data", "statistics"],
+    "input_modes": ["text/csv", "application/json"],
+    "output_modes": ["text/plain", "application/json"],
+    "examples": [
+      "Analyze this sales data and find trends",
+      "Calculate statistics for this dataset"
+    ]
+  }],
+  
+  "capabilities": {
+    "streaming": true,
+    "push_notifications": true,
+    "extensions": [{
+      "uri": "https://bindu.me/extensions/advanced-analytics",
+      "required": false
+    }]
+  },
+  
+  "agent_trust": {
+    "identity_provider": "keycloak",
+    "inherited_roles": [],
+    "creator_id": "creator-uuid",
+    "trust_verification_required": true
+  },
+  
+  "default_input_modes": ["text/plain"],
+  "default_output_modes": ["text/plain"]
+}
+```
+
+### Skills
+Skills define what an agent can do. Two styles are supported:
+
+#### Inline Skills (Simple)
+All metadata in the config:
+
+```typescript
+{
+  "id": "email-sender",
+  "name": "Email Sender",
+  "description": "Send emails to recipients",
+  "tags": ["communication", "email"],
+  "input_modes": ["text/plain"],
+  "output_modes": ["text/plain"],
+  "examples": ["Send an email to john@example.com"]
+}
+```
+
+#### File-Based Skills (Rich Documentation)
+Claude-style with detailed SKILL.md files:
+
+```typescript
+{
+  "id": "pdf-processor",
+  "name": "PDF Processor",
+  "description": "Extract and process PDF documents",
+  "tags": ["documents", "pdf", "extraction"],
+  "input_modes": ["application/pdf"],
+  "output_modes": ["text/plain", "application/json"],
+  
+  "documentation_path": "./skills/pdf-processor/SKILL.md",
+  "documentation_content": "# PDF Processor\n\n## When to Use...",
+  
+  "capabilities_detail": {
+    "text_extraction": {"supported": true, "types": ["standard", "ocr"]},
+    "form_filling": {"supported": true}
+  },
+  
+  "requirements": {
+    "packages": ["pypdf", "pdfplumber"],
+    "system": ["tesseract-ocr"],
+    "min_memory_mb": 512
+  },
+  
+  "performance": {
+    "avg_processing_time_ms": 2000,
+    "max_file_size_mb": 50
+  },
+  
+  "allowed_tools": ["Read", "Write"]
+}
+```
+
+---
+
+## JSON-RPC Protocol
+
+All communication uses JSON-RPC 2.0 format.
+
+### Request Structure
+```typescript
+{
+  "jsonrpc": "2.0",
+  "id": "uuid",
+  "method": "message/send",
+  "params": {
+    "message": {/* message object */},
+    "configuration": {
+      "accepted_output_modes": ["text/plain"],
+      "blocking": false
+    }
+  }
+}
+```
+
+### Response Structure
+```typescript
+{
+  "jsonrpc": "2.0",
+  "id": "uuid",
+  "result": {/* success result */},
+  "error": {
+    "code": -32600,
+    "message": "Invalid request",
+    "data": {}
+  }
+}
+```
+
+### Available Methods
+
+**Task Operations:**
+- **message/send**: Send a message to create or update a task
+- **message/stream**: Stream a message for real-time updates
+- **tasks/get**: Retrieve task details
+- **tasks/list**: List all tasks
+- **tasks/cancel**: Cancel a running task
+- **tasks/feedback**: Provide feedback on completed task
+- **tasks/resubscribe**: Resubscribe to task updates
+
+**Context Operations:**
+- **contexts/list**: List all contexts
+- **contexts/clear**: Clear a context
+
+**Notification Operations:**
+- **tasks/pushNotification/set**: Configure push notifications
+- **tasks/pushNotification/get**: Get notification config
+- **tasks/pushNotificationConfig/list**: List all configs
+- **tasks/pushNotificationConfig/delete**: Remove a config
+
+### Error Codes
+
+#### Standard JSON-RPC Errors
+- **-32700**: Parse error (invalid JSON)
+- **-32600**: Invalid request (malformed structure)
+- **-32601**: Method not found
+- **-32602**: Invalid params
+- **-32603**: Internal error
+
+#### A2A Protocol Errors
+- **-32001**: Task not found
+- **-32002**: Task not cancelable
+- **-32003**: Push notifications not supported
+- **-32004**: Unsupported operation
+- **-32005**: Content type not supported
+- **-32006**: Invalid agent response
+- **-32007**: Authenticated card not configured
+- **-32008**: Task immutable (terminal state)
+
+#### Bindu Authentication Errors
+- **-32009**: Authentication required
+- **-32010**: Invalid token
+- **-32011**: Token expired
+- **-32012**: Invalid token signature
+- **-32013**: Insufficient permissions
+
+#### Bindu Context Errors
+- **-32020**: Context not found
+- **-32021**: Context not cancelable
+
+#### Bindu Skill Errors
+- **-32030**: Skill not found
+
+---
+
+## Agent Negotiation
+
+For multi-agent coordination and resource negotiation:
+
+### Negotiation Proposal
+```typescript
+{
+  "proposal_id": "uuid",
+  "from_agent": "agent-1-uuid",
+  "to_agent": "agent-2-uuid",
+  "terms": {
+    "task_type": "data-processing",
+    "max_duration_minutes": 30,
+    "cost_credits": 100
+  },
+  "timestamp": "2025-10-10T10:00:00Z",
+  "status": "proposed"
+}
+```
+
+### Negotiation Context
+```typescript
+{
+  "context_id": "uuid",
+  "status": "ongoing",
+  "participants": ["agent-1-did", "agent-2-did"],
+  "proposals": [/* array of proposals */]
+}
+```
+
+**Negotiation Statuses:**
+- **proposed**: Initial offer made
+- **accepted**: Offer accepted
+- **rejected**: Offer declined
+- **countered**: Counter-offer made
+
+**Session Statuses:**
+- **initiated**: Negotiation started
+- **ongoing**: Active negotiation
+- **completed**: Agreement reached
+- **rejected**: Negotiation failed
+
+---
+
+## Agent Execution & Credits
+
+### Execution Cost
+Define how much it costs to run an agent:
+
+```typescript
+{
+  "agent_id": "agent-123",
+  "agent_name": "Premium Analyzer",
+  "credits_per_request": 100,
+  "creator_did": "did:example:creator",
+  "minimum_trust_level": "analyst"
+}
+```
+
+### Execution Request
+```typescript
+{
+  "request_id": "uuid",
+  "executor_did": "did:example:user",
+  "agent_id": "agent-123",
+  "input_data": "Analyze this dataset...",
+  "estimated_credits": 100,
+  "trust_level": "analyst"
+}
+```
+
+### Execution Response
+```typescript
+{
+  "request_id": "uuid",
+  "execution_id": "uuid",
+  "success": true,
+  "credits_charged": 95,
+  "transaction_id": "uuid",
+  "output_data": "Analysis complete...",
+  "execution_time": "2025-10-10T10:05:00Z"
+}
+```
+
+---
+
+## Summary
+
+The Bindu protocol types provide a complete vocabulary for agent communication:
+
+- **Parts** (Text, File, Data) - Content building blocks
+- **Messages** - Operational communication
+- **Artifacts** - Final deliverable results
+- **Tasks** - Work coordination units
+- **Contexts** - Conversation sessions
+- **Security** - Authentication and authorization
+- **Payments** - Commerce and transactions
+- **Agent Cards** - Capability discovery
+- **JSON-RPC** - Communication protocol
+
+Each type serves a specific purpose in enabling agents to work together effectively, securely, and transparently.
