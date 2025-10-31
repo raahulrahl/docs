@@ -1,11 +1,11 @@
 ---
 title: 'Configuration'
-description: 'Complete reference for all create-bindu-agent configuration options'
 ---
 
-# Configuration Reference
+Complete guide to all configuration options available when creating a Bindu agent with cookiecutter. Follow these steps in order to configure your agent.
 
-Complete guide to all configuration options available when creating a Bindu agent with cookiecutter.
+<Steps>
+  <Step title="Basic Information" icon="user">
 
 ## Basic Information
 
@@ -18,11 +18,11 @@ Complete guide to all configuration options available when creating a Bindu agen
 </ParamField>
 
 <ParamField path="author_github_handle" type="string" default="your_github_handle">
-  Your GitHub username
+  Your GitHub username, this will be used for the github actions.
 </ParamField>
 
 <ParamField path="project_name" type="string" default="my-bindu-agent">
-  The name of your agent project (will be used for directory name)
+  The name of your agent project (will be used for directory name).
 </ParamField>
 
 <ParamField path="project_description" type="string" default="A Bindu AI agent for intelligent task handling">
@@ -30,12 +30,16 @@ Complete guide to all configuration options available when creating a Bindu agen
 </ParamField>
 
 <ParamField path="agent_version" type="string" default="1.0.0">
-  Initial version number for your agent
+  Initial version number for your agent.
 </ParamField>
 
 <ParamField path="bindu_version" type="string" default="0.3.19">
   Version of Bindu to use
 </ParamField>
+
+  </Step>
+
+  <Step title="Agent Framework" icon="brain">
 
 ## Agent Framework
 
@@ -50,9 +54,15 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **custom** - Bring your own framework
 </ParamField>
 
+  </Step>
+
+  <Step title="Skills & Capabilities" icon="wand-magic-sparkles">
+
 ## Skills & Capabilities
 
 <ParamField path="include_example_skills" type="select" default="y">
+  We do encourage you to include example skills to get started quickly.
+  Because the skills will be used later to advertise the power of the agents to the world.
   Include example skills to get started quickly
   - **y** - Include example skills
   - **n** - Start with a blank slate
@@ -60,7 +70,12 @@ Complete guide to all configuration options available when creating a Bindu agen
 
 <ParamField path="skill_names" type="string" default="question-answering,pdf-processing">
   Comma-separated list of skill names (e.g., `question-answering,pdf-processing,web-search`)
+  We will create a template folder for each skill. You need to complete them.
 </ParamField>
+
+  </Step>
+
+  <Step title="Authentication & Security" icon="shield">
 
 ## Authentication & Security
 
@@ -80,22 +95,29 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **none** - No authentication
 </ParamField>
 
+  </Step>
+
+  <Step title="Identity & Cryptography" icon="key">
+
 ## Identity & Cryptography
 
 <ParamField path="enable_did" type="select" default="y">
   Enable Decentralized Identifier (DID) for your agent
+  We would encourage you to enable DID for your agent. That will help to provide an identity to your agent.
+  We have not added decentralised identity support yet. But thats our roadmap.
   - **y** - Enable DID
   - **n** - Disable DID
 </ParamField>
 
 <ParamField path="enable_pki" type="select" default="y">
   Enable Public Key Infrastructure
+  We would encourage you to enable PKI for your agent. That will create an internal folder for your agent's keys.
   - **y** - Enable PKI
   - **n** - Disable PKI
 </ParamField>
 
 <ParamField path="recreate_keys" type="select" default="y">
-  Recreate cryptographic keys on each deployment
+  Recreate cryptographic keys on each deployment.
   - **y** - Recreate keys
   - **n** - Reuse existing keys
 </ParamField>
@@ -106,30 +128,38 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **ecdsa** - Elliptic Curve Digital Signature Algorithm
 </ParamField>
 
+  </Step>
+
+  <Step title="Agent Behavior" icon="sliders">
+
 ## Agent Behavior
 
 <ParamField path="enable_system_message" type="select" default="y">
-  Enable system message for agent instructions
+  Enable system message for agent instructions. When enabled, a system message is added to your agent's prompts to ensure it follows the "input-required" protocol correctly.
   - **y** - Enable system message
   - **n** - Disable system message
 </ParamField>
 
 <ParamField path="enable_context_based_history" type="select" default="n">
-  Enable context-based conversation history
+  Enable context-based conversation history. When enabled, the agent maintains context across tasks, which may improve performance but could also increase hallucination risk. Monitor your agent's output carefully if you enable this feature.
   - **y** - Enable context-based history
   - **n** - Use simple history
 </ParamField>
 
+  </Step>
+
+  <Step title="Observability & Monitoring" icon="eye">
+
 ## Observability & Monitoring
 
 <ParamField path="enable_telemetry" type="select" default="y">
-  Enable telemetry for monitoring
+  Enable telemetry for monitoring. When enabled, the agent sends telemetry data to the observability provider.
   - **y** - Enable telemetry
   - **n** - Disable telemetry
 </ParamField>
 
 <ParamField path="enable_llm_observability" type="select" default="y">
-  Enable LLM-specific observability
+  Enable LLM-specific observability. Uses [OpenInference](https://github.com/Arize-ai/openinference) to track LLM usage. This format is respected by many observability providers.
   - **y** - Enable LLM observability
   - **n** - Disable LLM observability
 </ParamField>
@@ -137,7 +167,7 @@ Complete guide to all configuration options available when creating a Bindu agen
 <ParamField path="llm_observability_provider" type="select" default="phoenix">
   Choose LLM observability provider:
   - **phoenix** - Arize Phoenix
-  - **langfuse** - Langfuse
+  - **langfuse** - Langfuse (not properly tested yet)
 </ParamField>
 
 <ParamField path="use_jaeger" type="select" default="y">
@@ -146,25 +176,37 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **n** - Disable Jaeger
 </ParamField>
 
+  </Step>
+
+  <Step title="Cost Tracking" icon="dollar">
+
 <ParamField path="enable_execution_cost" type="select" default="n">
-  Track execution costs
+  Track execution costs and enable payment requirements. When enabled, clients must pay for each request. A configuration will be created with settings like amount ($0.0001), token (USDC), network (base-sepolia), payment address, and protected methods. The payment flow respects the X402 protocol. For more details, see the payment documentation.
   - **y** - Enable cost tracking
   - **n** - Disable cost tracking
 </ParamField>
 
+  </Step>
+
+  <Step title="Storage & Scheduling" icon="database">
+
 ## Storage & Scheduling
 
 <ParamField path="storage_type" type="select" default="memory">
-  Choose storage backend:
-  - **memory** - In-memory storage (development)
+  Choose storage backend. All workers use shared storage to track tasks and persist data. For production, use PostgreSQL because in-memory storage loses all information if the pod goes down.
+  - **memory** - In-memory storage
   - **postgres** (not implemented yet)
 </ParamField>
 
 <ParamField path="scheduler_type" type="select" default="memory">
-  Choose scheduler backend:
-  - **memory** - In-memory scheduler (development)
+  Choose scheduler backend. For production, use Redis.
+  - **memory** - In-memory scheduler
   - **redis** (not implemented yet)
 </ParamField>
+
+  </Step>
+
+  <Step title="Deployment" icon="rocket">
 
 ## Deployment
 
@@ -173,7 +215,7 @@ Complete guide to all configuration options available when creating a Bindu agen
 </ParamField>
 
 <ParamField path="deployment_port" type="string" default="3773">
-  Port number for deployment
+  Port number for deployment, Lets use 3773 as default, two prime numbers 37+73 :)
 </ParamField>
 
 <ParamField path="log_level" type="select" default="info">
@@ -183,6 +225,10 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **warning** - Warnings only
   - **error** - Errors only
 </ParamField>
+
+  </Step>
+
+  <Step title="Development Tools" icon="wrench">
 
 ## Development Tools
 
@@ -222,6 +268,10 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **n** - Skip Dockerfile
 </ParamField>
 
+  </Step>
+
+  <Step title="License" icon="file-contract">
+
 ## License
 
 <ParamField path="open_source_license" type="select" default="MIT license">
@@ -233,6 +283,10 @@ Complete guide to all configuration options available when creating a Bindu agen
   - **GNU General Public License v3**
   - **Not open source**
 </ParamField>
+
+  </Step>
+
+</Steps>
 
 ## Internal Defaults
 
@@ -266,68 +320,3 @@ These values are set automatically and not prompted during setup:
   Verification key type (internal)
 </ParamField>
 
-## Configuration Examples
-
-### Minimal Development Setup
-
-```json
-{
-  "project_name": "my-agent",
-  "agent_framework": "agno",
-  "enable_auth": "n",
-  "enable_did": "n",
-  "enable_telemetry": "n",
-  "storage_type": "memory",
-  "scheduler_type": "memory"
-}
-```
-
-### Production Setup
-
-```json
-{
-  "project_name": "production-agent",
-  "agent_framework": "langchain",
-  "enable_auth": "y",
-  "auth_provider": "auth0",
-  "enable_did": "y",
-  "enable_pki": "y",
-  "enable_telemetry": "y",
-  "enable_llm_observability": "y",
-  "llm_observability_provider": "phoenix",
-  "use_jaeger": "y",
-  "include_github_actions": "y",
-  "dockerfile": "y"
-}
-```
-
-### Multi-Agent Setup
-
-```json
-{
-  "project_name": "crew-agent",
-  "agent_framework": "crew",
-  "include_example_skills": "y",
-  "skill_names": "research,writing,analysis",
-  "enable_auth": "y",
-  "enable_did": "y",
-  "enable_llm_observability": "y"
-}
-```
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Quick Start" icon="rocket" href="/bindu/introduction/create-agent">
-    Create your first agent
-  </Card>
-  <Card title="Overview" icon="book" href="/bindu/create-bindu-agent/overview">
-    Learn more about create-bindu-agent
-  </Card>
-  <Card title="Authentication" icon="shield" href="/bindu/learn/auth">
-    Configure authentication
-  </Card>
-  <Card title="DID Setup" icon="fingerprint" href="/bindu/learn/did">
-    Set up Decentralized Identifiers
-  </Card>
-</CardGroup>

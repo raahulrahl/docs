@@ -72,14 +72,21 @@ your-agent/
 
 ## How It Works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Run cookiecutter → 2. Answer prompts → 3. Deploy!       │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-      Your agent is now live and speaking A2A, AP2, X402
-                            ↓
-              Ready to join the Internet of Agents 🌐
+```mermaid
+sequenceDiagram
+    participant You
+    participant Cookiecutter
+    participant Agent
+    participant Network as Internet of Agents
+    
+    You->>Cookiecutter: Run uvx cookiecutter
+    Cookiecutter->>You: Prompt for configuration
+    You->>Cookiecutter: Answer prompts
+    Cookiecutter->>Agent: Generate project
+    Agent-->>You: Project created
+    You->>Agent: Deploy
+    Agent->>Network: Connect via A2A, AP2, X402
+    Network-->>Agent: Ready to join the Force 🌐
 ```
 
 ## Next Steps
@@ -90,11 +97,5 @@ your-agent/
   </Card>
   <Card title="Quick Start" icon="rocket" href="/bindu/introduction/create-agent">
     Create your first agent in 2 minutes
-  </Card>
-  <Card title="Authentication" icon="shield" href="/bindu/learn/auth">
-    Configure authentication for your agent
-  </Card>
-  <Card title="Observability" icon="eye" href="/bindu/learn/observability/phoenix">
-    Monitor your agent with Phoenix or Langfuse
   </Card>
 </CardGroup>
