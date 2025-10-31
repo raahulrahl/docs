@@ -111,7 +111,7 @@
           {
             "group": "Examples",
             "pages": [
-              "examples/overview"
+              "examples/introduction/overview"
             ]
           }
         ]
@@ -121,7 +121,7 @@
         "groups": [
           {
             "group": "Changelog",
-            "pages": ["changelog/overview"]
+            "pages": ["changelog/introduction/overview"]
           }
         ]
       },
@@ -131,8 +131,7 @@
           {
             "group": "FAQ",
             "pages": [
-              "api/overview",
-              "api/"
+              "faq/introduction/overview"
             ]
           }
         ]
