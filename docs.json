@@ -13,7 +13,22 @@
   },
   "favicon": "/logo/light.svg",
   "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude"]
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode",
+      {
+        "title": "Request a feature",
+        "description": "Join the discussion on GitHub to request a new feature",
+        "icon": "plus",
+        "href": "https://github.com/Saptha-me/Bindu/discussions"
+      }
+    ]
   },
   "navigation": {
     "tabs": [
