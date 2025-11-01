@@ -134,19 +134,11 @@
       },
       {
         "tab": "API",
+        "openapi": "/openapi.yaml",
         "groups": [
           {
             "group": "Overview",
             "pages": ["api/introduction/overview"]
-          },
-          {
-            "group": "Endpoints",
-            "pages": [
-              "api/jsonrpc",
-              "api/discovery",
-              "api/skills",
-              "api/payment"
-            ]
           }
         ]
       },
