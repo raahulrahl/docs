@@ -117,6 +117,17 @@
         ]
       },
       {
+        "tab": "Roadmap",
+        "groups": [
+          {
+            "group": "Roadmap",
+            "pages": [
+              "roadmap/introduction/overview"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Changelog",
         "groups": [
           {
