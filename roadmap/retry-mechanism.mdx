@@ -1,0 +1,127 @@
+---
+title: 'Retry Mechanism'
+description: 'Automatic retry logic for failed operations'
+---
+
+# Retry Mechanism
+
+## Overview
+
+Implementing intelligent retry logic with exponential backoff, jitter, and configurable policies to handle transient failures gracefully.
+
+## Why Retry Logic?
+
+- **Resilience** - Handle temporary network issues and service outages
+- **Reliability** - Reduce manual intervention for transient errors
+- **User Experience** - Seamless recovery from failures
+- **Cost Efficiency** - Avoid losing work due to temporary issues
+
+## Features
+
+### Retry Strategies
+
+**Exponential Backoff**
+```python
+# Retry with increasing delays: 1s, 2s, 4s, 8s...
+@retry(strategy="exponential", max_attempts=5)
+async def send_message(agent_id, message):
+    ...
+```
+
+**Fixed Delay**
+```python
+# Retry every 3 seconds
+@retry(strategy="fixed", delay=3, max_attempts=3)
+async def fetch_agent_card(url):
+    ...
+```
+
+**Jittered Backoff**
+```python
+# Add randomness to prevent thundering herd
+@retry(strategy="jittered", base_delay=1, max_attempts=5)
+async def call_external_api():
+    ...
+```
+
+### Configurable Policies
+
+- **Max Attempts** - Limit retry count
+- **Timeout** - Overall operation timeout
+- **Retryable Errors** - Specify which errors to retry
+- **Circuit Breaker** - Stop retrying if service is down
+- **Fallback** - Execute alternative logic after max retries
+
+### Smart Retry Logic
+
+- **Idempotency Checks** - Prevent duplicate operations
+- **Error Classification** - Retry transient errors, fail fast on permanent errors
+- **Contextual Retry** - Different policies for different operations
+- **Metrics Collection** - Track retry rates and success
+
+## Use Cases
+
+### Network Operations
+- Agent-to-agent communication
+- External API calls
+- Database connections
+- File uploads/downloads
+
+### Task Processing
+- Failed task execution
+- Artifact retrieval
+- Context updates
+- State transitions
+
+### Integration Points
+- Payment processing (AP2)
+- Authentication services
+- Message queue operations
+- Cache operations
+
+## Configuration
+
+```python
+from bindu.retry import RetryConfig
+
+# Global retry configuration
+retry_config = RetryConfig(
+    max_attempts=3,
+    base_delay=1.0,
+    max_delay=30.0,
+    exponential_base=2,
+    jitter=True,
+    retryable_exceptions=[
+        NetworkError,
+        TimeoutError,
+        ServiceUnavailable,
+    ],
+)
+
+# Per-operation override
+@retry(max_attempts=5, strategy="exponential")
+async def critical_operation():
+    ...
+```
+
+## Observability
+
+- Retry attempt logging
+- Success/failure metrics
+- Latency tracking
+- Alert on excessive retries
+
+## Status
+
+🚀 **In Progress** - Core retry logic and decorators
+
+## Timeline
+
+- **Q1 2025** - Basic retry implementation
+- **Q1 2025** - Circuit breaker and advanced policies
+- **Q2 2025** - Full observability integration
+
+## Get Involved
+
+- Discuss retry strategies on [Discord](https://discord.gg/3w5zuYUuwt)
+- Share your reliability requirements

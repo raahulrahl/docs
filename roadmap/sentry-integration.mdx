@@ -1,0 +1,83 @@
+---
+title: 'Sentry Error Tracking'
+description: 'Production-grade error monitoring and alerting'
+---
+
+# Sentry Error Tracking
+
+## Overview
+
+Integrating Sentry for comprehensive error tracking, performance monitoring, and real-time alerting in production agent deployments.
+
+## Why Sentry?
+
+- **Real-time Alerts** - Get notified immediately when errors occur
+- **Error Grouping** - Automatically group similar errors
+- **Stack Traces** - Detailed error context and debugging information
+- **Performance Monitoring** - Track slow operations and bottlenecks
+- **Release Tracking** - Monitor errors across different versions
+
+## Features
+
+### Error Monitoring
+- Automatic exception capture and reporting
+- Custom error context (agent ID, task ID, user DID)
+- Breadcrumbs for debugging complex workflows
+- Source map support for better stack traces
+
+### Performance Tracking
+- Transaction monitoring for agent operations
+- Slow query detection
+- API endpoint performance metrics
+- Custom performance instrumentation
+
+### Alerting & Notifications
+- Configurable alert rules
+- Integration with Slack, Discord, email
+- Error frequency thresholds
+- New error notifications
+
+## Integration Points
+
+- **Agent Runtime** - Capture agent execution errors
+- **Protocol Handlers** - Monitor A2A message processing
+- **Database Operations** - Track query performance
+- **External API Calls** - Monitor third-party integrations
+- **Background Tasks** - Async job error tracking
+
+## Configuration
+
+```python
+import sentry_sdk
+from bindu.observability import configure_sentry
+
+# Initialize Sentry with Bindu
+configure_sentry(
+    dsn="your-sentry-dsn",
+    environment="production",
+    traces_sample_rate=0.1,
+    profiles_sample_rate=0.1,
+)
+```
+
+## Privacy & Security
+
+- Sensitive data scrubbing (API keys, passwords, tokens)
+- PII filtering for GDPR compliance
+- Custom data sanitization rules
+- On-premise deployment option
+
+## Status
+
+🚀 **In Progress** - Core integration and configuration options
+
+## Timeline
+
+- **Q1 2025** - Basic error tracking integration
+- **Q1 2025** - Performance monitoring support
+- **Q2 2025** - Advanced features and custom instrumentation
+
+## Get Involved
+
+- Join the discussion on [Discord](https://discord.gg/3w5zuYUuwt)
+- Share your monitoring requirements

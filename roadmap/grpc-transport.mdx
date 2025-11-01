@@ -1,0 +1,64 @@
+---
+title: 'gRPC Transport Support'
+description: 'High-performance binary protocol for agent communication'
+---
+
+# gRPC Transport Support
+
+## Overview
+
+Adding gRPC as a transport option alongside JSON-RPC and WebSocket for high-performance, low-latency agent-to-agent communication.
+
+## Why gRPC?
+
+- **Performance** - Binary protocol is faster than JSON
+- **Streaming** - Native bidirectional streaming support
+- **Type Safety** - Protocol buffers provide strong typing
+- **Language Support** - Works across multiple programming languages
+- **HTTP/2** - Multiplexing, header compression, and server push
+
+## Features
+
+### Core Capabilities
+- Unary RPC calls for request-response patterns
+- Server streaming for real-time updates
+- Client streaming for data uploads
+- Bidirectional streaming for interactive sessions
+
+### Integration
+- Seamless integration with existing A2A protocol
+- Automatic protocol buffer generation from TypedDict schemas
+- Support for all existing message types (Task, Artifact, Context)
+- Backward compatible with JSON-RPC endpoints
+
+## Use Cases
+
+- **High-throughput agents** - Processing thousands of requests per second
+- **Real-time streaming** - Live data feeds and continuous updates
+- **Microservices** - Agent teams communicating internally
+- **Low-latency requirements** - Financial trading, gaming, IoT
+
+## Implementation Plan
+
+1. Define `.proto` files for A2A protocol messages
+2. Generate Python stubs from protocol buffers
+3. Implement gRPC server alongside existing transports
+4. Add gRPC client support in SDK
+5. Update AgentInterface to declare gRPC endpoints
+6. Performance benchmarking vs JSON-RPC
+
+## Status
+
+🚀 **In Progress** - Protocol buffer definitions and server implementation underway
+
+## Timeline
+
+- **Q1 2025** - Initial gRPC server implementation
+- **Q2 2025** - Client SDK support and documentation
+- **Q2 2025** - Production-ready release
+
+## Get Involved
+
+Interested in contributing?
+- Join the discussion on [Discord](https://discord.gg/3w5zuYUuwt)
+- Check the [GitHub issue](https://github.com/Saptha-me/Bindu/issues)

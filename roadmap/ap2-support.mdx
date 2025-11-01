@@ -1,0 +1,227 @@
+---
+title: 'AP2 End-to-End Support'
+description: 'Complete Agent Payments Protocol implementation'
+---
+
+# AP2 End-to-End Support
+
+## Overview
+
+Full implementation of the Agent Payments Protocol (AP2) for autonomous commerce, enabling agents to conduct secure, trustless transactions with cryptographic guarantees.
+
+## What is AP2?
+
+The Agent Payments Protocol enables agents to:
+- Make purchases on behalf of users
+- Accept payments for services
+- Negotiate prices and terms
+- Handle refunds and disputes
+- Maintain transaction records
+
+## Current Status
+
+✅ **Completed:**
+- All 15 AP2 data types implemented
+- Payment request/response flow
+- Mandate framework (Intent, Cart, Payment)
+- Documentation and examples
+
+🚀 **In Progress:**
+- Payment processor integrations
+- Wallet management
+- Transaction verification
+- Dispute resolution
+
+## Features
+
+### Payment Types
+
+**Basic Payments**
+- ContactAddress for shipping
+- PaymentCurrencyAmount for pricing
+- PaymentItem for line items
+- PaymentShippingOption for delivery
+- PaymentRequest/Response flow
+
+**Trust Framework**
+- IntentMandate - User purchase constraints
+- CartMandate - Merchant price guarantee
+- PaymentMandate - User authorization
+- Cryptographic signatures
+- Dispute resolution
+
+### Shopping Agent Flow
+
+```python
+# 1. User sets intent
+intent = IntentMandate(
+    user_cart_confirmation_required=False,
+    natural_language_description="Buy laptop under $1500",
+    merchants=["BestBuy", "Amazon"],
+    requires_refundability=True,
+    intent_expiry="2025-12-31T23:59:59Z"
+)
+
+# 2. Agent shops and gets cart
+cart = await shopping_agent.find_best_deal(intent)
+
+# 3. Merchant signs cart
+cart_mandate = await merchant.sign_cart(cart)
+
+# 4. User approves (if required)
+if intent.user_cart_confirmation_required:
+    approved = await user.approve_cart(cart_mandate)
+
+# 5. Agent initiates payment
+payment_response = await shopping_agent.pay(
+    cart_mandate=cart_mandate,
+    payment_method="CARD"
+)
+
+# 6. Create payment mandate
+payment_mandate = PaymentMandate(
+    payment_mandate_contents=payment_details,
+    user_authorization=user_signature
+)
+
+# 7. Complete purchase
+order = await merchant.fulfill_order(payment_mandate)
+```
+
+### Merchant Agent Flow
+
+```python
+# Merchant agent creates signed cart
+merchant_agent = MerchantAgent(did="did:merchant:bestbuy")
+
+cart = CartContents(
+    id="cart-123",
+    merchant_name="BestBuy",
+    payment_request=PaymentRequest(...),
+    cart_expiry="2025-01-15T12:00:00Z"
+)
+
+# Sign cart with merchant's private key
+cart_mandate = await merchant_agent.sign_cart(cart)
+
+# Verify payment mandate
+if await merchant_agent.verify_payment_mandate(payment_mandate):
+    await merchant_agent.process_order(payment_mandate)
+```
+
+## Payment Processor Integration
+
+### Supported Processors
+- **Stripe** - Cards, wallets, bank transfers
+- **PayPal** - PayPal accounts and cards
+- **Square** - In-person and online payments
+- **Adyen** - Global payment methods
+- **Coinbase** - Cryptocurrency payments
+
+### Integration Example
+
+```python
+from bindu.payments import StripeProcessor
+
+processor = StripeProcessor(
+    api_key="sk_live_...",
+    webhook_secret="whsec_..."
+)
+
+# Process payment
+result = await processor.process_payment(
+    payment_response=payment_response,
+    cart_mandate=cart_mandate,
+    idempotency_key=f"order-{order_id}"
+)
+```
+
+## Security Features
+
+### Cryptographic Verification
+- JWT signatures on mandates
+- DID-based identity verification
+- Hash verification for cart contents
+- Replay attack prevention
+
+### Dispute Resolution
+- Immutable audit trail
+- Signed mandate chain
+- Timestamp verification
+- Third-party arbitration support
+
+### Fraud Prevention
+- Transaction limits
+- Velocity checks
+- Merchant verification
+- User authorization requirements
+
+## Wallet Management
+
+```python
+# User wallet for payment methods
+wallet = UserWallet(user_did="did:user:alice")
+
+# Add payment method
+await wallet.add_payment_method(
+    method_type="CARD",
+    token="tok_visa_4242",
+    is_default=True
+)
+
+# Get payment methods
+methods = await wallet.get_payment_methods()
+
+# Remove payment method
+await wallet.remove_payment_method(method_id="pm_123")
+```
+
+## Refunds & Returns
+
+```python
+# Initiate refund
+refund = await merchant_agent.initiate_refund(
+    payment_mandate_id="pm-789",
+    amount=PaymentCurrencyAmount(currency="USD", value=1299.99),
+    reason="Customer requested return"
+)
+
+# Process return
+return_label = await merchant_agent.generate_return_label(
+    order_id="order-456",
+    shipping_address=original_address
+)
+```
+
+## Analytics & Reporting
+
+- Transaction volume and value
+- Success/failure rates
+- Average transaction time
+- Popular payment methods
+- Refund rates
+- Merchant performance
+
+## Compliance
+
+- PCI DSS compliance for card data
+- GDPR for user data
+- PSD2 for European payments
+- SOC 2 for security controls
+
+## Status
+
+🚀 **In Progress** - Payment processor integrations and wallet management
+
+## Timeline
+
+- **Q1 2025** - Stripe and PayPal integration
+- **Q2 2025** - Wallet management and refunds
+- **Q2 2025** - Full dispute resolution
+- **Q3 2025** - Additional payment processors
+
+## Get Involved
+
+- Share payment use cases on [Discord](https://discord.gg/3w5zuYUuwt)
+- Request payment processor support
+- Contribute to AP2 specification

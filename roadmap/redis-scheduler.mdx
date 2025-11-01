@@ -1,0 +1,141 @@
+---
+title: 'Redis Scheduler Implementation'
+description: 'Distributed task scheduling with Redis'
+---
+
+# Redis Scheduler Implementation
+
+## Overview
+
+Implementing a distributed task scheduler using Redis for reliable, scalable background job processing and scheduled agent operations.
+
+## Why Redis Scheduler?
+
+- **Distributed** - Works across multiple agent instances
+- **Persistent** - Jobs survive restarts
+- **Scalable** - Handle millions of scheduled tasks
+- **Fast** - In-memory performance
+- **Reliable** - At-least-once delivery guarantees
+
+## Features
+
+### Scheduling Capabilities
+
+**Delayed Execution**
+```python
+# Schedule task to run in 5 minutes
+scheduler.schedule(
+    task_id="cleanup-123",
+    delay=timedelta(minutes=5),
+    handler=cleanup_old_artifacts
+)
+```
+
+**Recurring Jobs**
+```python
+# Run every hour
+scheduler.schedule_recurring(
+    job_id="health-check",
+    interval=timedelta(hours=1),
+    handler=check_agent_health
+)
+```
+
+**Cron-style Scheduling**
+```python
+# Run at 2 AM every day
+scheduler.schedule_cron(
+    job_id="daily-report",
+    cron="0 2 * * *",
+    handler=generate_daily_report
+)
+```
+
+### Advanced Features
+
+- **Priority Queues** - Process high-priority tasks first
+- **Rate Limiting** - Control execution frequency
+- **Job Dependencies** - Chain tasks together
+- **Retry Logic** - Automatic retry on failure
+- **Dead Letter Queue** - Handle permanently failed jobs
+
+## Use Cases
+
+### Agent Operations
+- Scheduled agent health checks
+- Periodic skill updates
+- Automatic context cleanup
+- Session timeout handling
+
+### Background Processing
+- Artifact processing pipelines
+- Batch data imports
+- Report generation
+- Cache warming
+
+### Maintenance Tasks
+- Database cleanup
+- Log rotation
+- Metric aggregation
+- Backup operations
+
+## Architecture
+
+```mermaid
+graph LR
+    A[Agent] --> B[Redis Scheduler]
+    B --> C[Redis Queue]
+    C --> D[Worker Pool]
+    D --> E[Task Execution]
+    E --> F[Result Storage]
+```
+
+## Configuration
+
+```python
+from bindu.scheduler import RedisScheduler
+
+scheduler = RedisScheduler(
+    redis_url="redis://localhost:6379",
+    queue_name="bindu-tasks",
+    max_workers=10,
+    retry_attempts=3,
+    visibility_timeout=300,
+)
+
+# Start scheduler
+await scheduler.start()
+```
+
+## Monitoring
+
+- Queue depth metrics
+- Job execution time
+- Success/failure rates
+- Worker utilization
+- Retry statistics
+
+## Comparison with Alternatives
+
+| Feature | Redis | Celery | APScheduler |
+|---------|-------|--------|-------------|
+| Distributed | ✅ | ✅ | ❌ |
+| Persistent | ✅ | ✅ | ⚠️ |
+| Performance | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
+| Complexity | Low | High | Low |
+| Scalability | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
+
+## Status
+
+🚀 **In Progress** - Core scheduler implementation and Redis integration
+
+## Timeline
+
+- **Q1 2025** - Basic scheduling and delayed execution
+- **Q1 2025** - Recurring jobs and cron support
+- **Q2 2025** - Advanced features and monitoring
+
+## Get Involved
+
+- Share your scheduling requirements on [Discord](https://discord.gg/3w5zuYUuwt)
+- Contribute scheduler patterns

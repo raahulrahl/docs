@@ -78,8 +78,7 @@
               {
                 "group": "Payment",
                 "pages": [
-                  "bindu/payment/introduction",
-                  "bindu/payment/"
+                  "bindu/payment/introduction"
                 ] 
               }
 
@@ -120,9 +119,47 @@
         "tab": "Roadmap",
         "groups": [
           {
-            "group": "Roadmap",
+            "group": "Overview",
             "pages": [
               "roadmap/introduction/overview"
+            ]
+          },
+          {
+            "group": "Infrastructure & Reliability",
+            "pages": [
+              "roadmap/grpc-transport",
+              "roadmap/retry-mechanism",
+              "roadmap/redis-scheduler",
+              "roadmap/postgres-memory",
+              "roadmap/test-coverage"
+            ]
+          },
+          {
+            "group": "Observability & UX",
+            "pages": [
+              "roadmap/sentry-integration",
+              "roadmap/ag-ui-integration"
+            ]
+          },
+          {
+            "group": "Authentication & Security",
+            "pages": [
+              "roadmap/authentication",
+              "roadmap/mlts"
+            ]
+          },
+          {
+            "group": "Protocol Extensions",
+            "pages": [
+              "roadmap/negotiation",
+              "roadmap/ap2-support",
+              "roadmap/x402"
+            ]
+          },
+          {
+            "group": "AI & ML",
+            "pages": [
+              "roadmap/dspy"
             ]
           }
         ]

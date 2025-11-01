@@ -1,0 +1,58 @@
+---
+title: 'Install & Setup'
+description: 'Get started with Bindu in minutes'
+---
+
+# Install & Setup
+
+## Install `bindu` SDK
+
+We highly recommend:
+
+* Installing `bindu` using `pip` in a python virtual environment.
+
+<Steps>
+  <Step title="Create a virtual environment">
+    <CodeGroup>
+      ```bash Mac
+      python3 -m venv ~/.venvs/bindu
+      source ~/.venvs/bindu/bin/activate
+      ```
+
+      ```bash Windows
+      python3 -m venv binduenv
+      binduenv/scripts/activate
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install bindu">
+    Install `bindu` using pip
+
+    <CodeGroup>
+      ```bash Mac
+      pip install -U bindu
+      ```
+
+      ```bash Windows
+      pip install -U bindu
+      ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+<br />
+
+<Note>
+  If you encounter errors, try updating pip using `python -m pip install --upgrade pip` 
+</Note>
+
+***
+
+## Upgrade bindu
+
+To upgrade `bindu`, run this in your virtual environment
+
+```bash
+pip install -U bindu --no-cache-dir
+```
