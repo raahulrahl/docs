@@ -23,6 +23,73 @@ Skills in Bindu serve as **rich advertisement metadata** that help orchestrators
 
 ---
 
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Agent"
+        A[Agent Config] --> B[Skills Directory]
+        B --> C[skill.yaml]
+        B --> D[skill.yaml]
+        B --> E[skill.yaml]
+    end
+    
+    subgraph "Skills API"
+        F[/agent/skills] --> G[List All Skills]
+        H[/agent/skills/:id] --> I[Skill Details]
+        J[/agent/skills/:id/docs] --> K[Documentation]
+    end
+    
+    subgraph "Orchestrator"
+        L[Discovery] --> M[Capability Matching]
+        M --> N[Performance Estimation]
+        N --> O[Agent Selection]
+        O --> P[Task Routing]
+    end
+    
+    subgraph "Skill Definition"
+        Q[Metadata<br/>id, name, version]
+        R[Capabilities<br/>features, limitations]
+        S[Requirements<br/>packages, memory]
+        T[Performance<br/>timing, concurrency]
+        U[Documentation<br/>examples, best practices]
+    end
+    
+    C --> F
+    D --> F
+    E --> F
+    
+    G --> L
+    I --> M
+    K --> N
+    
+    Q --> C
+    R --> C
+    S --> C
+    T --> C
+    U --> C
+    
+    P --> V[Execute Task]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style L fill:#e8f5e9
+    style P fill:#f3e5f5
+    style C fill:#fff9c4
+    style D fill:#fff9c4
+    style E fill:#fff9c4
+```
+
+### How It Works
+
+1. **Agent defines skills** - YAML files describe capabilities
+2. **Skills API exposes** - REST endpoints provide skill information
+3. **Orchestrator discovers** - Queries available skills
+4. **Capability matching** - Finds agents that meet requirements
+5. **Task routing** - Sends tasks to optimal agent
+
+---
+
 ## Why Skills Matter
 
 ### For Agent Developers

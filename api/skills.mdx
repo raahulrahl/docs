@@ -1,0 +1,359 @@
+---
+title: 'Skills API'
+description: 'Agent skills and capabilities endpoints'
+---
+
+# Skills API
+
+Access detailed information about agent skills and capabilities.
+
+<Note>
+  All skills endpoints are public and do not require authentication.
+</Note>
+
+---
+
+## List Skills
+
+Get a list of all skills supported by the agent.
+
+### Endpoint
+
+```
+GET /agent/skills
+```
+
+### Request
+
+```bash
+curl http://localhost:8030/agent/skills
+```
+
+### Response
+
+```json
+{
+  "skills": [
+    {
+      "id": "question-answering-v1",
+      "name": "Question Answering",
+      "description": "Answer questions based on context",
+      "version": "1.0.0"
+    },
+    {
+      "id": "text-analysis-v1",
+      "name": "Text Analysis",
+      "description": "Analyze text for sentiment and entities",
+      "version": "1.0.0"
+    }
+  ]
+}
+```
+
+---
+
+## Get Skill Details
+
+Get detailed information about a specific skill.
+
+### Endpoint
+
+```
+GET /agent/skills/{skillId}
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `skillId` | string | Yes | Skill identifier (e.g., `question-answering-v1`) |
+
+### Request
+
+```bash
+curl http://localhost:8030/agent/skills/question-answering-v1
+```
+
+### Response
+
+```json
+{
+  "id": "question-answering-v1",
+  "name": "Question Answering",
+  "description": "Answer questions based on context",
+  "version": "1.0.0",
+  "tags": ["nlp", "qa"],
+  "inputModes": ["text/plain", "application/json"],
+  "outputModes": ["application/json"],
+  "capabilities": {
+    "factual_qa": {
+      "supported": true,
+      "types": ["factual", "analytical"]
+    },
+    "multi_turn": {
+      "supported": true
+    }
+  },
+  "requirements": {
+    "packages": ["transformers>=4.0.0"],
+    "minMemoryMb": 512
+  },
+  "performance": {
+    "avgProcessingTimeMs": 2000,
+    "maxFileSizeMb": 10,
+    "concurrentRequests": 5
+  }
+}
+```
+
+---
+
+## Get Skill Documentation
+
+Get human-readable documentation for a skill.
+
+### Endpoint
+
+```
+GET /agent/skills/{skillId}/documentation
+```
+
+### Request
+
+```bash
+curl http://localhost:8030/agent/skills/question-answering-v1/documentation
+```
+
+### Response
+
+```markdown
+# Question Answering Skill
+
+This skill allows the agent to answer questions based on provided context.
+
+## Usage
+
+Send a message with your question and the agent will respond with an answer.
+
+## Examples
+
+- "What is the capital of France?"
+- "Explain quantum computing"
+
+## Limitations
+
+- Supports English only
+- Maximum context length: 4096 tokens
+```
+
+---
+
+## Skill Fields Reference
+
+### Basic Metadata
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique skill identifier |
+| `name` | string | Human-readable name |
+| `description` | string | Brief description |
+| `version` | string | Semantic version |
+| `author` | string | Skill author |
+
+### Tags and Modes
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tags` | array | Categorization tags |
+| `inputModes` | array | Accepted input MIME types |
+| `outputModes` | array | Produced output MIME types |
+| `examples` | array | Example usage queries |
+
+### Capabilities
+
+Detailed capability information:
+
+```json
+{
+  "feature_name": {
+    "supported": true,
+    "types": ["type1", "type2"],
+    "limitations": "Optional description"
+  }
+}
+```
+
+### Requirements
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `packages` | array | Required Python packages |
+| `system` | array | System dependencies |
+| `minMemoryMb` | integer | Minimum memory required |
+
+### Performance
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `avgProcessingTimeMs` | integer | Average processing time |
+| `maxFileSizeMb` | integer | Maximum file size |
+| `concurrentRequests` | integer | Max concurrent requests |
+| `memoryPerRequestMb` | integer | Memory per request |
+
+---
+
+## Use Cases
+
+### Skill Discovery
+
+Find agents with specific capabilities:
+
+```python
+import requests
+
+# List all skills
+response = requests.get('http://localhost:8030/agent/skills')
+skills = response.json()['skills']
+
+# Find NLP skills
+nlp_skills = []
+for skill in skills:
+    details = requests.get(
+        f'http://localhost:8030/agent/skills/{skill["id"]}'
+    ).json()
+    
+    if 'nlp' in details.get('tags', []):
+        nlp_skills.append(skill)
+
+print(f"Found {len(nlp_skills)} NLP skills")
+```
+
+### Capability Matching
+
+Match task requirements to skills:
+
+```python
+def find_suitable_skill(requirements):
+    """Find skill matching requirements."""
+    response = requests.get('http://localhost:8030/agent/skills')
+    skills = response.json()['skills']
+    
+    for skill in skills:
+        details = requests.get(
+            f'http://localhost:8030/agent/skills/{skill["id"]}'
+        ).json()
+        
+        # Check memory requirements
+        if details['requirements']['minMemoryMb'] > requirements['maxMemory']:
+            continue
+        
+        # Check performance
+        if details['performance']['avgProcessingTimeMs'] > requirements['maxLatency']:
+            continue
+        
+        return skill
+    
+    return None
+```
+
+### Documentation Display
+
+Show skill documentation to users:
+
+```python
+skill_id = "question-answering-v1"
+response = requests.get(
+    f'http://localhost:8030/agent/skills/{skill_id}/documentation'
+)
+
+print(response.text)  # Markdown documentation
+```
+
+---
+
+## Examples
+
+### Python
+
+```python
+import requests
+
+# List skills
+skills_response = requests.get('http://localhost:8030/agent/skills')
+skills = skills_response.json()['skills']
+
+for skill in skills:
+    print(f"Skill: {skill['name']} (v{skill['version']})")
+    
+    # Get details
+    details = requests.get(
+        f"http://localhost:8030/agent/skills/{skill['id']}"
+    ).json()
+    
+    print(f"  Tags: {', '.join(details.get('tags', []))}")
+    print(f"  Avg time: {details['performance']['avgProcessingTimeMs']}ms")
+```
+
+### TypeScript
+
+```typescript
+interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+}
+
+interface SkillDetails extends Skill {
+  tags: string[];
+  capabilities: Record<string, any>;
+  requirements: {
+    packages: string[];
+    minMemoryMb: number;
+  };
+  performance: {
+    avgProcessingTimeMs: number;
+    concurrentRequests: number;
+  };
+}
+
+async function listSkills(baseUrl: string): Promise<Skill[]> {
+  const response = await fetch(`${baseUrl}/agent/skills`);
+  const data = await response.json();
+  return data.skills;
+}
+
+async function getSkillDetails(
+  baseUrl: string,
+  skillId: string
+): Promise<SkillDetails> {
+  const response = await fetch(`${baseUrl}/agent/skills/${skillId}`);
+  return response.json();
+}
+
+// Usage
+const skills = await listSkills('http://localhost:8030');
+for (const skill of skills) {
+  const details = await getSkillDetails('http://localhost:8030', skill.id);
+  console.log(`${skill.name}: ${details.performance.avgProcessingTimeMs}ms`);
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills System" icon="star" href="/bindu/skills/introduction/overview">
+    Learn about the Skills System
+  </Card>
+  <Card title="Agent Discovery" icon="magnifying-glass" href="/api/discovery">
+    Discover agent capabilities
+  </Card>
+  <Card title="JSON-RPC" icon="code" href="/api/jsonrpc">
+    Use the JSON-RPC API
+  </Card>
+  <Card title="Create Skills" icon="plus" href="/bindu/skills/introduction/overview#creating-a-new-skill">
+    Create your own skills
+  </Card>
+</CardGroup>
