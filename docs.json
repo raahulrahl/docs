@@ -48,7 +48,7 @@
           {
             "group": "Skills",
             "pages": [
-              "bindu/skills/overview"
+              "bindu/skills/introduction/overview"
             ]
           },
           {
@@ -74,8 +74,7 @@
               {
                 "group": "DID",
                 "pages": [
-                  "bindu/did/introduction",
-                  "bindu/did/compatibility"
+                  "bindu/learn/did/overview"
                 ] 
               },
               {

@@ -1,0 +1,651 @@
+---
+title: 'Skills System'
+description: 'Rich capability advertisement for intelligent agent orchestration'
+---
+
+# Skills System
+
+The Bindu Skills System provides rich agent capability advertisement for intelligent orchestration and agent discovery. Inspired by Claude's skills architecture, it enables agents to provide detailed documentation about their capabilities for orchestrators to make informed routing decisions.
+
+## What are Skills?
+
+Skills in Bindu serve as **rich advertisement metadata** that help orchestrators:
+
+- 🔍 **Discover** the right agent for a task
+- 📖 **Understand** detailed capabilities and limitations
+- ✅ **Validate** requirements before execution
+- 📊 **Estimate** performance and resource needs
+- 🔗 **Chain** multiple agents intelligently
+
+<Note>
+  Skills are not executable code—they're structured metadata that describe what your agent can do.
+</Note>
+
+---
+
+## Why Skills Matter
+
+### For Agent Developers
+
+- **Clear documentation** - Define capabilities in one place
+- **Standardized format** - YAML-based, human-readable
+- **Easy maintenance** - Update skills without code changes
+- **Better discovery** - Help users find your agent
+
+### For Orchestrators
+
+- **Intelligent routing** - Match tasks to the right agent
+- **Capability validation** - Check requirements before execution
+- **Performance estimation** - Predict resource needs
+- **Multi-agent workflows** - Chain agents based on capabilities
+
+### For Users
+
+- **Transparency** - Understand what agents can do
+- **Reliability** - Know limitations upfront
+- **Better results** - Tasks routed to optimal agents
+
+---
+
+## Skill Definition Format
+
+Bindu uses **YAML files** as the single source of truth for skill definitions.
+
+### Benefits of YAML
+
+- ✅ **Human-readable** - Easy to write and understand
+- ✅ **Structured data** - Programmatic access for orchestrators
+- ✅ **Rich documentation** - Everything in one place
+- ✅ **LLM-friendly** - Easy for AI to parse and understand
+- ✅ **No duplication** - Single source of truth
+
+### Directory Structure
+
+```
+examples/skills/
+├── text-analysis/
+│   └── skill.yaml
+├── image-generation/
+│   └── skill.yaml
+└── data-processing/
+    └── skill.yaml
+```
+
+---
+
+## Basic Skill Example
+
+Here's a minimal skill definition:
+
+```yaml
+# Basic Metadata
+id: text-analysis-v1
+name: text-analysis
+version: 1.0.0
+author: your@email.com
+
+# Description
+description: |
+  Analyzes text for sentiment, entities, and key phrases.
+  Supports multiple languages and formats.
+
+# Tags
+tags:
+  - nlp
+  - text-analysis
+  - sentiment
+
+# Input/Output Modes
+input_modes:
+  - text/plain
+  - application/json
+
+output_modes:
+  - application/json
+
+# Example Queries
+examples:
+  - "Analyze the sentiment of this review"
+  - "Extract entities from this document"
+  - "Identify key phrases in this text"
+
+# Capabilities
+capabilities_detail:
+  sentiment_analysis:
+    supported: true
+    types:
+      - positive
+      - negative
+      - neutral
+    limitations: "Supports English only"
+
+  entity_recognition:
+    supported: true
+    types:
+      - person
+      - organization
+      - location
+
+# Requirements
+requirements:
+  packages:
+    - transformers>=4.0.0
+    - torch>=2.0.0
+  min_memory_mb: 512
+
+# Performance
+performance:
+  avg_processing_time_ms: 2000
+  max_file_size_mb: 10
+  concurrent_requests: 5
+```
+
+---
+
+## Complete Skill Structure
+
+A full skill definition includes:
+
+### 1. Basic Metadata
+
+```yaml
+id: skill-id-v1
+name: skill-name
+version: 1.0.0
+author: your@email.com
+description: |
+  What this skill does
+```
+
+### 2. Tags and Modes
+
+```yaml
+tags:
+  - category
+  - feature
+
+input_modes:
+  - text/plain
+  - application/json
+
+output_modes:
+  - application/json
+```
+
+### 3. Capabilities Detail
+
+```yaml
+capabilities_detail:
+  feature_1:
+    supported: true
+    types:
+      - type_a
+      - type_b
+    limitations: "Optional limitations"
+
+  feature_2:
+    supported: false
+    planned_version: "2.0.0"
+```
+
+### 4. Requirements
+
+```yaml
+requirements:
+  packages:
+    - package1>=1.0.0
+    - package2>=2.0.0
+  system:
+    - system-dependency
+  min_memory_mb: 512
+```
+
+### 5. Performance Metrics
+
+```yaml
+performance:
+  avg_processing_time_ms: 2000
+  max_file_size_mb: 50
+  concurrent_requests: 5
+  memory_per_request_mb: 500
+```
+
+### 6. Documentation
+
+```yaml
+documentation:
+  overview: |
+    Comprehensive description of the skill
+
+  use_cases:
+    when_to_use:
+      - Scenario 1
+      - Scenario 2
+    when_not_to_use:
+      - Anti-pattern 1
+
+  input_structure: |
+    Expected input format with examples
+
+  output_format: |
+    Output format with examples
+
+  error_handling:
+    - "Error type 1: How it's handled"
+
+  examples:
+    - title: "Example 1"
+      input: "input data"
+      output: "output data"
+
+  best_practices:
+    for_developers:
+      - "Best practice 1"
+    for_orchestrators:
+      - "Routing guideline 1"
+```
+
+---
+
+## Creating a New Skill
+
+<Steps>
+  <Step title="Create Directory">
+    ```bash
+    mkdir -p examples/skills/my-skill
+    ```
+  </Step>
+
+  <Step title="Create skill.yaml">
+    ```bash
+    cd examples/skills/my-skill
+    touch skill.yaml
+    ```
+  </Step>
+
+  <Step title="Define Skill">
+    ```yaml
+    id: my-skill-v1
+    name: my-skill
+    version: 1.0.0
+    author: your@email.com
+
+    description: |
+      What your skill does
+
+    tags:
+      - relevant
+      - tags
+
+    input_modes:
+      - text/plain
+
+    output_modes:
+      - application/json
+
+    capabilities_detail:
+      main_feature:
+        supported: true
+        description: "What it does"
+
+    requirements:
+      packages: []
+      min_memory_mb: 100
+
+    performance:
+      avg_processing_time_ms: 500
+      concurrent_requests: 10
+
+    documentation:
+      overview: |
+        Detailed description
+
+      use_cases:
+        when_to_use:
+          - Use case 1
+        when_not_to_use:
+          - Anti-pattern 1
+    ```
+  </Step>
+
+  <Step title="Reference in Config">
+    Add to your agent config:
+    
+    ```json
+    {
+      "skills": [
+        "examples/skills/my-skill"
+      ]
+    }
+    ```
+  </Step>
+
+  <Step title="Test">
+    ```bash
+    # Start agent
+    python your_agent.py
+
+    # Test endpoints
+    curl http://localhost:8030/agent/skills
+    curl http://localhost:8030/agent/skills/my-skill-v1
+    curl http://localhost:8030/agent/skills/my-skill-v1/documentation
+    ```
+  </Step>
+</Steps>
+
+---
+
+## API Endpoints
+
+### List All Skills
+
+```bash
+GET /agent/skills
+```
+
+**Response:**
+```json
+{
+  "skills": [
+    {
+      "id": "text-analysis-v1",
+      "name": "text-analysis",
+      "version": "1.0.0",
+      "description": "Analyzes text for sentiment...",
+      "tags": ["nlp", "text-analysis"]
+    }
+  ]
+}
+```
+
+### Get Skill Details
+
+```bash
+GET /agent/skills/{skill_id}
+```
+
+**Response:**
+```json
+{
+  "id": "text-analysis-v1",
+  "name": "text-analysis",
+  "version": "1.0.0",
+  "capabilities_detail": {...},
+  "requirements": {...},
+  "performance": {...}
+}
+```
+
+### Get Skill Documentation
+
+```bash
+GET /agent/skills/{skill_id}/documentation
+```
+
+**Response:**
+```json
+{
+  "overview": "Comprehensive description...",
+  "use_cases": {...},
+  "examples": [...]
+}
+```
+
+---
+
+## Orchestrator Integration
+
+### Discovery Example
+
+```python
+import requests
+
+# Discover available skills
+response = requests.get("http://agent:8030/agent/skills")
+skills = response.json()["skills"]
+
+# Find skills with specific tags
+nlp_skills = [s for s in skills if "nlp" in s["tags"]]
+
+# Get detailed capabilities
+for skill in nlp_skills:
+    details = requests.get(
+        f"http://agent:8030/agent/skills/{skill['id']}"
+    ).json()
+    
+    if details["capabilities_detail"]["sentiment_analysis"]["supported"]:
+        print(f"Found sentiment analysis: {skill['name']}")
+```
+
+### Capability Matching
+
+```python
+def find_agent_for_task(task_requirements):
+    """Find best agent based on requirements."""
+    agents = discover_agents()
+    
+    for agent in agents:
+        skills = get_agent_skills(agent)
+        
+        for skill in skills:
+            if matches_requirements(skill, task_requirements):
+                return agent, skill
+    
+    return None, None
+```
+
+### LLM-Based Orchestration
+
+```python
+# Provide skills to LLM for routing
+skills_context = """
+Available agents and their skills:
+
+1. Text Analysis Agent
+   - Sentiment analysis (English only)
+   - Entity recognition
+   - Key phrase extraction
+   - Avg time: 2s, Max size: 10MB
+
+2. Translation Agent
+   - 50+ language pairs
+   - Document translation
+   - Avg time: 5s, Max size: 5MB
+"""
+
+# LLM can now make informed routing decisions
+```
+
+---
+
+## Best Practices
+
+### For Skill Authors
+
+1. ✅ **Be specific** - Clearly define capabilities and limitations
+2. ✅ **Include examples** - Show real usage scenarios
+3. ✅ **Document errors** - Explain how errors are handled
+4. ✅ **Update versions** - Increment version on changes
+5. ✅ **Test thoroughly** - Validate YAML and endpoints
+
+### For Agent Developers
+
+1. ✅ **Keep skills updated** - Reflect actual capabilities
+2. ✅ **Use semantic versioning** - Major.Minor.Patch
+3. ✅ **Provide rich documentation** - Help orchestrators understand
+4. ✅ **Include performance metrics** - Enable capacity planning
+5. ✅ **Tag appropriately** - Improve discoverability
+
+### For Orchestrators
+
+1. ✅ **Cache skill data** - Reduce API calls
+2. ✅ **Validate before routing** - Check requirements match
+3. ✅ **Consider performance** - Route based on metrics
+4. ✅ **Handle failures** - Have fallback strategies
+5. ✅ **Monitor usage** - Track which skills are used
+
+---
+
+## Configuration
+
+### File-Based Skills (Recommended)
+
+```json
+{
+  "name": "my-agent",
+  "skills": [
+    "examples/skills/text-analysis",
+    "examples/skills/data-processing"
+  ]
+}
+```
+
+### Inline Skills (Legacy)
+
+```json
+{
+  "name": "my-agent",
+  "capabilities": {
+    "text-analysis": {
+      "description": "Analyzes text",
+      "tags": ["nlp"]
+    }
+  }
+}
+```
+
+### Mixed Approach
+
+```json
+{
+  "name": "my-agent",
+  "skills": [
+    "examples/skills/text-analysis"
+  ],
+  "capabilities": {
+    "legacy-skill": {
+      "description": "Old format"
+    }
+  }
+}
+```
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Skill Not Loading">
+    **Check:**
+    - Path is correct in config
+    - `skill.yaml` exists in directory
+    - YAML syntax is valid
+    - Agent has read permissions
+  </Accordion>
+
+  <Accordion title="Invalid YAML">
+    **Solution:**
+    - Validate YAML syntax online
+    - Check indentation (use spaces, not tabs)
+    - Ensure all required fields are present
+    - Use quotes for special characters
+  </Accordion>
+
+  <Accordion title="Missing Documentation">
+    **Cause:** Documentation section not defined
+    
+    **Solution:** Add `documentation` section to skill.yaml
+  </Accordion>
+
+  <Accordion title="Fields Not Showing">
+    **Cause:** Fields not exposed in API
+    
+    **Solution:** Check API endpoint returns expected fields
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Examples
+
+### Text Analysis Skill
+
+```yaml
+id: text-analysis-v1
+name: text-analysis
+version: 1.0.0
+author: team@example.com
+
+description: |
+  Advanced text analysis with sentiment, entities, and key phrases
+
+tags:
+  - nlp
+  - sentiment
+  - entities
+
+capabilities_detail:
+  sentiment_analysis:
+    supported: true
+    types: [positive, negative, neutral]
+    languages: [en]
+  
+  entity_recognition:
+    supported: true
+    types: [person, org, location]
+```
+
+### Image Generation Skill
+
+```yaml
+id: image-gen-v1
+name: image-generation
+version: 1.0.0
+author: team@example.com
+
+description: |
+  Generate images from text descriptions
+
+tags:
+  - image
+  - generation
+  - ai-art
+
+capabilities_detail:
+  text_to_image:
+    supported: true
+    styles: [realistic, artistic, cartoon]
+    max_resolution: "1024x1024"
+
+performance:
+  avg_processing_time_ms: 15000
+  max_concurrent_requests: 2
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Your First Skill" icon="plus" href="/bindu/skills/create">
+    Step-by-step guide to creating skills
+  </Card>
+  <Card title="Skill Reference" icon="book" href="/bindu/skills/reference">
+    Complete YAML field reference
+  </Card>
+  <Card title="Orchestration Guide" icon="network-wired" href="/bindu/skills/orchestration">
+    Build multi-agent workflows
+  </Card>
+  <Card title="GitHub Examples" icon="github" href="https://github.com/Saptha-me/Bindu/tree/main/examples/skills">
+    View example skills
+  </Card>
+</CardGroup>
+
+---
+
+## Resources
+
+- **[Skills System Docs](https://github.com/Saptha-me/Bindu/blob/main/docs/skills-system.md)** - Complete technical documentation
+- **[Example Skills](https://github.com/Saptha-me/Bindu/tree/main/examples/skills)** - Real-world skill definitions
+- **[YAML Validator](https://www.yamllint.com/)** - Validate your YAML syntax
+- **[Discord Community](https://discord.gg/3w5zuYUuwt)** - Get help and share skills
