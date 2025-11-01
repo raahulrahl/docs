@@ -12,6 +12,31 @@
     "dark": "#7C3AED"
   },
   "favicon": "/logo/light.svg",
+  "seo": {
+    "indexing": "all",
+    "metatags": {
+      "description": "Bindu - A2A Protocol compliant agent framework for building intelligent, interoperable AI agents with DID support, skills system, and payment integration",
+      "keywords": "bindu, ai agents, a2a protocol, agent framework, did, decentralized identity, agent orchestration, skills system, x402 payment, agent-to-agent communication, multi-agent systems, python agents",
+      "author": "Saptha.me",
+      "canonical": "https://docs.saptha.me",
+      "og:title": "Bindu - AI Agent Framework",
+      "og:type": "website",
+      "og:url": "https://docs.saptha.me",
+      "og:image": "https://docs.saptha.me/logo/light.svg",
+      "og:description": "Build intelligent, interoperable AI agents with A2A Protocol, DID support, and advanced orchestration capabilities",
+      "og:site_name": "Bindu Documentation",
+      "og:locale": "en_US",
+      "twitter:card": "summary_large_image",
+      "twitter:site": "@saptha_me",
+      "twitter:title": "Bindu - AI Agent Framework",
+      "twitter:description": "Build intelligent, interoperable AI agents with A2A Protocol, DID support, and advanced orchestration capabilities",
+      "twitter:image": "https://docs.saptha.me/logo/light.svg",
+      "theme-color": "#8B5CF6",
+      "apple-mobile-web-app-capable": "yes",
+      "apple-mobile-web-app-status-bar-style": "black-translucent",
+      "apple-mobile-web-app-title": "Bindu Docs"
+    }
+  },
   "contextual": {
     "options": [
       "copy",
