@@ -57,15 +57,15 @@
               {
                 "group": "Observability",
                 "pages": [
-                  "bindu/observability/introduction",
-                  "bindu/observability/run"
+                  "bindu/learn/observability/overview",
+                  "bindu/learn/observability/jaeger"
                 ]
               },
               {
                 "group": "Authentication",
                 "pages": [
-                  "bindu/auth/auth0",
-                  "bindu/auth/azure"
+                  "bindu/learn/authentication/overview",
+                  "bindu/learn/authentication/auth0"
                 ]
               },
               {
@@ -78,7 +78,7 @@
               {
                 "group": "Payment",
                 "pages": [
-                  "bindu/payment/introduction"
+                  "bindu/learn/payment/introduction"
                 ] 
               }
 
