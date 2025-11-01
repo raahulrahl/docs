@@ -1,8 +1,131 @@
 ---
 title: 'Metrics'
-description: 'Track and analyze agent performance metrics'
+description: 'Track and analyze agent performance metrics with OpenTelemetry'
 ---
 
 # Metrics
 
-Monitor key performance indicators and metrics for your Bindu agents.
+Bindu automatically collects performance metrics to help you monitor agent health and identify issues.
+
+## Overview
+
+Metrics provide quantitative measurements of your agent's behavior:
+
+- **Counters** - Total count of events (tasks processed, errors)
+- **Histograms** - Distribution of values (task duration, response time)
+- **Gauges** - Current value (active tasks, memory usage)
+
+---
+
+## Automatic Metrics
+
+### Task Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bindu_tasks_total` | Counter | Total tasks processed |
+| `bindu_task_duration_seconds` | Histogram | Task execution duration |
+| `bindu_active_tasks` | UpDownCounter | Currently active tasks |
+| `bindu_task_errors_total` | Counter | Total task errors |
+
+### Context Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bindu_contexts_total` | Counter | Total contexts created |
+| `bindu_active_contexts` | UpDownCounter | Currently active contexts |
+
+### Agent Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bindu_agent_execution_time` | Histogram | Agent execution duration |
+| `bindu_agent_calls_total` | Counter | Total agent invocations |
+
+---
+
+## Metric Attributes
+
+Each metric includes labels for filtering:
+
+- `operation` - Operation name (send_message, get_task)
+- `agent_name` - Agent identifier
+- `status` - Success or error
+- `error_type` - Exception class (on error)
+
+**Example:**
+```
+bindu_tasks_total{operation="send_message", agent_name="my-agent", status="success"} 150
+bindu_tasks_total{operation="send_message", agent_name="my-agent", status="error"} 5
+```
+
+---
+
+## Viewing Metrics
+
+### Prometheus
+
+Configure Prometheus to scrape metrics:
+
+```yaml
+scrape_configs:
+  - job_name: 'bindu-agent'
+    static_configs:
+      - targets: ['localhost:8030']
+```
+
+### Grafana Dashboard
+
+Create dashboards to visualize:
+
+- Task throughput over time
+- Error rates
+- P50/P95/P99 latencies
+- Active task count
+
+---
+
+## Custom Metrics
+
+Add custom metrics in your agent:
+
+```python
+from opentelemetry import metrics
+
+meter = metrics.get_meter(__name__)
+
+# Counter
+llm_calls = meter.create_counter(
+    "llm_calls_total",
+    description="Total LLM API calls"
+)
+
+# Histogram
+llm_latency = meter.create_histogram(
+    "llm_latency_seconds",
+    description="LLM API latency"
+)
+
+# Usage
+llm_calls.add(1, {"model": "gpt-4"})
+llm_latency.record(1.5, {"model": "gpt-4"})
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Tracing" icon="route" href="/bindu/learn/observability/tracing">
+    Learn about distributed tracing
+  </Card>
+  <Card title="Jaeger Setup" icon="server" href="/bindu/learn/observability/jaeger">
+    Set up trace visualization
+  </Card>
+  <Card title="Overview" icon="eye" href="/bindu/learn/observability/overview">
+    Back to observability overview
+  </Card>
+  <Card title="OpenTelemetry Metrics" icon="chart-line" href="https://opentelemetry.io/docs/concepts/signals/metrics/">
+    Official metrics documentation
+  </Card>
+</CardGroup>

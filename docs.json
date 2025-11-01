@@ -58,7 +58,10 @@
                 "group": "Observability",
                 "pages": [
                   "bindu/learn/observability/overview",
-                  "bindu/learn/observability/jaeger"
+                  "bindu/learn/observability/tracing",
+                  "bindu/learn/observability/jaeger",
+                  "bindu/learn/observability/metrics",
+                  "bindu/learn/observability/phoenix"
                 ]
               },
               {
