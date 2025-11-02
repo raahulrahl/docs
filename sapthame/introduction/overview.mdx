@@ -1,13 +1,12 @@
 ---
 title: 'Getting AI Agents to Work Together'
-
 ---
 
 Let me tell you a story in the last summer that broke my system entirely.
 
 A few months ago, I ran into a wall that changed how I think about agent collaboration.
 
-We were running a complex research project — something that looked simple on paper but turned into chaos the deeper we went. The goal was to explore potential breakthroughs hidden in a messy scientific domain.
+We were running a complex research project.Something that looked simple on paper but turned into chaos the deeper we went. The goal was to explore potential breakthroughs hidden in a messy scientific domain.
 
 At first, we did what everyone does: one “super” agent with a long prompt.  
 It could summarize papers, reason about hypotheses, even suggest a few experiments. For the first few hours, it felt magical.
@@ -17,24 +16,35 @@ The agent forgot earlier findings, contradicted itself, and started repeating wo
 
 So we broke the task apart.
 
-We built one agent that just **read the literature** — thousands of papers, pulling out known mechanisms.  
-Another that **generated hypotheses** — connecting gaps between what’s known and what’s possible.  
-A third that **analyzed experimental data** — interpreting results from human-run tests.  
+We built one agent that just **read the literature** thousands of papers, pulling out known mechanisms.  
+Another that **generated hypotheses** connecting gaps between what’s known and what’s possible.  
+A third that **analyzed experimental data** interpreting results from human-run tests.  
 And finally, a “judge” agent that **evaluated everything** and decided which direction to pursue next.
 
 On a single machine, it worked beautifully.  
-Shared memory, fast hand-offs, no latency — everything clicked.
+Shared memory, fast hand-offs, no latency : we enjoyed that evening.
 
 But then we tried to move it into production.  
 That’s when the real pain started.
 
 The research agent was running in Europe, the analysis agent in the US, and the judge was on a GPU node somewhere else entirely.  
-Each one spoke a slightly different dialect — Agno, LangChain, CrewAI.
+Each one spoke a slightly different dialect - Agno, LangChain, CrewAI.
 
 It felt like playing **a game of telephone** across continents.  
 The first agent whispered a discovery,  
 the second agent half-heard it and rephrased it,  
 and by the time it reached the last one, the message was unrecognizable.
+
+<div className="relative w-full my-8" style={{ paddingBottom: '56.25%' }}>
+  <iframe
+    className="absolute top-0 left-0 w-full h-full rounded-xl shadow-lg"
+    src="https://getyarn.io/yarn-clip/42e7103e-a0e2-44dc-b500-a3427565a53e/embed?autoplay=false&responsive=true"
+    frameBorder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowFullScreen
+  />
+</div>
+
 
 Data formats didn’t match.  
 Context went missing.  
@@ -45,22 +55,22 @@ What worked perfectly in a lab setup broke the moment **distance, frameworks, an
 
 And in the middle of all this, another realization hit me —  
 somewhere along the way, we had quietly assumed **humans were optional**.  
+
 They’re not.
 
-Every step of this process needed **a human in the loop** —  
-to validate a hypothesis, to catch subtle reasoning errors,  
+Every step of this process needed **a human in the loop read it HITL** to validate a hypothesis, to catch subtle reasoning errors,  
 to guide agents when the data got messy or ambiguous.
 
 The real promise of agents isn’t replacing human effort;  
 it’s **amplifying it**.  
-Agents don’t remove engineers — they give engineers superpowers.  
-They handle the repetitive scaffolding, the research drudge work, the data plumbing —  
-so humans can focus on judgment, creativity, and direction.
+
+Agents don’t remove engineers, they give engineers superpowers.  
+They handle the repetitive scaffolding, the research drudge work, the data plumbing, so humans can focus on judgment, creativity, and direction.
 
 That’s when it clicked:  
-**multi-agent systems aren’t about removing people — they’re about scaling human intent.**
+**multi-agent systems aren’t about removing people, they’re about scaling human intent.**
 
-you probably face the same thing.
+You probably face the same thing.
 
 It's pretty well-accepted that AI agents struggle with complex, multi-step tasks. You've probably experienced this:
 
@@ -103,56 +113,68 @@ Parallel execution meant they weren't waiting on each other.
 I sent it to a senior analyst for review, expecting notes.  
 Instead: *"This is better than what our team usually produces."*
 
-That's when I knew we were onto something real.
+That's when I knew we were onto something real. 
+
+
+<div className="flex justify-center my-8">
+  <img 
+    src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3NjOThrd2tnanJ6bHlsdjRxeWdjdHN2b2dkY2ZoZTVqbjd1YXlreCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/tyttpH2kOXFKxf36920/giphy.gif" 
+    alt="Victory celebration"
+    className="rounded-xl shadow-lg max-w-2xl"
+  />
+</div>
 
 ---
 
 ## The Messy Middle
 
-But getting here wasn't clean.
-
-For weeks, I was drowning in code reviews.  
-The team was shipping **multi-thousand-line PRs** from agent-generated work.  
-Fast. Really fast.
-
-The code quality? Actually pretty good.  
-The problem? **Nothing connected.**
-
-The research agent would gather data, then forget it by the time analysis started.  
-The coding agent would implement features without seeing the broader architecture.  
-The writing agent would create docs that didn't match what was actually built.
-
-We were getting slop.  
-Not because the agents were bad.  
-But because they weren't talking to each other.
+But getting here wasn't clean. For weeks, agents weren't talking to each other, each one lived in its own silo.
 
 ### The Data Silos Problem
 
-Then we hit the real issue: **data silos**.
+Then we hit the real issue: **geographic data constraints**.
 
-Each agent lived in its own world.  
-Its own context. Its own memory. Its own version of reality.
+The Paris agent could only access Paris data sources.  
+The UAE agent couldn't leave UAE data boundaries.  
+The US agent was locked to US infrastructure.
 
-When the research agent finished, the analysis agent started from zero.  
-When analysis completed, the writing agent couldn't see the original research.
+Not by choice. By law.
 
-It was like watching a relay race where every runner starts at the beginning instead of where the last one left off.
+GDPR. Data sovereignty. Compliance requirements.  
+The same integration nightmare software engineers have faced for decades—now with AI agents.
+
+You can't just move data across borders.  
+You can't centralize everything in one region.  
+Each agent needs to stay where its data lives.
+
+It was like watching a relay race where every runner is stuck in a different country.
 
 ```mermaid
 graph TB
-    subgraph "The Problem: Isolated Agents"
-        U1[User Request] --> A1[Research Agent]
-        A1 --> D1[(Agent 1<br/>Context)]
-        D1 -.->|Lost| X1[❌]
-        
-        U1 --> A2[Analysis Agent]
-        A2 --> D2[(Agent 2<br/>Context)]
-        D2 -.->|Lost| X2[❌]
-        
-        U1 --> A3[Writing Agent]
-        A3 --> D3[(Agent 3<br/>Context)]
-        D3 -.->|Lost| X3[❌]
+    subgraph "Europe (GDPR)"
+        A1[Paris Agent]
+        D1[(Paris Data<br/>Sources)]
+        A1 --> D1
+        D1 -.->|Can't Leave| X1[🚫]
     end
+    
+    subgraph "Middle East"
+        A2[UAE Agent]
+        D2[(UAE Data<br/>Sources)]
+        A2 --> D2
+        D2 -.->|Can't Leave| X2[🚫]
+    end
+    
+    subgraph "United States"
+        A3[US Agent]
+        D3[(US Data<br/>Sources)]
+        A3 --> D3
+        D3 -.->|Can't Leave| X3[🚫]
+    end
+    
+    U[User Request] --> A1
+    U --> A2
+    U --> A3
     
     style D1 fill:#ffcccc
     style D2 fill:#ffcccc
@@ -162,220 +184,243 @@ graph TB
     style X3 fill:#ff0000
 ```
 
-In practice, this was painful:
+In practice, this was brutal:
 
-The analysis agent would ask for data the research agent already found.  
-The writing agent would make claims the analysis never supported.  
-Agents repeated each other's work.  
-Context evaporated between steps.
+The Paris agent couldn't see what the UAE agent discovered.  
+The US agent couldn't access European market data.  
+Each region's MCP servers were isolated.  
+Agents repeated work across geographies.
 
-Everything was inconsistent.
+**This is the same integration hell we've been solving in distributed systems for years.**  
+Except now it's with AI agents that need to collaborate across borders.
 
-### We Fixed It With Shared Context
+### The Solution: Task-Specific Agents + MCP Servers
+
+Here's what actually worked:
+
+We created **small, task-specific agents** in each region.  
+Each agent only talks to its local MCP server.  
+The MCP server handles all the data access within that geography.
+
+The Paris agent? Only interfaces with the Paris MCP server.  
+The UAE agent? Only talks to the UAE MCP server.  
+The US agent? Locked to the US MCP server.
+
+**Data stays where it needs to stay.**  
+But agents can now coordinate through a shared orchestration layer.
+
+### The Architecture
 
 ```mermaid
 graph TB
-    U[User Request] --> O[🧠 Orchestrator]
-    O --> SC[(📚 Shared Context<br/>PostgreSQL)]
+    U[User Request] --> O[Orchestrator]
+    O <--> SC[(Shared Context)]
     
-    O --> A1[🔍 Research Agent]
-    O --> A2[📊 Analysis Agent]
-    O --> A3[✍️ Writing Agent]
+    O --> A1
+    O --> A2
+    O --> A3
+    
+    subgraph "Europe (GDPR)"
+        A1[Paris Agent]
+        A1 <--> MCP1[Paris MCP Server]
+        MCP1 --> D1[(Paris Data)]
+    end
+    
+    subgraph "Middle East"
+        A2[UAE Agent]
+        A2 <--> MCP2[UAE MCP Server]
+        MCP2 --> D2[(UAE Data)]
+    end
+    
+    subgraph "United States"
+        A3[US Agent]
+        A3 <--> MCP3[US MCP Server]
+        MCP3 --> D3[(US Data)]
+    end
     
     A1 -.->|Writes findings| SC
-    A2 -.->|Reads research<br/>Writes insights| SC
-    A3 -.->|Reads everything<br/>Writes report| SC
+    A2 -.->|Writes findings| SC
+    A3 -.->|Writes findings| SC
     
-    SC --> O
-    O --> R[✨ Coordinated Result]
-    
-    style SC fill:#90EE90
-    style O fill:#fff4e1
-    style A1 fill:#e8f5e9
-    style A2 fill:#e8f5e9
-    style A3 fill:#e8f5e9
-    style R fill:#e1f5ff
+    style SC fill:#ccffcc
+    style O fill:#cce5ff
+    style MCP1 fill:#e6f3ff
+    style MCP2 fill:#e6f3ff
+    style MCP3 fill:#e6f3ff
 ```
 
-Now all agents write to and read from the same place.  
-PostgreSQL becomes the shared brain.
 
-Each agent builds on what the previous one discovered.  
-No repeated work. No lost context.  
-The orchestrator manages what each agent needs to see.
+### The Two Things That Actually Matter
 
-### The Uncomfortable Transformation
+After all this, two things emerged as critical:
 
-We had to completely rethink how agents work.
+**1. Shared Context**
 
-Instead of one agent trying to do everything, we built an orchestrator that:
-- Breaks down complex tasks into specialist-appropriate chunks
-- Routes work to the right agents based on their capabilities
-- Manages context so agents build on each other's work
-- Coordinates timing so agents work in parallel when possible
+Agents need to see what other agents discovered.  
+Not everything. Just what's relevant.
 
-It was uncomfortable at first.  
-We had to learn to trust the orchestrator.  
-Let go of control.  
-Stop micromanaging every step.
+The Paris agent finds market data → Goes into shared context  
+The UAE agent needs that data → Pulls it from shared context  
+The US agent builds on both → Context keeps growing
 
-But once we did? We started flying.
+Without shared context, agents repeat work.  
+With it, they build on each other.
+
+**2. Human in the Loop (HITL)**
+
+Here's the uncomfortable truth:  
+Agents make mistakes. Often.
+
+A research agent might miss a critical source.  
+An analysis agent might draw the wrong conclusion.  
+A writing agent might make claims that aren't supported.
+
+**You need humans reviewing at high-leverage points.**
+
+Not every line of output.  
+But the key decisions:
+- Did the research agent find the right sources?
+- Is the analysis actually valid?
+- Does the final output make sense?
 
 Here's what I learned:  
-A bad line of code is just a bad line of code.  
-But a bad task routing decision? That leads to hundreds of wasted agent calls.  
-Thousands of lines of wrong output.
+A bad line of agent output? One bad result.  
+A bad research direction? Hundreds of wasted agent calls.  
+A bad analysis assumption? Thousands of lines of wrong output.
 
-The orchestration decisions matter more than the code.
+**HITL at the right moments saves everything downstream.**
+
+<div className="flex justify-center my-8">
+  <img 
+    src="https://private-user-images.githubusercontent.com/3730605/493087548-dab49f61-caae-4c15-b481-ee9b8f64995f.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjIwODAzMzcsIm5iZiI6MTc2MjA4MDAzNywicGF0aCI6Ii8zNzMwNjA1LzQ5MzA4NzU0OC1kYWI0OWY2MS1jYWFlLTRjMTUtYjQ4MS1lZTliOGY2NDk5NWYucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MTEwMiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTExMDJUMTA0MDM3WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NGExNGYyMjhjNmMwYmM5ZTBlZTFlZGJhNzEyYzljNWM4MTc3MDE5NjhmNjY2NmRjY2JlYTE5YjY1MDJmODU4OCZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.OzA1oIY0mDz3zRUv8s_G0612_iobDgkGv9_Z2DILyJY" 
+    alt="Before Bindu: 3000 lines of boilerplate. After Bindu: 5 lines of config"
+    className="rounded-xl shadow-lg"
+  />
+</div>
 
 ---
 
 ## What Actually Works
 
-After months of breaking things and putting them back together, here's what stuck:
+After months of breaking things, here's what stuck:
 
-### 1. Specialists Win
+### The Three-Body Pattern
 
-Don't build one agent that tries to do everything.  
-Build focused agents that excel at one thing.
+Every complex task follows the same pattern:
 
-A research agent that's **great** at gathering data.  
-An analysis agent that's **great** at finding patterns.  
-A writing agent that's **great** at synthesis.
+**1. Research** → Gather context, understand the problem  
+**2. Plan** → Break it down, decide the approach  
+**3. Implement** → Execute with specialist agents
 
-Generalists are mediocre at everything.  
-Specialists are excellent at their thing.
+Skip research? Your plan will be wrong.  
+Skip planning? Your implementation will be chaotic.  
+Skip implementation review? You'll ship broken work.
 
-### 2. Orchestration is Everything
+```
+[████░░░░░░] Research  
+[██████████] Plan      
+[██████████] Implement 
+```
 
-Don't let agents figure out coordination themselves.  
-They won't.
+### Specialist Agents
 
-Build an orchestrator that manages the workflow.  
-Think of it like a project manager who understands the goal, knows which agents can help, and coordinates their work.
+One agent trying to do everything → Mediocre at all of it.  
+Focused agents, each excellent at one thing → Actually works.
 
-Without orchestration, you have chaos.  
-With it, you have a system.
+Research agent: Gathers data.  
+Analysis agent: Finds patterns.  
+Writing agent: Synthesizes output.
 
-### 3. Parallel > Sequential
+### Shared Context
 
-Don't wait for one agent to finish before starting the next.  
-That's how you waste time.
+Agents must see what other agents discovered.  
+Not everything—just what's relevant.
 
-Run independent agents in parallel.
+Without shared context: Agents repeat work, contradict each other.  
+With shared context: Each agent builds on previous findings.
 
-Research and competitive analysis? Simultaneously.  
-Data gathering from multiple sources? Parallelized.  
-This is where you get 3-5x speed improvements.
+### HITL at High-Leverage Points
 
-### 4. Context Management is Critical
+Don't review every line of output.  
+Review the decisions that multiply:
 
-Don't let agents lose context between steps.  
-That's how you get inconsistent output.
+- Research: Did we find the right sources?
+- Plan: Is the approach sound?
+- Implementation: Does the output make sense?
 
-Maintain shared context that agents build on.  
-Each agent sees what previous agents discovered.  
-The orchestrator manages this, keeping it relevant and focused.
-
-### 5. Human Review at High-Leverage Points
-
-Don't review every line of agent output.  
-You'll burn out.
-
-Review the task breakdown and routing decisions.  
-That's where mistakes multiply.
-
-A bad routing decision → hundreds of wasted agent calls.  
-Review the plan before execution, not just the output after.
+One bad decision early → Hundreds of wasted agent calls downstream.
 
 ---
 
-## How It Works (Simple)
+## How It Works
 
 ```mermaid
-graph LR
-    U[👤 You<br/>Ask a complex question] -->|Task| O[🧠 Orchestrator<br/>The Brain]
-    O -->|Parallel Work| A1[🔍 Agent 1]
-    O -->|Parallel Work| A2[📊 Agent 2]
-    O -->|Parallel Work| A3[✍️ Agent 3]
+graph TB
+    U[User Request] --> O[Orchestrator]
+    O <--> SC[(Shared Context)]
     
-    A1 -->|Result| O
-    A2 -->|Result| O
-    A3 -->|Result| O
+    O -->|Research| A1[Research Agent]
+    A1 -.->|Findings| SC
+    SC -.->|Review| H1[👤 HITL Review]
+    H1 -.->|Approved| O
     
-    O -->|✨ Coordinated<br/>Answer| U
+    O -->|Plan| A2[Planning Agent]
+    A2 -.->|Plan| SC
+    SC -.->|Review| H2[👤 HITL Review]
+    H2 -.->|Approved| O
     
-    style U fill:#e1f5ff
-    style O fill:#fff4e1
+    O -->|Implement| A3[Implementation Agents]
+    A3 -.->|Output| SC
+    SC -.->|Review| H3[👤 HITL Review]
+    H3 -.->|Approved| SC
+    
+    SC -->|Final Result| U
+    
+    style SC fill:#ccffcc
+    style O fill:#cce5ff
     style A1 fill:#e8f5e9
     style A2 fill:#e8f5e9
     style A3 fill:#e8f5e9
+    style H1 fill:#fff4e1
+    style H2 fill:#fff4e1
+    style H3 fill:#fff4e1
 ```
 
-Here's how it actually works:
+The workflow:
 
-1. **You ask** → Give it a complex task that needs multiple skills
-2. **Orchestrator coordinates** → Picks the right agents, runs them in parallel
-3. **You get results** → Fast, high-quality, comprehensive answer
+1. **User request** → Orchestrator receives the task
+2. **Research phase** → Agent gathers context, writes to shared context → **HITL reviews findings**
+3. **Planning phase** → Agent reads research, creates plan, writes to shared context → **HITL reviews plan**
+4. **Implementation phase** → Agents read plan, execute in parallel, write results → **HITL reviews output**
+5. **Final output** → Orchestrator synthesizes from shared context
 
-Simple in theory.  
-Hard in practice.  
-Worth it when it works.
+Each stage builds on the previous one.  
+**Humans review at each critical decision point.**  
+Nothing gets lost.  
+Everything stays coordinated.
 
 ---
 
 ## This is Not Magic
 
-Let me be clear about something.
-
 Remember that analyst who said our report was better than their team's work?  
-That required an actual human expert to review it.
+That required a human expert to review it.
 
-You have to engage with the task.  
-You can't just throw prompts at the orchestrator and hope for the best.
+Agent swarms don't work on autopilot.  
+You need to engage with the task.  
+Review at the right moments.  
+Guide the direction.
 
-There's a certain type of person who's always looking for the one magic pattern that will solve all their problems.
+**What makes this work isn't the orchestration alone.**  
+It's HITL at high-leverage points in the pipeline.
 
-It doesn't exist.
-
-What makes agent swarms **good enough for hard problems** isn't the orchestration alone.  
-It's building high-leverage human review into your pipeline.
-
-### Where We've Failed
-
-A few weeks back, we got cocky.
-
-We tried using our orchestration approach on a deeply technical infrastructure migration.  
-The kind of work that requires deep domain knowledge.
-
-It did not go well.
-
-The research agents didn't go deep enough into dependencies.  
-The planning agent made assumptions that weren't validated.  
-We ended up with a plan that would have created more problems than it solved.
-
-We caught it during review, thankfully.  
-But it was a reminder:
-
-**You need at least one person who's an expert in the domain.**
-
-For complex technical work, agent swarms augment expertise.  
-They don't replace it.
-
-### On Human Leverage
-
-If you take away one thing from all this, let it be this:
-
-**Focus human effort on the highest-leverage parts of the pipeline.**
-
-A bad line of agent output? One bad result.  
-A bad task breakdown? Hundreds of wasted agent calls.  
-A bad routing decision? Thousands of lines of wrong output.
-
-The earlier in the pipeline you catch mistakes, the more leverage you have.
-
-Review the orchestration decisions.  
-Not just the final output.
+<div className="flex justify-center my-8">
+  <img 
+    src="https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWVwZW0xNWh2MGp1ZDhldTdzOGJlOWc3dnB5MXNqajRtaDB6cHJuNSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hHxTQkcjmHUTC/giphy.gif" 
+    alt="Human reviewing agent work at critical decision points"
+    className="rounded-xl shadow-lg max-w-2xl"
+  />
+</div>
 
 ---
 
@@ -386,45 +431,44 @@ So here's what we're doing about it.
 **Saptha.me** is the orchestration platform for agent swarms.  
 We're building the infrastructure that lets agents work together effectively.
 
-### The Core Problem
+### The Saptami Python Package (Beta)
 
-Today, if you want agents to collaborate, you have to build everything yourself:
-- Your own orchestration logic
-- Your own context management
-- Your own agent discovery and routing
-- Your own way to make different frameworks talk to each other
+We're shipping a Python package that implements the Three-Body Pattern.
 
-It's exhausting.  
-And most teams don't have time for it.
+Here's how you use it:
 
-**We're building the platform that handles all of this.**
+**Stage 1: Research**
+```bash
+saptami run \
+  --id my_research_2025_10_17 \
+  --stage research \
+  --client-question "Analyze market opportunity for AI agents" \
+  --agent market=./agents/market-intel-agent.get-info.json \
+  --out ./runs/my_research
+```
 
-### What's Working Today
+**Stage 2: Plan**
+```bash
+saptami run \
+  --id my_plan_2025_10_17 \
+  --stage plan \
+  --plan-out ./plans/my_plan.md \
+  --client-question "Create rollout strategy"
+```
 
-We've shipped:
-- ✅ **Intelligent task routing** - The orchestrator breaks down complex tasks and routes to specialist agents
-- ✅ **Context management** - Shared context that agents build on, managed automatically
-- ✅ **Parallel execution** - Independent agents work simultaneously
-- ✅ **A2A Protocol** - Standard communication so any agent can join the swarm
+**Stage 3: Implement**
+```bash
+saptami run \
+  --id my_impl_2025_10_18 \
+  --stage implement \
+  --plan-in ./plans/my_plan.md \
+  --agent impl=./agents/protocol-orchestrator.get-info.json \
+  --out ./runs/my_impl
+```
 
-### What We're Working On
-
-We're building:
-- 🚧 **Agent marketplace** - Discover and use specialized agents built by others
-- 🚧 **Built-in payments** - Agents can charge for their services (x402 protocol)
-- 🚧 **DID-based identity** - Verifiable agent identities for trust
-- 🚧 **Cross-framework support** - LangChain, CrewAI, custom agents all work together
-
-### What's Still Hard
-
-Let me be honest about what doesn't work yet:
-- ❌ **Deep technical migrations** - Still need domain experts
-- ❌ **Novel problem spaces** - Agents struggle without existing patterns
-- ❌ **Complex dependency trees** - Research agents don't always go deep enough
-
-We're not claiming this solves everything.
-
-But for a growing class of problems—research, analysis, content creation, data processing—it works remarkably well.
+Each stage builds on the previous one.  
+Context flows through automatically.  
+HITL review points are built in.
 
 ---
 
@@ -497,31 +541,75 @@ Let's talk.
 
 ---
 
-## The Story So Far
+## The Internet of Agents
 
-Single agents struggle with complex, multi-step tasks.  
-We've all seen it.
+Here's what we're building toward:
 
-Agent swarms with specialist agents work better.  
-But only if you get orchestration and context management right.
+```
+a peek into the night sky
+}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+{{            +             +                  +   @          {{
+}}   |                *           o     +                .    }}
+{{  -O-    o               .               .          +       {{
+}}   |                    _,.-----.,_         o    |          }}
+{{           +    *    .-'.         .'-.          -O-         {{
+}}      *            .'.-'   .---.   `'.'.         |     *    }}
+{{ .                /_.-'   /     \   .'-.\                   {{
+}}         ' -=*<  |-._.-  |   @   |   '-._|  >*=-    .     + }}
+{{ -- )--           \`-.    \     /    .-'/                   {{
+}}       *     +     `.'.    '---'    .'.'    +       o       {{
+{{                  .  '-._         _.-'  .                   {{
+}}         |               `~~~~~~~`       - --===D       @   }}
+{{   o    -O-      *   .                  *        +          {{
+}}         |                      +         .            +    }}
+{{ jgs          .     @      o                        *       {{
+}}       o                          *          o           .  }}
+{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+```
 
-Human review at high-leverage points is essential.  
-This isn't about replacing people—it's about amplifying them.
+Each symbol is an agent, a spark of intelligence. And the single tiny dot is Bindu, the origin point in the Internet of Agents.
 
-This works for a growing class of problems.  
-Research, analysis, content creation, data processing.  
-But not everything. Not yet.
+Imagine thousands of specialized agents.  
+Each one excellent at its thing.  
+All discoverable. All connectable. All working together.
 
-We're building the infrastructure to make this easier.  
-To make agent collaboration actually work in production.
+A research agent in Paris.  
+An analysis agent in Dubai.  
+A writing agent in San Francisco.  
+All coordinating seamlessly while data stays local.
+
+**This is the Internet of Agents.**
+
+### How We Get There
+
+**Step 1: Make agents accessible**
+
+With [Bindu](https://github.com/Saptha-me/Bindu), you write your prompt, `bindufy()` it, and your agent is live.  
+A2A protocol. DID identity. Payment support. Production-ready.
+
+One function call. Your agent joins the network.
+
+**Step 2: Make agents collaborate**
+
+With [Saptha.me](https://github.com/Saptha-me/sapthame), agents coordinate through the Three-Body Pattern.  
+Research → Plan → Implement.  
+Shared context. HITL review. Geographic data boundaries respected.
+
+Orchestration that actually works in production.
+
+**Step 3: Build the ecosystem**
+
+Agent marketplace. Verifiable identities. Built-in payments.  
+Agents discover each other. Charge for services. Build on each other's work.
 
 **The future of AI is collaborative.**
 
 Not one super-agent trying to do everything.  
 But swarms of specialists working together.  
+Each in its own region. Each respecting data sovereignty.  
 Coordinated. Context-aware. Human-guided.
 
-We're building the platform that makes that possible.
+We're building the infrastructure that makes this possible.
 
 ---
 
