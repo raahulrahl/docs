@@ -1,12 +1,26 @@
 ---
-title: 'Join the Force'
+title: 'Join the Internet of Agents'
 ---
 
-Your AI agent, production-ready in 120 seconds. Create Bindu Agent scaffolds intelligent agents that natively communicate in the Internet of Agents.
+Remember that developer who spent three weeks on infrastructure?
 
-## Quickstart - Cookiecutter Style
+Let's make sure that's not you.
+
+In the next **2 minutes**, you'll have a production-ready agent.  
+Not a demo. Not a prototype.  
+A real agent with DID identity, A2A protocol compliance, observability, and payment support.
+
+Ready to communicate in the Internet of Agents.
+
+Let's go.
+
+---
+
+## The Fast Way - Cookiecutter Style
 
 Time to first agent: **~2 minutes** ⏱️
+
+This is the fastest way to get started.
 
 Navigate to the directory where you want to create your agent project and run:
 
@@ -25,9 +39,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 For detailed documentation, see the [Template Overview](/bindu/create-bindu-agent/overview).
 </Note>
 
-## Already Have an Agent? - Manual Setup
+## Already Built Something?
 
-If you have an existing agent and want to add Bindu capabilities, you'll need two things: a configuration file and the `bindufy` wrapper.
+You've got an agent running.  
+Maybe it's in LangChain. Maybe CrewAI. Maybe custom code.
+
+Doesn't matter.
+
+You can Bindu-fy it in **5 minutes**.
+
+Two things you need: a config file and the `bindufy` wrapper.  
+That's it.
 
 ### Step 1: Create `agent_config.json`
 
@@ -75,15 +97,26 @@ def agent_handler(messages: list[dict[str, str]]):
 bindufy(my_agent, config, agent_handler)
 ```
 
-That's it! Your agent is now live and ready to communicate with other agents in the Internet of Agents.
+**Done.**
+
+Your agent is now live.  
+Ready to communicate with other agents in the Internet of Agents.
+
+No infrastructure setup.  
+No protocol implementation.  
+No weeks of DevOps work.
+
+Just your agent, now accessible to the world.
 
 <Tip>
 Check out [examples](https://github.com/Saptha-me/Bindu/tree/main/examples) for different agent frameworks like LangChain, CrewAI, and more.
 </Tip>
 
-## What Happens Next?
+---
 
-You'll be prompted for:
+## What Happens During Setup?
+
+When you run the cookiecutter command, you'll be prompted for:
 - **Project details** - Name, description, author info
 - **Agent framework** - Agno, LangChain, CrewAI, etc.
 - **Features** - Authentication, DID, observability, CI/CD
@@ -105,27 +138,47 @@ your-agent/
 └── README.md                 # Complete setup instructions
 ```
 
-## Running Your Agent
+## Fire It Up
 
-Navigate to your agent directory and install dependencies:
+Navigate to your agent directory:
 
 ```bash
 cd your-agent
+```
+
+Install dependencies (this is fast with uv):
+
+```bash
 uv sync
 ```
 
-Start your agent server:
+Start your agent:
 
 ```bash
 uv run python -m your_agent.main
 ```
 
-Your agent is now live at `http://localhost:3773` and ready to communicate using:
+**That's it.**
+
+Your agent is now live at `http://localhost:3773`.
+
+It's speaking:
 - **A2A** - Agent-to-Agent protocol
 - **AP2** - Agentic Protocol 2
 - **X402** - Payment rails
 
-## What's Included
+Other agents can discover it.  
+Talk to it.  
+Pay it for services.
+
+You just joined the Internet of Agents.
+
+---
+
+## What You Just Got
+
+All of this. Out of the box.  
+No configuration. No setup. No weeks of work.
 
 <CardGroup cols={2}>
   <Card title="Protocol Support" icon="network-wired">
@@ -177,34 +230,56 @@ Your agent is now live at `http://localhost:3773` and ready to communicate using
   </Card>
 </CardGroup>
 
-## Troubleshooting
+## When Things Go Wrong
+
+They usually don't. But if they do:
 
 <AccordionGroup>
   <Accordion title="uv not found">
-    Install uv using:
+    You need uv installed first.
+    
     ```bash
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
-    Then restart your terminal.
+    
+    Then restart your terminal and try again.
   </Accordion>
   
   <Accordion title="Port already in use">
-    Change the `deployment_port` in your `agent_config.json` or set a different port when prompted during setup.
+    Something's already running on port 3773.
+    
+    Change the `deployment_port` in your `agent_config.json` to something else (like 8030 or 9000).
+    
+    Or kill whatever's using that port.
   </Accordion>
   
   <Accordion title="Authentication errors">
-    Make sure you've configured your Auth0 credentials in the environment variables. Check the generated README for details.
+    You probably haven't set up Auth0 credentials yet.
+    
+    Check the generated README for details on environment variables.
+    
+    Or disable auth in your config if you're just testing.
   </Accordion>
   
   <Accordion title="Dependencies not installing">
-    Try removing the `.venv` directory and running `uv sync` again:
+    Sometimes the virtual environment gets corrupted.
+    
+    Nuke it and start fresh:
     ```bash
     rm -rf .venv
     uv sync
     ```
+    
+    Should work now.
   </Accordion>
 </AccordionGroup>
 
-<Note>
-**Need help?** Join our [Discord community](https://discord.gg/saptha) or check out the [GitHub repository](https://github.com/Saptha-me/create-bindu-agent) for more information.
-</Note>
+---
+
+## Still Stuck?
+
+**Join our [Discord community](https://discord.gg/saptha)** - Real people, real help, usually within minutes.
+
+Or check out the [GitHub repository](https://github.com/Saptha-me/create-bindu-agent) for more examples and documentation.
+
+We're building this together. Your questions make the docs better.
