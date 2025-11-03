@@ -2,8 +2,6 @@
 title: "Protocol Types"
 ---
 
-# The Language of Agents
-
 Think of protocol types as the vocabulary that agents use to talk to each other. Just like humans need a common language to communicate, agents need a precise set of data structures to understand each other. This guide explains each type in simple terms.
 
 ## Overview
@@ -4728,15 +4726,15 @@ uv run examples/agno_example.py
 Version: 0.3.20.dev0+g1be868185.d20251029
 
 🚀 Bindu Server 🚀
-Agent Server: http://localhost:8030
+Agent Server: http://localhost:3773
 
 Agent ID: 6616c5797f434a9a8cdb35a043507ee1
 Agent DID: did:bindu:alice@example.com:research_agent:6616c5797f434a9a8cdb35a043507ee1
 
 Protocol Endpoints:
-  - A2A: http://localhost:8030/a2a
-  - DID Resolution: http://localhost:8030/did/resolve
-  - Agent Info: http://localhost:8030/agent/info
+  - A2A: http://localhost:3773/a2a
+  - DID Resolution: http://localhost:3773/did/resolve
+  - Agent Info: http://localhost:3773/agent/info
 
 ⭐️⭐️⭐️ Support Open Source ⭐️⭐️⭐️
 ⭐️⭐️⭐️ Star on GitHub! ⭐️⭐️⭐️
@@ -4753,7 +4751,7 @@ INFO:     Started server process [45927]
 INFO:     Waiting for application startup.
            WARNING  Missing OpenInference packages - auto-installation disabled for safety
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://localhost:8030 (Press CTRL+C to quit)
+INFO:     Uvicorn running on http://localhost:3773 (Press CTRL+C to quit)
 ```
 
 Your agent is now running with:
@@ -4762,4 +4760,4 @@ Your agent is now running with:
 - **DID Resolution** - Discover and verify agent identities
 - **Agent Info** - Query agent capabilities and metadata
 
-Visit `http://localhost:8030/agent/info` to see your agent's complete AgentCard.
+Visit `http://localhost:3773/agent/info` to see your agent's complete AgentCard.

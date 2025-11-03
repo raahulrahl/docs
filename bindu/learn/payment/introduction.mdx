@@ -176,7 +176,7 @@ Bindu supports payments on multiple blockchain networks:
 
   <Step title="Send First Request">
     ```bash
-    curl --location 'http://localhost:8030/' \
+    curl --location 'http://localhost:3773/' \
     --header 'Content-Type: application/json' \
     --data '{
         "jsonrpc": "2.0",
@@ -233,7 +233,7 @@ Test different payment scenarios:
 import { X402Client } from '@bindu/x402-client';
 
 const client = new X402Client({
-  agentUrl: 'http://localhost:8030',
+  agentUrl: 'http://localhost:3773',
   wallet: {
     privateKey: process.env.WALLET_PRIVATE_KEY,
     network: 'base-sepolia'
@@ -253,7 +253,7 @@ const response = await client.sendMessage({
 from bindu.client import X402Client
 
 client = X402Client(
-    agent_url="http://localhost:8030",
+    agent_url="http://localhost:3773",
     private_key="0xYOUR_PRIVATE_KEY",
     network="base-sepolia"
 )

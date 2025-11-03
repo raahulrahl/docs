@@ -393,9 +393,9 @@ documentation:
     python your_agent.py
 
     # Test endpoints
-    curl http://localhost:8030/agent/skills
-    curl http://localhost:8030/agent/skills/my-skill-v1
-    curl http://localhost:8030/agent/skills/my-skill-v1/documentation
+    curl http://localhost:3773/agent/skills
+    curl http://localhost:3773/agent/skills/my-skill-v1
+    curl http://localhost:3773/agent/skills/my-skill-v1/documentation
     ```
   </Step>
 </Steps>
@@ -468,7 +468,7 @@ GET /agent/skills/{skill_id}/documentation
 import requests
 
 # Discover available skills
-response = requests.get("http://agent:8030/agent/skills")
+response = requests.get("http://agent:3773/agent/skills")
 skills = response.json()["skills"]
 
 # Find skills with specific tags
@@ -477,7 +477,7 @@ nlp_skills = [s for s in skills if "nlp" in s["tags"]]
 # Get detailed capabilities
 for skill in nlp_skills:
     details = requests.get(
-        f"http://agent:8030/agent/skills/{skill['id']}"
+        f"http://agent:3773/agent/skills/{skill['id']}"
     ).json()
     
     if details["capabilities_detail"]["sentiment_analysis"]["supported"]:

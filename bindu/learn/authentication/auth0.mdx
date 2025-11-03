@@ -133,7 +133,7 @@ Update your agent config to enable authentication:
     "audience": "https://api.bindu.ai"
   },
   "deployment": {
-    "url": "http://localhost:8030"
+    "url": "http://localhost:3773"
   },
   "storage": {
     "type": "memory"
@@ -202,7 +202,7 @@ class BinduM2MClient:
         self.client_id = os.getenv("AUTH0_CLIENT_ID")
         self.client_secret = os.getenv("AUTH0_CLIENT_SECRET")
         self.audience = os.getenv("AUTH0_AUDIENCE")
-        self.agent_url = os.getenv("BINDU_AGENT_URL", "http://localhost:8030")
+        self.agent_url = os.getenv("BINDU_AGENT_URL", "http://localhost:3773")
 
         self._token: Optional[str] = None
         self._token_expires_at: float = 0
@@ -277,7 +277,7 @@ AUTH0_DOMAIN=your-company.auth0.com
 AUTH0_CLIENT_ID=abc123xyz789
 AUTH0_CLIENT_SECRET=supersecretvalue
 AUTH0_AUDIENCE=https://api.bindu.ai
-BINDU_AGENT_URL=http://localhost:8030
+BINDU_AGENT_URL=http://localhost:3773
 ```
 
 <Warning>
@@ -303,7 +303,7 @@ class BinduM2MClient {
     this.clientId = process.env.AUTH0_CLIENT_ID!;
     this.clientSecret = process.env.AUTH0_CLIENT_SECRET!;
     this.audience = process.env.AUTH0_AUDIENCE!;
-    this.agentUrl = process.env.BINDU_AGENT_URL || 'http://localhost:8030';
+    this.agentUrl = process.env.BINDU_AGENT_URL || 'http://localhost:3773';
   }
 
   private async getToken(): Promise<string> {
@@ -376,7 +376,7 @@ python examples/agno_example.py examples/simple_agent_config.json
 Test public endpoint:
 
 ```bash
-curl http://localhost:8030/.well-known/agent.json
+curl http://localhost:3773/.well-known/agent.json
 ```
 
 ### 2. Enable Auth in Config
@@ -386,7 +386,7 @@ Update your config with Auth0 credentials and restart the agent.
 ### 3. Test Without Token (Should Fail)
 
 ```bash
-curl -X POST http://localhost:8030/ \
+curl -X POST http://localhost:3773/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -430,7 +430,7 @@ Save the `access_token` from the response.
 ```bash
 TOKEN="your_access_token_here"
 
-curl -X POST http://localhost:8030/ \
+curl -X POST http://localhost:3773/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -549,7 +549,7 @@ curl -X POST http://localhost:8030/ \
     "audience": "https://api.bindu.dev"
   },
   "deployment": {
-    "url": "http://localhost:8030"
+    "url": "http://localhost:3773"
   }
 }
 ```

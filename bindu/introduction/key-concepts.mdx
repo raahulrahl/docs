@@ -5,6 +5,7 @@ title: 'Built for the Internet of Agents'
 Transform any agent into a production-ready server that speaks universal protocols.
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'10px'}, 'flowchart':{'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 graph TB
     Client[Client/Orchestrator] --> Discovery[Skills Discovery<br/>Match Task to Agent]
     
@@ -50,17 +51,101 @@ graph TB
 
 **How It Works**
 
-1. **Skills Discovery**: Find the right agent using `/agent/skills` API (YAML metadata)
-2. **HTTP Request**: Send task via A2A or X402 protocol
-3. **Payment Flow**: If required, X402 handles payment signing and verification
-4. **Auth & DID**: Verify identity and permissions (Auth0 + DID)
-5. **Web Server**: BinduApplication receives and routes the request
-6. **TaskManager**: Coordinates the entire operation (restaurant manager)
-7. **Scheduler**: Queues tasks for execution
-8. **Worker**: Executes your AI agent (LangChain, CrewAI, etc.)
-9. **Response**: Returns results with completion status
-10. **Observability**: Traces everything via Phoenix/Langfuse/Jaeger (dotted lines)
-11. **Storage**: PostgreSQL or Redis for persistence
+1. **Discovery**: Client finds agents via `/agent/skills` endpoint
+2. **Submit Task**: Send message via `message/send` → Task enters **"submitted"** state
+3. **Payment** (optional): X402 verifies payment if required
+4. **Authentication**: Auth0 + DID verify identity
+5. **Processing**: Task moves to **"working"** state, agent executes
+6. **Interactive Loop**: If agent needs input, task enters **"input-required"** state
+7. **Completion**: Task reaches **"completed"** state with artifacts
+8. **Observability**: Full trace captured via Phoenix/Langfuse/Jaeger
+
+### Task Lifecycle & States
+
+Bindu uses a **task-first pattern** where every interaction is a trackable, resumable task with persistent state:
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'11px'}, 'flowchart':{'nodeSpacing': 40, 'rankSpacing': 50}}}%%
+stateDiagram-v2
+    [*] --> submitted: message/send
+    submitted --> working: Agent starts processing
+    submitted --> input_required: Agent needs clarification
+    working --> input_required: Agent asks question
+    input_required --> submitted: User responds (same taskId)
+    working --> completed: Task finishes
+    working --> failed: Error occurs
+    submitted --> canceled: tasks/cancel
+    working --> canceled: tasks/cancel
+    completed --> [*]
+    failed --> [*]
+    canceled --> [*]
+    
+    note right of input_required
+        Interactive conversations
+        Agent asks, user answers
+        Context preserved
+    end note
+    
+    note right of completed
+        Returns artifacts
+        Full conversation history
+        DID-signed results
+    end note
+```
+
+**Core States:**
+
+| State | Description | Can Cancel? | Next Actions |
+|-------|-------------|-------------|--------------|
+| **`submitted`** | Task received, queued for processing | ✅ Yes | Wait or poll with `tasks/get` |
+| **`working`** | Agent actively processing | ✅ Yes | Wait for completion or input request |
+| **`input-required`** | Agent needs user input to continue | ✅ Yes | Send follow-up message with same `taskId` |
+| **`completed`** | Task finished successfully | ❌ No | Retrieve artifacts, submit feedback |
+| **`failed`** | Task encountered an error | ❌ No | Check error details, retry if needed |
+| **`canceled`** | Task was canceled by user | ❌ No | Create new task if needed |
+
+**Key Features:**
+
+- **Resumable Conversations**: Tasks can pause for user input and resume seamlessly
+- **Context Preservation**: Full conversation history maintained across all states
+- **Reference Previous Tasks**: Use `referenceTaskIds` to build on prior results
+- **Async by Default**: Submit task, get immediate response, poll for completion
+- **Artifact Storage**: Final results stored with DID signatures for verification
+
+**Example Flow:**
+
+```python
+# 1. Submit task
+response = await agent.send_message("create sunset caption")
+# State: "submitted" → "input-required"
+# Agent asks: "Which platform? Instagram, Pinterest, or General?"
+
+# 2. Check status
+task = await agent.get_task(task_id)
+# State: "input-required"
+# History shows agent's question
+
+# 3. Respond to agent (same taskId, new messageId)
+response = await agent.send_message("Instagram", task_id=task_id)
+# State: "submitted" → "working" → "completed"
+
+# 4. Get final result
+task = await agent.get_task(task_id)
+# State: "completed"
+# Artifacts: ["Chasing sunsets and dreams. 🌅 #SunsetLovers"]
+
+# 5. Build on previous result (new task, reference old one)
+response = await agent.send_message(
+    "make it shorter",
+    reference_task_ids=[task_id]
+)
+# Agent accesses previous caption and shortens it
+# Result: "Sunset vibes. 🌅 #GoldenHour"
+```
+
+<Tip>
+**Why This Matters**: Unlike stateless APIs, Bindu preserves the entire conversation context. Agents can ask clarifying questions, users can provide additional input, and subsequent tasks can reference previous results—enabling true multi-turn agent interactions.
+</Tip>
 
 ### Protocol-Native Architecture
 
@@ -74,7 +159,7 @@ graph TB
 
 ### Infrastructure & Deployment
 
-- **Simple Server Setup**: Turn your AI agent into [a web server using Starlette (a Python web framework)](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/applications.py). The `BinduApplication` class handles all the complex setup.You just provide your agent and it creates a fully functional server ready to receive requests.
+- **Simple Server Setup**: Turn your AI agent into [a web server using Starlette (a Python web framework)](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/applications.py). The `BinduApplication` class handles all the complex setup. You just provide your agent and it creates a fully functional server ready to receive requests.
 
 - **Built-In Reliability**: Comes with automatic error handling, task retry mechanisms, health checks, and backup systems. If something fails, [Bindu knows how to recover gracefully without crashing your agent](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/task_manager.py).
 
