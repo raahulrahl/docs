@@ -1,133 +1,30 @@
 ---
-title: 'Increase Test Coverage to 80%'
-description: 'Comprehensive testing for reliability and confidence'
+title: 'Test Coverage 80%'
 ---
-
-# Increase Test Coverage to 80%
 
 ## Overview
 
-Expanding test coverage across the entire Bindu codebase to ensure reliability, catch bugs early, and enable confident refactoring.
+Comprehensive testing across Bindu to catch bugs early, enable confident refactoring, and maintain production reliability.
 
-## Why 80% Coverage?
-
-- **Reliability** - Catch bugs before they reach production
-- **Confidence** - Refactor and improve code safely
-- **Documentation** - Tests serve as usage examples
-- **Regression Prevention** - Ensure fixes stay fixed
-- **Quality Assurance** - Maintain high code quality standards
+**Target:** 80% overall coverage with critical modules at 90%+
 
 ## Testing Strategy
 
-### Unit Tests
-- Individual function and class testing
-- Mock external dependencies
-- Fast execution (< 1 second per test)
-- High coverage of core logic
+**Unit Tests** - Core logic, mocked dependencies, fast execution  
+**Integration Tests** - Component interactions, database, API endpoints  
+**E2E Tests** - Full agent lifecycle, multi-agent scenarios, protocol compliance  
+**Property-Based** - Hypothesis for edge cases and fuzz testing
 
-### Integration Tests
-- Test component interactions
-- Database operations
-- API endpoints
-- Message handling
+## Tools & CI
 
-### End-to-End Tests
-- Full agent lifecycle testing
-- Multi-agent scenarios
-- Protocol compliance
-- Real-world workflows
-
-### Property-Based Tests
-- Hypothesis for edge case discovery
-- Fuzz testing for robustness
-- Invariant checking
-
-## Coverage Goals by Module
-
-| Module | Current | Target | Priority |
-|--------|---------|--------|----------|
-| Core Protocol | 65% | 85% | High |
-| Agent Runtime | 55% | 80% | High |
-| Security | 70% | 90% | Critical |
-| Skills | 45% | 75% | Medium |
-| Extensions | 40% | 75% | Medium |
-| UI/CLI | 30% | 70% | Low |
-
-## Testing Tools
-
-- **pytest** - Test framework
-- **pytest-cov** - Coverage reporting
-- **pytest-asyncio** - Async test support
-- **hypothesis** - Property-based testing
-- **faker** - Test data generation
-- **freezegun** - Time mocking
-- **responses** - HTTP mocking
-
-## Test Types
-
-### Functional Tests
-```python
-def test_agent_creates_task():
-    agent = Agent(name="test")
-    task = agent.create_task(description="Test task")
-    assert task.status == TaskStatus.CREATED
-```
-
-### Edge Cases
-```python
-@given(st.text(), st.integers())
-def test_message_with_random_data(content, value):
-    # Property-based testing
-    message = Message(content=content, metadata={"value": value})
-    assert message.validate()
-```
-
-### Performance Tests
-```python
-def test_handles_1000_concurrent_tasks():
-    # Load testing
-    tasks = [agent.process_task(t) for t in range(1000)]
-    results = await asyncio.gather(*tasks)
-    assert all(r.success for r in results)
-```
-
-## Continuous Integration
-
-- Automated test runs on every PR
-- Coverage reports in PR comments
-- Block merges if coverage decreases
-- Nightly full test suite runs
-- Performance regression detection
-
-## Documentation
-
-- Test examples in docs
-- Testing best practices guide
-- How to write good tests
-- Mocking strategies
-- Debugging failed tests
+**Testing Stack:** pytest, pytest-cov, pytest-asyncio, hypothesis  
+**CI/CD:** Automated runs on every PR, coverage reports, block merges if coverage drops
 
 ## Status
 
-🚀 **In Progress** - Systematically adding tests module by module
+📋 **Planned** - Systematically adding tests module by module
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Core protocol and security to 80%+
-- **Q2 2025** - Agent runtime and skills to 75%+
-- **Q2 2025** - Overall codebase to 80%
-
-## Metrics
-
-Track progress:
-- Overall coverage percentage
-- Coverage by module
-- Test execution time
-- Flaky test rate
-- Bug escape rate
-
-## Get Involved
-
-- Write tests for your contributions
-- Report untested edge cases
-- Join testing discussions on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Contribute** - Write tests for your PRs
+- **Report** - Share untested edge cases on [Discord](https://discord.gg/3w5zuYUuwt)

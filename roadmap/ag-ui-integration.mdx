@@ -1,99 +1,84 @@
 ---
-title: 'Ag-UI Integration'
-description: 'Beautiful web interface for agent management'
+title: 'AG-UI Protocol Integration'
 ---
-
-# Ag-UI Integration
 
 ## Overview
 
-A modern, intuitive web interface for managing agents, monitoring tasks, and visualizing agent interactions in real-time.
+AG-UI is an open, event-based protocol for bringing agents into frontend applications. When you `bindufy()` your agent, AG-UI integration will enable real-time agent interactions directly in web and mobile apps.
 
-## Why Ag-UI?
+**The Stack:**
+- **MCP** - Gives agents tools
+- **A2A** - Agents communicate with agents
+- **AG-UI** - Brings agents into user-facing applications ✨
 
-- **Visual Management** - Manage agents without command-line tools
-- **Real-time Monitoring** - Watch agent activity as it happens
-- **Debugging Tools** - Inspect messages, tasks, and state transitions
-- **Team Collaboration** - Share agent insights with your team
-- **Analytics Dashboard** - Track performance metrics and usage
+## What You Get
 
-## Features
+**Real-time Agent Chat** - Streaming responses with generative UI  
+**Bi-directional State** - Frontend and agent stay in sync  
+**Human-in-the-Loop** - Users can guide agent execution  
+**Frontend Tools** - Agents can trigger UI components
 
-### Agent Management
-- Create and configure agents through UI
-- Edit skills and capabilities visually
-- Deploy and manage agent lifecycle
-- Version control and rollback
+## How It Works
 
-### Task Monitoring
-- Real-time task execution tracking
-- View task history and outcomes
-- Inspect input/output artifacts
-- Debug failed tasks with detailed logs
+When your Bindu agent runs, it emits AG-UI compatible events:
 
-### Visualization
-- Agent interaction graphs
-- Message flow diagrams
-- Context relationship maps
-- Performance metrics charts
+```python
+# Your agent emits events
+agent.emit("message", {"content": "Analyzing data..."})
+agent.emit("tool_call", {"tool": "chart", "data": {...}})
+agent.emit("input_required", {"prompt": "Which format?"})
+```
 
-### Configuration
-- Visual skill editor with syntax highlighting
-- AgentCard builder with live preview
-- Security settings management
-- Integration configuration wizard
+Frontend apps listen and render:
 
-## Technology Stack
+```tsx
+<AgentChat 
+  agentUrl="http://localhost:3773"
+  onMessage={(msg) => renderMessage(msg)}
+  onToolCall={(tool) => renderChart(tool.data)}
+/>
+```
 
-- **Frontend** - React with TypeScript
-- **UI Components** - shadcn/ui + Tailwind CSS
-- **State Management** - Zustand
-- **Real-time Updates** - WebSocket + Server-Sent Events
-- **Charts** - Recharts
-- **Code Editor** - Monaco Editor
+## Supported Frameworks
 
-## Screenshots
+AG-UI works with your existing agent framework:
+- LangGraph, CrewAI, Agno (partnerships)
+- Mastra, Pydantic AI, LlamaIndex (1st party)
+- OpenAI Agent SDK, Vercel AI SDK (community)
 
-Coming soon - UI mockups and design previews!
+## Integration with Bindu
 
-## Key Screens
+```python
+from bindu import bindufy
+from bindu.middleware import AGUIMiddleware
 
-### Dashboard
-- Agent status overview
-- Active tasks counter
-- Recent activity feed
-- Performance metrics
+# Enable AG-UI events
+config = {
+    "middleware": [AGUIMiddleware()],
+    "events": {
+        "streaming": True,
+        "generative_ui": True
+    }
+}
 
-### Agent Builder
-- Drag-and-drop skill configuration
-- Visual capability selection
-- Real-time validation
-- One-click deployment
+bindufy(agent, config, handler)
+```
 
-### Task Inspector
-- Message timeline
-- Artifact viewer (text, images, files)
-- State transition history
-- Error stack traces
+Your agent now emits AG-UI compatible events that frontend apps can consume.
 
-### Analytics
-- Usage statistics
-- Performance trends
-- Cost tracking (credit system)
-- User activity logs
+## Use Cases
+
+**Customer Support** - Chat interface with agent assistance  
+**Data Analysis** - Interactive dashboards with agent insights  
+**Content Creation** - Collaborative editing with AI suggestions  
+**Workflow Automation** - Visual task execution with human approval
 
 ## Status
 
-🚀 **In Progress** - UI design and core components development
+🚀 **High Priority** - Protocol integration and event emission
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Alpha release with basic features
-- **Q2 2025** - Beta with full agent management
-- **Q2 2025** - Production-ready v1.0
-
-## Get Involved
-
-- Join design discussions on [Discord](https://discord.gg/3w5zuYUuwt)
-- Share your UI/UX feedback
-- Request features you'd like to see
+- **Learn** - Read the [AG-UI spec](https://github.com/ag-ui-protocol/ag-ui)
+- **Discuss** - Share your use cases on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Contribute** - Help with Bindu integration

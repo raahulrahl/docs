@@ -1,172 +1,54 @@
 ---
-title: 'Postgres Database for Memory Storage'
-description: 'Persistent memory storage with PostgreSQL'
+title: 'Postgres Memory Storage'
 ---
-
-# Postgres Database for Memory Storage
 
 ## Overview
 
-Implementing PostgreSQL as the persistent storage backend for agent memory, context, and conversation history with full ACID guarantees.
+PostgreSQL as the persistent storage backend for agent memory, context, and conversation history.
 
-## Why PostgreSQL?
-
-- **ACID Compliance** - Data integrity and consistency
-- **Rich Queries** - Complex filtering and aggregation
-- **JSON Support** - Native JSONB for flexible schemas
-- **Full-Text Search** - Built-in search capabilities
-- **Vector Extensions** - pgvector for semantic search
-- **Mature Ecosystem** - Battle-tested and reliable
+**Benefits:** ACID compliance, rich queries, JSONB support, full-text search, pgvector for semantic search
 
 ## Features
 
-### Memory Storage
+**Conversation History** - Store and retrieve agent conversations  
+**Long-term Memory** - Store facts and knowledge with confidence scores  
+**Semantic Search** - pgvector for similarity-based memory retrieval  
+**Full-Text Search** - Built-in PostgreSQL text search
 
-**Conversation History**
-```python
-# Store and retrieve conversation context
-await memory.store_conversation(
-    agent_id="agent-123",
-    context_id="ctx-456",
-    messages=[...],
-    metadata={"user_id": "user-789"}
-)
+## Data Models
 
-history = await memory.get_conversation_history(
-    context_id="ctx-456",
-    limit=50
-)
-```
+**Context** - Conversation sessions with metadata  
+**Messages** - Chat history with embeddings for semantic search  
+**Artifacts** - Task outputs and generated content
 
-**Long-term Memory**
-```python
-# Store facts and knowledge
-await memory.store_fact(
-    agent_id="agent-123",
-    fact="User prefers morning meetings",
-    confidence=0.95,
-    source="conversation-2024-01-15"
-)
-```
-
-**Semantic Search**
-```python
-# Find relevant memories using vector similarity
-results = await memory.search_similar(
-    query="What does the user like?",
-    limit=10,
-    threshold=0.7
-)
-```
-
-### Data Models
-
-**Context Table**
-- context_id (UUID, primary key)
-- agent_id (UUID, indexed)
-- created_at (timestamp)
-- updated_at (timestamp)
-- metadata (JSONB)
-- state (enum)
-
-**Message Table**
-- message_id (UUID, primary key)
-- context_id (UUID, foreign key)
-- role (enum: user/agent/system)
-- content (text)
-- artifacts (JSONB)
-- timestamp (timestamp)
-- embedding (vector) - for semantic search
-
-**Artifact Table**
-- artifact_id (UUID, primary key)
-- task_id (UUID, indexed)
-- artifact_type (text)
-- data (JSONB)
-- storage_url (text) - for large files
-- created_at (timestamp)
-
-## Advanced Features
-
-### Vector Search with pgvector
-```sql
--- Find similar messages
-SELECT * FROM messages
-WHERE context_id = $1
-ORDER BY embedding <-> $2
-LIMIT 10;
-```
-
-### Full-Text Search
-```sql
--- Search conversation content
-SELECT * FROM messages
-WHERE to_tsvector('english', content) @@ to_tsquery('agent & payment');
-```
-
-### Partitioning
-- Time-based partitioning for message history
-- Agent-based partitioning for multi-tenancy
-- Automatic partition management
-
-### Archival Strategy
-- Move old conversations to cold storage
-- Compress inactive contexts
-- Configurable retention policies
-
-## Performance Optimizations
-
-- **Indexes** - B-tree, GiST, and GIN indexes
-- **Connection Pooling** - PgBouncer integration
-- **Query Optimization** - EXPLAIN ANALYZE monitoring
-- **Caching** - Redis cache layer for hot data
-- **Read Replicas** - Scale read operations
-
-## Migration from In-Memory
-
-```python
-# Automatic migration tool
-from bindu.migration import migrate_to_postgres
-
-await migrate_to_postgres(
-    source="memory://",
-    target="postgresql://localhost/bindu",
-    batch_size=1000
-)
-```
-
-## Configuration
+## Implementation
 
 ```python
 from bindu.storage import PostgresMemoryStore
 
 memory = PostgresMemoryStore(
-    dsn="postgresql://user:pass@localhost/bindu",
-    pool_size=20,
-    max_overflow=10,
-    enable_vector_search=True,
-    retention_days=90,
+    dsn="postgresql://localhost/bindu",
+    enable_vector_search=True
+)
+
+# Store conversation
+await memory.store_conversation(
+    agent_id="agent-123",
+    context_id="ctx-456",
+    messages=[...]
+)
+
+# Semantic search
+results = await memory.search_similar(
+    query="What does the user like?",
+    limit=10
 )
 ```
-
-## Backup & Recovery
-
-- Automated daily backups
-- Point-in-time recovery
-- Replication for high availability
-- Disaster recovery procedures
 
 ## Status
 
 🚀 **In Progress** - Schema design and core storage implementation
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Basic storage and retrieval
-- **Q1 2025** - Vector search integration
-- **Q2 2025** - Advanced features and optimization
-
-## Get Involved
-
-- Share your memory storage requirements on [Discord](https://discord.gg/3w5zuYUuwt)
-- Contribute schema improvements
+- **Discuss** - Share your storage needs on [Discord](https://discord.gg/3w5zuYUuwt)

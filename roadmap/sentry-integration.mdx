@@ -1,49 +1,26 @@
 ---
 title: 'Sentry Error Tracking'
-description: 'Production-grade error monitoring and alerting'
 ---
-
-# Sentry Error Tracking
 
 ## Overview
 
-Integrating Sentry for comprehensive error tracking, performance monitoring, and real-time alerting in production agent deployments.
+Production agents need robust error tracking. When your agent fails, you need to know which task caused it, what the user was doing, and whether it's affecting others.
 
-## Why Sentry?
+Sentry provides this visibility with real-time alerts, error grouping, and detailed stack traces.
 
-- **Real-time Alerts** - Get notified immediately when errors occur
-- **Error Grouping** - Automatically group similar errors
-- **Stack Traces** - Detailed error context and debugging information
-- **Performance Monitoring** - Track slow operations and bottlenecks
-- **Release Tracking** - Monitor errors across different versions
+## What You Get
 
-## Features
-
-### Error Monitoring
-- Automatic exception capture and reporting
-- Custom error context (agent ID, task ID, user DID)
-- Breadcrumbs for debugging complex workflows
-- Source map support for better stack traces
-
-### Performance Tracking
-- Transaction monitoring for agent operations
-- Slow query detection
-- API endpoint performance metrics
-- Custom performance instrumentation
-
-### Alerting & Notifications
-- Configurable alert rules
-- Integration with Slack, Discord, email
-- Error frequency thresholds
-- New error notifications
+**Error Monitoring** - Automatic exception capture with agent context (task ID, user DID, context ID)  
+**Performance Tracking** - Monitor slow operations, database queries, and API calls  
+**Alerting** - Slack, Discord, email integration with configurable rules
 
 ## Integration Points
 
-- **Agent Runtime** - Capture agent execution errors
-- **Protocol Handlers** - Monitor A2A message processing
-- **Database Operations** - Track query performance
-- **External API Calls** - Monitor third-party integrations
-- **Background Tasks** - Async job error tracking
+Sentry will monitor:
+- Agent execution errors and task failures
+- A2A protocol message processing
+- Database queries and external API calls
+- Background task execution
 
 ## Configuration
 
@@ -62,22 +39,14 @@ configure_sentry(
 
 ## Privacy & Security
 
-- Sensitive data scrubbing (API keys, passwords, tokens)
-- PII filtering for GDPR compliance
-- Custom data sanitization rules
-- On-premise deployment option
+Automatic scrubbing of API keys, passwords, and PII. GDPR-compliant with custom sanitization rules.
 
 ## Status
 
-🚀 **In Progress** - Core integration and configuration options
+🚀 **High Priority**
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Basic error tracking integration
-- **Q1 2025** - Performance monitoring support
-- **Q2 2025** - Advanced features and custom instrumentation
-
-## Get Involved
-
-- Join the discussion on [Discord](https://discord.gg/3w5zuYUuwt)
-- Share your monitoring requirements
+- **Vote** - Star the GitHub issue to prioritize
+- **Discuss** - Share your monitoring needs on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Contribute** - Help with implementation

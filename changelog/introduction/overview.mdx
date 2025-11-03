@@ -1,28 +1,67 @@
 ---
-title: 'Changelog'
+title: 'Bindu v0.3.19 Changelog'
 ---
 
-<Note>
-  **🚧 Under Development**
-  
-  The changelog is currently being compiled. We're working on documenting all releases, features, and improvements to Bindu and the Saptha.me ecosystem.
-  
-  For the latest updates:
-  - Check our [GitHub releases](https://github.com/Saptha-me/Bindu/releases)
-  - Follow our [Discord announcements](https://discord.gg/3w5zuYUuwt)
-  - Star the [repository](https://github.com/Saptha-me/Bindu) to get notified
-</Note>
+- Research agent examples simplified with DuckDuckGo integration
+- X402 payment infrastructure with browser-based paywall UI
+- Task manager refactored into specialized handlers
+- Skills system migrated to YAML-only format
 
-## Coming Soon
+## General Changes
 
-We'll be documenting:
+**Research Agent Updates**
+- Refactored agent example with `DuckDuckGoTools` integration
+- Simplified agent configuration for easier setup
+- Enhanced documentation and code examples
 
-- **Version releases** with detailed feature lists
-- **Breaking changes** and migration guides
-- **New protocol features** (A2A, AP2 extensions)
-- **Performance improvements**
-- **Bug fixes** and patches
-- **Deprecations** and removals
-- **Security updates**
+**Payment System**
+- Added copy button for payment addresses in UI
+- Implemented Web3 connection pooling for improved performance
+- Streamlined payment verification flow
 
-Stay tuned for comprehensive release notes!
+## X402 Payment Integration
+
+- Payment session management with browser-based paywall UI
+- X402 middleware integration with payment settlement flow
+- Coinbase payment verification and JWT authentication
+- Payment requirement checks for agent execution costs
+
+## Code Organization & Refactoring
+
+**Task Manager Restructuring**
+- Split `TaskManager` into specialized handlers:
+  - `MessageHandler` for message processing
+  - `TaskHandler` for task lifecycle management
+  - `ContextHandler` for conversation context
+  - `NotificationHandler` for push notifications
+
+
+**Architecture Improvements**
+- Consolidated endpoint error handling into `request_utils` module
+- Removed DID and X402 extensions from `AgentManifest` for cleaner architecture
+- Centralized error handling and skill lookup logic
+
+## Skills System
+
+**Format Simplification**
+- Migrated to YAML-only format
+- Removed `manifest.json` and `SKILL.md` duplication
+- Added skill management endpoints at `/agent/skills`
+
+**Example Skills**
+- Added `question-answering` skill for context-based Q&A
+- Added `pdf-processing` skill for PDF extraction and analysis
+
+## Infrastructure & Observability
+
+- Added OpenTelemetry configuration with multiple OTLP endpoints support
+- Dynamic version management from git tags
+- Enhanced server display with protocol endpoints and community links
+- Coverage status badge and CI improvements
+
+## Previous Releases
+
+For older releases and detailed version history:
+- Check our [GitHub releases](https://github.com/Saptha-me/Bindu/releases)
+- Follow our [Discord announcements](https://discord.gg/3w5zuYUuwt)
+- Star the [repository](https://github.com/Saptha-me/Bindu) to get notified of new releases

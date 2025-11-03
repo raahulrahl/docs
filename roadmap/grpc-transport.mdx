@@ -1,64 +1,41 @@
 ---
 title: 'gRPC Transport Support'
-description: 'High-performance binary protocol for agent communication'
 ---
-
-# gRPC Transport Support
 
 ## Overview
 
-Adding gRPC as a transport option alongside JSON-RPC and WebSocket for high-performance, low-latency agent-to-agent communication.
+Bindu currently uses **JSON-RPC 2.0** for agent communication. As the framework matures, we plan to add **gRPC** as an optional high-performance transport.
 
-## Why gRPC?
+**Current:** JSON-RPC over HTTP (simple, human-readable, widely supported)  
+**Future:** gRPC option for production workloads requiring high throughput
 
-- **Performance** - Binary protocol is faster than JSON
-- **Streaming** - Native bidirectional streaming support
-- **Type Safety** - Protocol buffers provide strong typing
-- **Language Support** - Works across multiple programming languages
-- **HTTP/2** - Multiplexing, header compression, and server push
+## Why Add gRPC?
 
-## Features
-
-### Core Capabilities
-- Unary RPC calls for request-response patterns
-- Server streaming for real-time updates
-- Client streaming for data uploads
-- Bidirectional streaming for interactive sessions
-
-### Integration
-- Seamless integration with existing A2A protocol
-- Automatic protocol buffer generation from TypedDict schemas
-- Support for all existing message types (Task, Artifact, Context)
-- Backward compatible with JSON-RPC endpoints
+**Performance** - Binary protocol, faster than JSON  
+**Streaming** - Native bidirectional streaming for real-time updates  
+**Type Safety** - Protocol buffers provide strong typing  
+**HTTP/2** - Multiplexing and header compression
 
 ## Use Cases
 
-- **High-throughput agents** - Processing thousands of requests per second
-- **Real-time streaming** - Live data feeds and continuous updates
-- **Microservices** - Agent teams communicating internally
-- **Low-latency requirements** - Financial trading, gaming, IoT
+When you need:
+- High-throughput (thousands of requests/second)
+- Real-time streaming (live data feeds)
+- Low-latency (financial trading, gaming)
+- Microservices (agent teams communicating internally)
 
-## Implementation Plan
+## Implementation
 
-1. Define `.proto` files for A2A protocol messages
-2. Generate Python stubs from protocol buffers
-3. Implement gRPC server alongside existing transports
-4. Add gRPC client support in SDK
-5. Update AgentInterface to declare gRPC endpoints
-6. Performance benchmarking vs JSON-RPC
+gRPC will be added alongside JSON-RPC:
+- Same A2A protocol, different transport
+- Backward compatible with existing agents
+- Optional—JSON-RPC remains the default
 
 ## Status
 
-🚀 **In Progress** - Protocol buffer definitions and server implementation underway
+📋 **Planned** - Will add as Bindu matures and production needs emerge
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Initial gRPC server implementation
-- **Q2 2025** - Client SDK support and documentation
-- **Q2 2025** - Production-ready release
-
-## Get Involved
-
-Interested in contributing?
-- Join the discussion on [Discord](https://discord.gg/3w5zuYUuwt)
-- Check the [GitHub issue](https://github.com/Saptha-me/Bindu/issues)
+- **Discuss** - Share your performance requirements on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Vote** - Star the GitHub issue if you need gRPC

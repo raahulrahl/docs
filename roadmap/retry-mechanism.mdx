@@ -1,127 +1,48 @@
 ---
 title: 'Retry Mechanism'
-description: 'Automatic retry logic for failed operations'
 ---
-
-# Retry Mechanism
 
 ## Overview
 
-Implementing intelligent retry logic with exponential backoff, jitter, and configurable policies to handle transient failures gracefully.
+Intelligent retry logic for handling transient failures in agent communication, using [Tenacity](https://github.com/jd/tenacity) for robust retry strategies.
 
-## Why Retry Logic?
-
-- **Resilience** - Handle temporary network issues and service outages
-- **Reliability** - Reduce manual intervention for transient errors
-- **User Experience** - Seamless recovery from failures
-- **Cost Efficiency** - Avoid losing work due to temporary issues
+**Goal:** Graceful handling of network issues, timeouts, and temporary service outages
 
 ## Features
 
-### Retry Strategies
-
-**Exponential Backoff**
-```python
-# Retry with increasing delays: 1s, 2s, 4s, 8s...
-@retry(strategy="exponential", max_attempts=5)
-async def send_message(agent_id, message):
-    ...
-```
-
-**Fixed Delay**
-```python
-# Retry every 3 seconds
-@retry(strategy="fixed", delay=3, max_attempts=3)
-async def fetch_agent_card(url):
-    ...
-```
-
-**Jittered Backoff**
-```python
-# Add randomness to prevent thundering herd
-@retry(strategy="jittered", base_delay=1, max_attempts=5)
-async def call_external_api():
-    ...
-```
-
-### Configurable Policies
-
-- **Max Attempts** - Limit retry count
-- **Timeout** - Overall operation timeout
-- **Retryable Errors** - Specify which errors to retry
-- **Circuit Breaker** - Stop retrying if service is down
-- **Fallback** - Execute alternative logic after max retries
-
-### Smart Retry Logic
-
-- **Idempotency Checks** - Prevent duplicate operations
-- **Error Classification** - Retry transient errors, fail fast on permanent errors
-- **Contextual Retry** - Different policies for different operations
-- **Metrics Collection** - Track retry rates and success
+**Exponential Backoff** - Increasing delays (1s, 2s, 4s, 8s...)  
+**Jittered Retry** - Add randomness to prevent thundering herd  
+**Circuit Breaker** - Stop retrying if service is consistently down  
+**Error Classification** - Retry transient errors, fail fast on permanent ones
 
 ## Use Cases
 
-### Network Operations
-- Agent-to-agent communication
-- External API calls
-- Database connections
-- File uploads/downloads
+- Agent-to-agent communication failures
+- External API timeouts
+- Database connection issues
+- Payment processing retries
 
-### Task Processing
-- Failed task execution
-- Artifact retrieval
-- Context updates
-- State transitions
+## Implementation
 
-### Integration Points
-- Payment processing (AP2)
-- Authentication services
-- Message queue operations
-- Cache operations
-
-## Configuration
+Using Tenacity for retry logic:
 
 ```python
-from bindu.retry import RetryConfig
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-# Global retry configuration
-retry_config = RetryConfig(
-    max_attempts=3,
-    base_delay=1.0,
-    max_delay=30.0,
-    exponential_base=2,
-    jitter=True,
-    retryable_exceptions=[
-        NetworkError,
-        TimeoutError,
-        ServiceUnavailable,
-    ],
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=1, max=30)
 )
-
-# Per-operation override
-@retry(max_attempts=5, strategy="exponential")
-async def critical_operation():
+async def send_message(agent_id, message):
+    # Automatically retries on failure
     ...
 ```
 
-## Observability
-
-- Retry attempt logging
-- Success/failure metrics
-- Latency tracking
-- Alert on excessive retries
-
 ## Status
 
-🚀 **In Progress** - Core retry logic and decorators
+📋 **Planned** - Will integrate Tenacity for production reliability
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Basic retry implementation
-- **Q1 2025** - Circuit breaker and advanced policies
-- **Q2 2025** - Full observability integration
-
-## Get Involved
-
-- Discuss retry strategies on [Discord](https://discord.gg/3w5zuYUuwt)
-- Share your reliability requirements
+- **Discuss** - Share your reliability needs on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Learn** - Read about [Tenacity](https://github.com/jd/tenacity)

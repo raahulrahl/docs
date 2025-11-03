@@ -1,307 +1,89 @@
 ---
-title: 'MLTS Support'
-description: 'Multi-Level Trust System for secure agent interactions'
+title: 'mTLS (Mutual TLS) Support'
 ---
-
-# MLTS Support
 
 ## Overview
 
-Implementing Multi-Level Trust System (MLTS) for hierarchical trust management, enabling fine-grained access control and secure agent-to-agent interactions across trust boundaries.
+**The Problem:** When agents communicate, how do you know they are who they claim to be? How do you prevent man-in-the-middle attacks?
 
-## What is MLTS?
+**The Solution:** Mutual TLS (mTLS) - Both client and server authenticate each other using certificates, not just passwords or API keys.
 
-MLTS provides a framework for:
-- **Hierarchical Trust** - Multiple trust levels with inheritance
-- **Dynamic Trust** - Trust levels that change based on behavior
-- **Context-Aware** - Different trust for different operations
-- **Verifiable** - Cryptographic proof of trust level
-- **Auditable** - Complete trust transition history
+## Why mTLS?
 
-## Trust Hierarchy
+**Traditional Auth (API Keys):**
+- ❌ Keys can be stolen or leaked
+- ❌ No cryptographic proof of identity
+- ❌ Difficult to rotate
+- ❌ No protection against MITM attacks
+
+**mTLS (Certificate-Based):**
+- ✅ Cryptographic proof of identity
+- ✅ Automatic encryption
+- ✅ Protection against MITM attacks
+- ✅ Certificate rotation built-in
+- ✅ Works at the transport layer
+
+## How It Works
 
 ```
-super_admin (Level 10)
-    ↓
-admin (Level 9)
-    ↓
-manager (Level 8)
-    ↓
-operator (Level 7)
-    ↓
-editor (Level 6)
-    ↓
-analyst (Level 5)
-    ↓
-auditor (Level 4)
-    ↓
-support (Level 3)
-    ↓
-viewer (Level 2)
-    ↓
-guest (Level 1)
+Agent A wants to talk to Agent B:
+
+1. Agent A presents its certificate
+2. Agent B verifies A's certificate
+3. Agent B presents its certificate
+4. Agent A verifies B's certificate
+5. ✅ Both authenticated, encrypted connection established
 ```
-
-## Features
-
-### Trust Level Assignment
-
-```python
-from bindu.trust import TrustManager, TrustLevel
-
-trust_manager = TrustManager()
-
-# Assign trust level to agent
-await trust_manager.assign_trust(
-    agent_did="did:agent:data-processor",
-    trust_level=TrustLevel.OPERATOR,
-    granted_by="did:admin:alice",
-    expires_at=datetime.now() + timedelta(days=30),
-    reason="Approved for production data access"
-)
-```
-
-### Operation-Level Permissions
-
-```python
-# Define operation requirements
-@require_trust(min_level=TrustLevel.ANALYST)
-async def analyze_sensitive_data(data):
-    # Only analysts and above can execute
-    ...
-
-@require_trust(min_level=TrustLevel.ADMIN)
-async def delete_user_data(user_id):
-    # Only admins can delete
-    ...
-```
-
-### Dynamic Trust Adjustment
-
-```python
-# Increase trust based on successful operations
-await trust_manager.adjust_trust(
-    agent_did="did:agent:helper",
-    adjustment=+1,
-    reason="100 successful tasks completed",
-    evidence={
-        "success_rate": 0.99,
-        "tasks_completed": 100,
-        "errors": 1
-    }
-)
-
-# Decrease trust on suspicious behavior
-await trust_manager.adjust_trust(
-    agent_did="did:agent:suspicious",
-    adjustment=-2,
-    reason="Multiple failed authentication attempts",
-    evidence={
-        "failed_attempts": 5,
-        "timestamp": datetime.now()
-    }
-)
-```
-
-### Trust Verification
-
-```python
-# Verify agent's trust level
-verification = await trust_manager.verify_trust(
-    agent_did="did:agent:processor",
-    required_level=TrustLevel.OPERATOR,
-    operation="data.process"
-)
-
-if verification.is_valid:
-    # Proceed with operation
-    await process_data()
-else:
-    raise InsufficientTrustError(
-        f"Required: {TrustLevel.OPERATOR}, "
-        f"Actual: {verification.current_level}"
-    )
-```
-
-## Trust Certificates
-
-### Issuing Certificates
-
-```python
-# Issue verifiable trust certificate
-certificate = await trust_manager.issue_certificate(
-    agent_did="did:agent:verified",
-    trust_level=TrustLevel.OPERATOR,
-    issuer_did="did:admin:bob",
-    validity_period=timedelta(days=90),
-    attributes={
-        "department": "engineering",
-        "clearance": "confidential",
-        "capabilities": ["data_processing", "reporting"]
-    }
-)
-
-# Certificate is a signed JWT
-print(certificate.jwt)  # eyJhbGciOiJFUzI1NiIs...
-```
-
-### Verifying Certificates
-
-```python
-# Verify trust certificate
-verification = await trust_manager.verify_certificate(
-    certificate_jwt=certificate.jwt,
-    check_revocation=True,
-    check_expiry=True
-)
-
-if verification.is_valid:
-    trust_level = verification.trust_level
-    attributes = verification.attributes
-```
-
-## Trust Policies
-
-### Policy Definition
-
-```python
-# Define trust policy
-policy = TrustPolicy(
-    name="data_access_policy",
-    rules=[
-        TrustRule(
-            operation="data.read",
-            min_trust_level=TrustLevel.VIEWER,
-            conditions={"data_classification": "public"}
-        ),
-        TrustRule(
-            operation="data.read",
-            min_trust_level=TrustLevel.ANALYST,
-            conditions={"data_classification": "internal"}
-        ),
-        TrustRule(
-            operation="data.read",
-            min_trust_level=TrustLevel.ADMIN,
-            conditions={"data_classification": "confidential"}
-        ),
-    ]
-)
-
-await trust_manager.register_policy(policy)
-```
-
-### Policy Enforcement
-
-```python
-# Enforce policy on operation
-@enforce_policy("data_access_policy")
-async def read_data(classification: str):
-    # Policy automatically checks trust level
-    # based on data classification
-    ...
-```
-
-## Trust Attestation
-
-### Attestation Chain
-
-```python
-# Agent A attests to Agent B's trustworthiness
-attestation = await agent_a.attest_trust(
-    target_agent="did:agent:b",
-    trust_level=TrustLevel.OPERATOR,
-    confidence=0.95,
-    based_on={
-        "interactions": 50,
-        "success_rate": 0.98,
-        "duration_days": 30
-    }
-)
-
-# Build trust through multiple attestations
-trust_score = await trust_manager.calculate_trust_score(
-    agent_did="did:agent:b",
-    attestations=[attestation1, attestation2, attestation3]
-)
-```
-
-## Trust Metrics
-
-### Monitoring
-
-```python
-# Get trust metrics
-metrics = await trust_manager.get_metrics(
-    agent_did="did:agent:processor"
-)
-
-print(f"Current Level: {metrics.current_level}")
-print(f"Trust Score: {metrics.trust_score}")
-print(f"Successful Operations: {metrics.success_count}")
-print(f"Failed Operations: {metrics.failure_count}")
-print(f"Trust Adjustments: {metrics.adjustment_history}")
-```
-
-### Audit Trail
-
-```python
-# Get complete trust history
-history = await trust_manager.get_trust_history(
-    agent_did="did:agent:processor",
-    from_date=datetime.now() - timedelta(days=30)
-)
-
-for event in history:
-    print(f"{event.timestamp}: {event.action}")
-    print(f"  Level: {event.old_level} → {event.new_level}")
-    print(f"  Reason: {event.reason}")
-```
-
-## Integration with Existing Systems
-
-### Keycloak Integration
-
-```python
-# Sync trust levels with Keycloak roles
-await trust_manager.sync_with_keycloak(
-    keycloak_url="https://auth.example.com",
-    realm="production",
-    role_mapping={
-        "admin": TrustLevel.ADMIN,
-        "developer": TrustLevel.OPERATOR,
-        "analyst": TrustLevel.ANALYST,
-    }
-)
-```
-
-### Zero Trust Architecture
-
-- Verify every request
-- Least privilege access
-- Assume breach mentality
-- Continuous verification
-- Micro-segmentation
 
 ## Use Cases
 
-- **Enterprise Deployments** - Role-based access control
-- **Multi-Tenant Platforms** - Tenant isolation
-- **Sensitive Data** - Graduated access levels
-- **Agent Marketplaces** - Reputation systems
-- **Compliance** - Audit trails and access logs
+**Agent-to-Agent Communication** - Secure A2A protocol messages  
+**Enterprise Deployments** - Meet security compliance requirements  
+**Multi-Tenant Platforms** - Isolate tenant agents  
+**Production Environments** - Zero-trust architecture
+
+## Integration Plan
+
+### Phase 1: Certificate Infrastructure
+- Set up Certificate Authority (CA)
+- Generate agent certificates
+- Certificate storage and rotation
+- Revocation list management
+
+### Phase 2: Bindu Integration
+```python
+from bindu import bindufy
+
+config = {
+    "security": {
+        "mtls": {
+            "enabled": True,
+            "cert_path": "/path/to/agent-cert.pem",
+            "key_path": "/path/to/agent-key.pem",
+            "ca_path": "/path/to/ca-cert.pem"
+        }
+    }
+}
+
+bindufy(agent, config, handler)
+```
+
+### Phase 3: Client Support
+- Update client SDKs to support mTLS
+- Automatic certificate loading
+- Certificate renewal handling
+
+### Phase 4: Monitoring & Ops
+- Certificate expiry monitoring
+- Automated renewal
+- Audit logging
+- Revocation handling
 
 ## Status
 
-📋 **Planned** - Design and specification phase
+📋 **Planned** - Certificate infrastructure and integration design
 
-## Timeline
+## What's Next
 
-- **Q2 2025** - MLTS specification and design
-- **Q2 2025** - Core trust management implementation
-- **Q3 2025** - Advanced features and integrations
-
-## Get Involved
-
-- Discuss trust requirements on [Discord](https://discord.gg/3w5zuYUuwt)
-- Share enterprise use cases
-- Contribute to MLTS specification
+- **Discuss** - Share your security requirements on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Enterprise** - Need mTLS for compliance? Let us know
