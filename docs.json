@@ -129,8 +129,7 @@
           {
             "group": "How to",
             "pages": [
-              "bindu/how-to/install",
-              "bindu/how-to/contribute"
+              "bindu/how-to/install"
             ]
           }
         ]

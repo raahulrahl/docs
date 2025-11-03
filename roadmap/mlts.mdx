@@ -45,12 +45,18 @@ Agent A wants to talk to Agent B:
 ## Integration Plan
 
 ### Phase 1: Certificate Infrastructure
-- Set up Certificate Authority (CA)
-- Generate agent certificates
+**Using Third-Party Certificate Authorities:**
+- Support for Let's Encrypt, AWS Certificate Manager, HashiCorp Vault
+- Integration with existing enterprise PKI
+- Automatic certificate provisioning
 - Certificate storage and rotation
 - Revocation list management
 
+We won't build our own CA—we'll integrate with proven third-party solutions.
+
 ### Phase 2: Bindu Integration
+
+**Example 1: Using Let's Encrypt**
 ```python
 from bindu import bindufy
 
@@ -58,14 +64,43 @@ config = {
     "security": {
         "mtls": {
             "enabled": True,
-            "cert_path": "/path/to/agent-cert.pem",
-            "key_path": "/path/to/agent-key.pem",
-            "ca_path": "/path/to/ca-cert.pem"
+            "cert_path": "/etc/letsencrypt/live/agent.example.com/fullchain.pem",
+            "key_path": "/etc/letsencrypt/live/agent.example.com/privkey.pem",
+            "ca_path": "/etc/letsencrypt/live/agent.example.com/chain.pem"
         }
     }
 }
 
 bindufy(agent, config, handler)
+```
+
+**Example 2: Using AWS Certificate Manager**
+```python
+config = {
+    "security": {
+        "mtls": {
+            "enabled": True,
+            "provider": "aws_acm",
+            "certificate_arn": "arn:aws:acm:us-east-1:123456789012:certificate/abc123",
+            "region": "us-east-1"
+        }
+    }
+}
+```
+
+**Example 3: Using HashiCorp Vault**
+```python
+config = {
+    "security": {
+        "mtls": {
+            "enabled": True,
+            "provider": "vault",
+            "vault_addr": "https://vault.example.com:8200",
+            "vault_token": "s.xxxxxx",
+            "pki_path": "pki/issue/agent-role"
+        }
+    }
+}
 ```
 
 ### Phase 3: Client Support

@@ -1,227 +1,123 @@
 ---
-title: 'AP2 End-to-End Support'
-description: 'Complete Agent Payments Protocol implementation'
+title: 'AP2 Protocol Support'
 ---
-
-# AP2 End-to-End Support
 
 ## Overview
 
-Full implementation of the Agent Payments Protocol (AP2) for autonomous commerce, enabling agents to conduct secure, trustless transactions with cryptographic guarantees.
+**The Problem:** When an AI agent clicks "buy," how do we know the user actually authorized it? How do merchants trust the agent isn't hallucinating? Who's accountable if something goes wrong?
 
-## What is AP2?
+**The Solution:** [AP2 (Agent Payments Protocol)](https://ap2-protocol.org/) - An open protocol by Google Cloud that creates verifiable proof of user intent for agent commerce.
 
-The Agent Payments Protocol enables agents to:
-- Make purchases on behalf of users
-- Accept payments for services
-- Negotiate prices and terms
-- Handle refunds and disputes
-- Maintain transaction records
+## Why AP2 Matters
 
-## Current Status
+**Traditional payments assume a human is clicking "buy."** When agents do it autonomously, three critical questions arise:
+
+- **Authorization** - Did the user actually give the agent permission?
+- **Authenticity** - Is this the user's real intent, or an AI hallucination?
+- **Accountability** - If fraud occurs, who's responsible?
+
+Without a standard protocol, we get fragmented proprietary solutions—confusing for users, expensive for merchants, impossible for banks to manage.
+
+## How AP2 Works
+
+**Verifiable Digital Credentials (VDCs)** - Cryptographically signed proof of intent:
+
+### 1. Intent Mandate
+**"Human-Not-Present" Scenarios**
+
+User gives agent authority with constraints:
+```
+"Buy a laptop under $1500 from Best Buy or Amazon"
+```
+Agent can shop autonomously within these bounds.
+
+### 2. Cart Mandate  
+**"Human-Present" Scenarios**
+
+User explicitly approves the final cart:
+```
+MacBook Pro M3 - $1,299.99
+AppleCare+ - $99.99
+Total: $1,399.98 ✓ User signature
+```
+Non-repudiable proof of user intent.
+
+### 3. Payment Mandate
+Shared with payment network to signal AI agent involvement and assess transaction context.
+
+## The Stack
+
+**Build agents with:** ADK, LangChain, CrewAI, Agno (any framework)  
+**Equip with tools:** MCP (Model Context Protocol)  
+**Collaborate via:** A2A (Agent-to-Agent Protocol)  
+**Secure payments with:** AP2 ← We're here
+
+## Current Status in Bindu
 
 ✅ **Completed:**
 - All 15 AP2 data types implemented
-- Payment request/response flow
-- Mandate framework (Intent, Cart, Payment)
-- Documentation and examples
+- Intent, Cart, and Payment Mandate framework
+- Cryptographic signing and verification
+- A2A protocol integration
 
 🚀 **In Progress:**
-- Payment processor integrations
-- Wallet management
-- Transaction verification
-- Dispute resolution
+- X402 integration (crypto payments on Base Sepolia)
+- Human-present and human-not-present flows
 
-## Features
+📋 **Planned:**
+- Stripe integration (traditional payments)
+- PayPal and other processors
 
-### Payment Types
+## Integration Plan
 
-**Basic Payments**
-- ContactAddress for shipping
-- PaymentCurrencyAmount for pricing
-- PaymentItem for line items
-- PaymentShippingOption for delivery
-- PaymentRequest/Response flow
+### Phase 1: Core AP2 Implementation ✅
+- Implement all AP2 data types
+- Mandate creation and verification
+- Cryptographic signatures with DIDs
 
-**Trust Framework**
-- IntentMandate - User purchase constraints
-- CartMandate - Merchant price guarantee
-- PaymentMandate - User authorization
-- Cryptographic signatures
-- Dispute resolution
-
-### Shopping Agent Flow
-
+### Phase 2: X402 Integration (Current)
 ```python
-# 1. User sets intent
-intent = IntentMandate(
-    user_cart_confirmation_required=False,
-    natural_language_description="Buy laptop under $1500",
-    merchants=["BestBuy", "Amazon"],
-    requires_refundability=True,
-    intent_expiry="2025-12-31T23:59:59Z"
+from bindu.ap2 import AP2Agent
+
+# AP2 with X402 crypto payments
+agent = AP2Agent(
+    did="did:agent:shopping-bot",
+    payment_method="x402",
+    network="base-sepolia",
+    token="USDC"
 )
 
-# 2. Agent shops and gets cart
-cart = await shopping_agent.find_best_deal(intent)
-
-# 3. Merchant signs cart
-cart_mandate = await merchant.sign_cart(cart)
-
-# 4. User approves (if required)
-if intent.user_cart_confirmation_required:
-    approved = await user.approve_cart(cart_mandate)
-
-# 5. Agent initiates payment
-payment_response = await shopping_agent.pay(
-    cart_mandate=cart_mandate,
-    payment_method="CARD"
+# Create intent mandate
+intent = await agent.create_intent_mandate(
+    description="Buy API access for $10",
+    max_amount={"currency": "USDC", "value": 10}
 )
 
-# 6. Create payment mandate
-payment_mandate = PaymentMandate(
-    payment_mandate_contents=payment_details,
-    user_authorization=user_signature
-)
-
-# 7. Complete purchase
-order = await merchant.fulfill_order(payment_mandate)
+# Agent pays with X402
+result = await agent.process_payment(intent)
 ```
 
-### Merchant Agent Flow
+### Phase 3: Stripe Integration (Next)
+- Traditional card payments
+- Stripe payment processor integration
+- Fiat currency support (USD, EUR, etc.)
 
-```python
-# Merchant agent creates signed cart
-merchant_agent = MerchantAgent(did="did:merchant:bestbuy")
+### Phase 4: Human-Present & Not-Present Flows
+- User approval UI for human-present scenarios
+- Autonomous shopping for human-not-present
+- Dispute resolution and refunds
 
-cart = CartContents(
-    id="cart-123",
-    merchant_name="BestBuy",
-    payment_request=PaymentRequest(...),
-    cart_expiry="2025-01-15T12:00:00Z"
-)
-
-# Sign cart with merchant's private key
-cart_mandate = await merchant_agent.sign_cart(cart)
-
-# Verify payment mandate
-if await merchant_agent.verify_payment_mandate(payment_mandate):
-    await merchant_agent.process_order(payment_mandate)
-```
-
-## Payment Processor Integration
-
-### Supported Processors
-- **Stripe** - Cards, wallets, bank transfers
-- **PayPal** - PayPal accounts and cards
-- **Square** - In-person and online payments
-- **Adyen** - Global payment methods
-- **Coinbase** - Cryptocurrency payments
-
-### Integration Example
-
-```python
-from bindu.payments import StripeProcessor
-
-processor = StripeProcessor(
-    api_key="sk_live_...",
-    webhook_secret="whsec_..."
-)
-
-# Process payment
-result = await processor.process_payment(
-    payment_response=payment_response,
-    cart_mandate=cart_mandate,
-    idempotency_key=f"order-{order_id}"
-)
-```
-
-## Security Features
-
-### Cryptographic Verification
-- JWT signatures on mandates
-- DID-based identity verification
-- Hash verification for cart contents
-- Replay attack prevention
-
-### Dispute Resolution
-- Immutable audit trail
-- Signed mandate chain
-- Timestamp verification
-- Third-party arbitration support
-
-### Fraud Prevention
-- Transaction limits
-- Velocity checks
-- Merchant verification
-- User authorization requirements
-
-## Wallet Management
-
-```python
-# User wallet for payment methods
-wallet = UserWallet(user_did="did:user:alice")
-
-# Add payment method
-await wallet.add_payment_method(
-    method_type="CARD",
-    token="tok_visa_4242",
-    is_default=True
-)
-
-# Get payment methods
-methods = await wallet.get_payment_methods()
-
-# Remove payment method
-await wallet.remove_payment_method(method_id="pm_123")
-```
-
-## Refunds & Returns
-
-```python
-# Initiate refund
-refund = await merchant_agent.initiate_refund(
-    payment_mandate_id="pm-789",
-    amount=PaymentCurrencyAmount(currency="USD", value=1299.99),
-    reason="Customer requested return"
-)
-
-# Process return
-return_label = await merchant_agent.generate_return_label(
-    order_id="order-456",
-    shipping_address=original_address
-)
-```
-
-## Analytics & Reporting
-
-- Transaction volume and value
-- Success/failure rates
-- Average transaction time
-- Popular payment methods
-- Refund rates
-- Merchant performance
-
-## Compliance
-
-- PCI DSS compliance for card data
-- GDPR for user data
-- PSD2 for European payments
-- SOC 2 for security controls
+### Phase 5: Production Features
+- PayPal and other processors
+- Multi-currency support
+- Real-time bank transfers (UPI, PIX)
 
 ## Status
 
-🚀 **In Progress** - Payment processor integrations and wallet management
+🚀 **In Progress** - Payment processor integrations and production flows
 
-## Timeline
+## What's Next
 
-- **Q1 2025** - Stripe and PayPal integration
-- **Q2 2025** - Wallet management and refunds
-- **Q2 2025** - Full dispute resolution
-- **Q3 2025** - Additional payment processors
-
-## Get Involved
-
-- Share payment use cases on [Discord](https://discord.gg/3w5zuYUuwt)
-- Request payment processor support
-- Contribute to AP2 specification
+- **Learn** - Read the [AP2 specification](https://ap2-protocol.org/specification/)
+- **Experiment** - Try [AP2 samples](https://github.com/google-agentic-commerce/AP2)
+- **Discuss** - Share your commerce use cases on [Discord](https://discord.gg/3w5zuYUuwt)

@@ -1,15 +1,14 @@
 ---
 title: 'Install & Setup'
-description: 'Get started with Bindu in minutes'
 ---
 
-# Install & Setup
+### Using uv (Recommended)
 
-## Install `bindu` SDK
+```bash
+uv add bindu
+```
 
-We highly recommend:
-
-* Installing `bindu` using `pip` in a python virtual environment.
+### Using pip
 
 <Steps>
   <Step title="Create a virtual environment">
@@ -27,8 +26,6 @@ We highly recommend:
   </Step>
 
   <Step title="Install bindu">
-    Install `bindu` using pip
-
     <CodeGroup>
       ```bash Mac
       pip install -U bindu
@@ -41,18 +38,26 @@ We highly recommend:
   </Step>
 </Steps>
 
-<br />
-
 <Note>
-  If you encounter errors, try updating pip using `python -m pip install --upgrade pip` 
+  If you encounter errors, try updating pip: `python -m pip install --upgrade pip` 
 </Note>
 
-***
+---
 
-## Upgrade bindu
+## Contributing
 
-To upgrade `bindu`, run this in your virtual environment
+Want to contribute to Bindu? Here's how to set up your development environment:
 
 ```bash
-pip install -U bindu --no-cache-dir
+# Clone the repository
+git clone https://github.com/Saptha-me/Bindu.git
+cd Bindu
+
+# Install development dependencies with uv
+uv sync
+
+# Install pre-commit hooks
+pre-commit run --all-files
 ```
+
+See our [Contributing Guidelines](https://github.com/Saptha-me/Bindu/blob/main/.github/contributing.md) for more details.

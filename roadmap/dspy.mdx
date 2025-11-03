@@ -1,338 +1,113 @@
 ---
-title: 'DSPy Addition'
-description: 'Declarative Self-improving Language Programs for better agent reasoning'
+title: 'DSPy Integration'
 ---
-
-# DSPy Addition
 
 ## Overview
 
-Integrating DSPy (Declarative Self-improving Language Programs) to enable agents to automatically optimize their prompts, improve reasoning chains, and adapt to tasks through declarative programming.
+**The Problem:** Hand-crafted prompts are hard to optimize. How do we make agents learn from real user feedback and improve over time?
 
-## What is DSPy?
+**The Solution:** Use Bindu's feedback API to collect real interactions, create golden datasets, and use DSPy to automatically optimize prompts.
 
-DSPy is a framework that:
-- **Optimizes Prompts** - Automatically improves LLM prompts
-- **Compiles Programs** - Turns high-level specs into optimized chains
-- **Self-Improves** - Learns from examples and feedback
-- **Modular** - Composable reasoning modules
-- **Declarative** - Specify what, not how
+## The Workflow
 
-## Why DSPy for Agents?
-
-- **Better Performance** - Optimized prompts outperform hand-crafted ones
-- **Adaptability** - Agents improve over time
-- **Consistency** - Structured outputs and reasoning
-- **Debugging** - Trace reasoning steps
-- **Efficiency** - Fewer tokens, better results
-
-## Core Concepts
-
-### Signatures
-
-Define input/output specifications:
-
-```python
-from dspy import Signature, InputField, OutputField
-
-class AnalyzeData(Signature):
-    """Analyze dataset and extract insights."""
-    
-    data: str = InputField(desc="Raw data to analyze")
-    context: str = InputField(desc="Additional context")
-    
-    insights: list[str] = OutputField(desc="Key insights found")
-    confidence: float = OutputField(desc="Confidence score 0-1")
-    recommendations: list[str] = OutputField(desc="Actionable recommendations")
+```
+1. Agent runs with initial prompts
+2. Users provide feedback via Bindu's feedback API
+3. Collect good examples → Create golden dataset
+4. Export dataset for DSPy
+5. DSPy optimizes prompts automatically
+6. Deploy improved agent
 ```
 
-### Modules
+## Why This Matters
 
-Composable reasoning components:
+**Manual prompt engineering is slow.** You tweak prompts, test, repeat. With DSPy + Bindu feedback:
 
+- **Learn from real usage** - Not synthetic examples
+- **Automatic optimization** - DSPy tunes prompts for you
+- **Continuous improvement** - Agents get better over time
+- **Data-driven** - Optimize based on actual performance
+
+## How It Works
+
+### Step 1: Collect Feedback
 ```python
-import dspy
+from bindu import bindufy
 
-class DataAnalysisAgent(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.analyze = dspy.ChainOfThought(AnalyzeData)
-        self.validate = dspy.Predict("insights -> bool")
-    
-    def forward(self, data, context):
-        # Analyze data
-        result = self.analyze(data=data, context=context)
-        
-        # Validate insights
-        is_valid = self.validate(insights=result.insights)
-        
-        if not is_valid:
-            # Retry with more context
-            result = self.analyze(
-                data=data,
-                context=f"{context}\nPrevious attempt was invalid."
-            )
-        
-        return result
+agent = bindufy(my_agent, config, handler)
+
+# Bindu automatically tracks all interactions
+# Users provide feedback via API:
+# POST /feedback
+# {
+#   "task_id": "task-123",
+#   "rating": 5,
+#   "comment": "Perfect answer!"
+# }
 ```
 
-### Optimizers
+### Step 2: Create Golden Dataset
+```python
+from bindu.dspy import create_golden_dataset
 
-Automatically improve performance:
+# Export high-quality examples
+golden_dataset = create_golden_dataset(
+    agent_id="my-agent",
+    min_rating=4,  # Only 4+ star feedback
+    limit=100
+)
+
+# Exports to DSPy format
+golden_dataset.export("training_data.json")
+```
+
+## Internal Prompt Versioning
+
+Bindu automatically versions your prompts:
 
 ```python
-from dspy.teleprompt import BootstrapFewShot
+# Deploy multiple prompt versions
+agent = bindufy(my_agent, config, handler)
 
-# Create training examples
-train_examples = [
-    dspy.Example(
-        data="Q1 sales: $1M, Q2: $1.5M, Q3: $1.2M",
-        context="Quarterly sales data",
-        insights=["50% growth Q1-Q2", "20% decline Q2-Q3"],
-        confidence=0.95
-    ),
-    # More examples...
-]
+# Version 1 (original)
+agent.deploy_prompt_version("v1", "original_prompts.json")
 
-# Optimize the agent
-optimizer = BootstrapFewShot(metric=accuracy_metric)
-optimized_agent = optimizer.compile(
-    DataAnalysisAgent(),
-    trainset=train_examples
+# Version 2 (DSPy optimized)
+agent.deploy_prompt_version("v2", "optimized_agent.json")
+
+# Route traffic to different versions
+agent.set_routing({
+    "v1": 0.2,  # 20% traffic to original
+    "v2": 0.8   # 80% traffic to optimized
+})
+
+# Or A/B test
+agent.ab_test(
+    control="v1",
+    treatment="v2",
+    metric="user_satisfaction"
 )
 ```
 
-## Integration with Bindu
-
-### Agent with DSPy Skills
-
-```python
-from bindu import Agent
-from bindu.skills import DSPySkill
-
-class ResearchAgent(Agent):
-    def __init__(self):
-        super().__init__(name="research_agent")
-        
-        # Add DSPy-powered skills
-        self.add_skill(DSPySkill(
-            name="analyze_data",
-            signature=AnalyzeData,
-            module=DataAnalysisAgent(),
-            optimize=True  # Auto-optimize from usage
-        ))
-    
-    async def handle_task(self, task):
-        # Use optimized DSPy skill
-        result = await self.skills["analyze_data"].execute(
-            data=task.input_data,
-            context=task.context
-        )
-        
-        return result
-```
-
-### Self-Improving Agents
-
-```python
-# Agent learns from feedback
-agent = ResearchAgent()
-
-# Process tasks and collect feedback
-for task in tasks:
-    result = await agent.handle_task(task)
-    feedback = await get_user_feedback(result)
-    
-    # Agent improves from feedback
-    await agent.learn_from_feedback(
-        task=task,
-        result=result,
-        feedback=feedback
-    )
-
-# Periodically recompile with new examples
-await agent.optimize_skills()
-```
-
-## Advanced Features
-
-### Multi-Hop Reasoning
-
-```python
-class MultiHopResearch(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.generate_query = dspy.ChainOfThought("question -> search_query")
-        self.search = dspy.Retrieve(k=5)
-        self.synthesize = dspy.ChainOfThought("context, question -> answer")
-    
-    def forward(self, question):
-        # Generate search query
-        query = self.generate_query(question=question).search_query
-        
-        # Retrieve relevant docs
-        docs = self.search(query)
-        
-        # Synthesize answer
-        answer = self.synthesize(
-            context=docs,
-            question=question
-        )
-        
-        return answer
-```
-
-### Ensemble Methods
-
-```python
-# Combine multiple reasoning strategies
-class EnsembleAgent(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.cot = dspy.ChainOfThought(AnalyzeData)
-        self.react = dspy.ReAct(AnalyzeData)
-        self.program = dspy.ProgramOfThought(AnalyzeData)
-    
-    def forward(self, data, context):
-        # Get predictions from all methods
-        results = [
-            self.cot(data=data, context=context),
-            self.react(data=data, context=context),
-            self.program(data=data, context=context),
-        ]
-        
-        # Ensemble results
-        return self.ensemble(results)
-```
-
-### Retrieval-Augmented Generation
-
-```python
-class RAGAgent(dspy.Module):
-    def __init__(self, vector_store):
-        super().__init__()
-        self.retrieve = dspy.Retrieve(k=10, vector_store=vector_store)
-        self.generate = dspy.ChainOfThought("context, query -> response")
-    
-    def forward(self, query):
-        # Retrieve relevant context
-        context = self.retrieve(query)
-        
-        # Generate response with context
-        response = self.generate(context=context, query=query)
-        
-        return response
-```
-
-## Optimization Strategies
-
-### Few-Shot Learning
-
-```python
-# Bootstrap few-shot examples
-optimizer = BootstrapFewShot(
-    metric=f1_score,
-    max_bootstrapped_demos=8,
-    max_labeled_demos=4
-)
-```
-
-### MIPRO (Multi-prompt Instruction Proposal)
-
-```python
-# Optimize instructions and demonstrations
-optimizer = MIPRO(
-    metric=accuracy,
-    num_candidates=10,
-    init_temperature=1.0
-)
-```
-
-### Bayesian Optimization
-
-```python
-# Optimize hyperparameters
-optimizer = BayesianSignatureOptimizer(
-    metric=performance_metric,
-    num_trials=50
-)
-```
-
-## Metrics & Evaluation
-
-```python
-# Define custom metrics
-def accuracy_metric(example, prediction):
-    return example.insights == prediction.insights
-
-def quality_metric(example, prediction):
-    # Combine multiple factors
-    accuracy = accuracy_metric(example, prediction)
-    confidence = prediction.confidence
-    completeness = len(prediction.insights) >= 3
-    
-    return (accuracy + confidence + completeness) / 3
-
-# Evaluate agent
-from dspy import Evaluate
-
-evaluator = Evaluate(
-    devset=test_examples,
-    metric=quality_metric,
-    num_threads=4
-)
-
-score = evaluator(optimized_agent)
-print(f"Agent Score: {score}")
-```
+**Benefits:**
+- **Safe rollouts** - Test optimized prompts with small traffic
+- **A/B testing** - Compare performance scientifically
+- **Easy rollback** - Revert if optimization doesn't work
+- **Version history** - Track prompt improvements over time
 
 ## Use Cases
 
-### Research Agents
-- Multi-hop question answering
-- Literature review
-- Data analysis
-- Report generation
-
-### Customer Support
-- Intent classification
-- Response generation
-- Escalation detection
-- Sentiment analysis
-
-### Code Agents
-- Code generation
-- Bug detection
-- Code review
-- Documentation generation
-
-### Data Processing
-- ETL pipelines
-- Data validation
-- Anomaly detection
-- Pattern recognition
-
-## Benefits
-
-- **Reduced Prompt Engineering** - Automatic optimization
-- **Better Accuracy** - Learned from examples
-- **Faster Development** - Declarative specifications
-- **Easier Debugging** - Structured reasoning traces
-- **Cost Efficiency** - Optimized token usage
+**Customer Support** - Learn from 5-star responses  
+**Research Agents** - Optimize based on accurate answers  
+**Code Generation** - Improve from working code examples  
+**Data Analysis** - Learn from validated insights
 
 ## Status
 
-📋 **Planned** - Integration design and implementation
+📋 **Planned** - Feedback API integration with DSPy export
 
-## Timeline
+## What's Next
 
-- **Q2 2025** - DSPy integration and basic modules
-- **Q3 2025** - Optimization strategies and metrics
-- **Q3 2025** - Advanced features and examples
-
-## Get Involved
-
-- Discuss DSPy use cases on [Discord](https://discord.gg/3w5zuYUuwt)
-- Share reasoning patterns
-- Contribute DSPy modules
+- **Learn** - Read about [DSPy](https://github.com/stanfordnlp/dspy)
+- **Discuss** - Share your optimization needs on [Discord](https://discord.gg/3w5zuYUuwt)
 - Request features

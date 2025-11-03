@@ -1,231 +1,82 @@
 ---
 title: 'Negotiation Support'
-description: 'Agent negotiation capabilities for collaborative tasks'
 ---
-
-# Negotiation Support
 
 ## Overview
 
-Implementing agent-to-agent negotiation protocols for collaborative task execution, resource allocation, and consensus building.
+**The Story:** Humans negotiate everything—prices, resources, agreements. As LLM agents act on behalf of users, they need to negotiate too. But how well can they actually do it?
 
-## Why Negotiation?
+**The Solution:** [NegotiationArena](https://github.com/vinid/NegotiationArena) - A research platform that tests how well LLMs negotiate with each other through games and scenarios.
 
-- **Collaboration** - Agents work together to achieve goals
-- **Resource Optimization** - Efficient allocation of limited resources
-- **Conflict Resolution** - Handle competing objectives
-- **Flexibility** - Adapt to changing requirements
-- **Autonomy** - Agents make decisions without human intervention
+## Why This Matters
 
-## Negotiation Patterns
+When agents negotiate:
+- They split tasks among teams
+- They allocate limited resources
+- They resolve conflicts
+- They reach consensus without human intervention
 
-### Proposal-Response Pattern
+**The Research Question:** Can GPT-4 negotiate better than GPT-3.5? What strategies do they use? Do they cooperate or compete?
 
+## What NegotiationArena Discovered
+
+**"Babysitting" Effect:**
+When a strong model (GPT-4) negotiates with a weaker one (GPT-3.5), GPT-4 often guides the conversation to help the weaker model—but makes worse offers for itself in the process.
+
+**Reasoning Patterns:**
+By analyzing agent conversations, researchers found LLMs use different negotiation strategies based on their initialization and opponent behavior.
+
+## Use Cases in Bindu
+
+**Task Allocation** - Agents negotiate who does what in a workflow  
+**Resource Sharing** - Agents bid for compute resources or API quotas  
+**Service Agreements** - Agents negotiate SLA terms and pricing  
+**Collaborative Planning** - Multi-agent teams reach consensus on approach
+
+## Integration Plan
+
+### Phase 1: NegotiationArena Integration
+- Integrate NegotiationArena framework into Bindu
+- Support game-based negotiation scenarios
+- Enable agent-to-agent negotiation via A2A protocol
+
+### Phase 2: Negotiation Protocols
 ```python
-# Agent A proposes a task division
-proposal = await agent_a.propose(
-    task_id="complex-analysis",
-    division={
-        "data_collection": "agent_b",
-        "analysis": "agent_a",
-        "reporting": "agent_c"
-    },
-    deadline="2024-01-20T12:00:00Z"
-)
+from bindu.negotiation import NegotiationGame
 
-# Agent B responds
-response = await agent_b.respond(
-    proposal_id=proposal.id,
-    status="counter_offer",
-    counter_proposal={
-        "data_collection": "agent_b",
-        "preprocessing": "agent_b",  # Added step
-        "analysis": "agent_a",
-        "reporting": "agent_c"
+# Create negotiation scenario
+game = NegotiationGame(
+    scenario="task_allocation",
+    agents=[agent_a, agent_b],
+    rules={
+        "max_rounds": 5,
+        "timeout": timedelta(minutes=2)
     }
 )
+
+# Run negotiation
+result = await game.play()
+print(f"Agreement: {result.agreement}")
+print(f"Payoffs: {result.payoffs}")
 ```
 
-### Auction-Based Negotiation
+### Phase 3: Evaluation & Analytics
+- Track negotiation success rates
+- Analyze agent strategies
+- Measure win rates and payoffs
+- Export conversation logs for analysis
 
-```python
-# Agent posts task for bidding
-auction = await coordinator.create_auction(
-    task="process_large_dataset",
-    requirements={
-        "min_memory_gb": 16,
-        "max_duration_hours": 2,
-        "skills": ["data_processing", "ml"]
-    },
-    deadline=datetime.now() + timedelta(hours=1)
-)
-
-# Agents submit bids
-bid = await agent.submit_bid(
-    auction_id=auction.id,
-    price_credits=100,
-    estimated_time=timedelta(minutes=45),
-    quality_score=0.95
-)
-
-# Coordinator selects winner
-winner = await coordinator.select_winner(
-    auction_id=auction.id,
-    criteria="lowest_price"  # or "fastest", "highest_quality"
-)
-```
-
-### Consensus Building
-
-```python
-# Multi-agent decision making
-consensus = await team.reach_consensus(
-    question="Which ML model to use?",
-    options=["random_forest", "neural_network", "gradient_boosting"],
-    voting_method="weighted",  # or "majority", "unanimous"
-    timeout=timedelta(minutes=5)
-)
-```
-
-## Negotiation Protocols
-
-### Contract Net Protocol
-1. Task announcement
-2. Bid submission
-3. Bid evaluation
-4. Contract award
-5. Task execution
-6. Result delivery
-
-### Alternating Offers
-1. Initial proposal
-2. Counter-offer
-3. Iterate until agreement or timeout
-4. Finalize terms
-
-### Mediated Negotiation
-1. Agents submit preferences
-2. Mediator proposes solution
-3. Agents accept/reject
-4. Iterate with mediator adjustments
-
-## Features
-
-### Negotiation Strategies
-
-**Cooperative**
-- Maximize joint utility
-- Fair resource distribution
-- Win-win outcomes
-
-**Competitive**
-- Maximize individual utility
-- Strategic bidding
-- Game theory optimization
-
-**Adaptive**
-- Learn from past negotiations
-- Adjust strategy based on opponent
-- Context-aware tactics
-
-### Constraints & Preferences
-
-```python
-negotiation = Negotiation(
-    hard_constraints={
-        "max_price": 500,
-        "min_quality": 0.8,
-        "deadline": "2024-01-20"
-    },
-    soft_preferences={
-        "prefer_faster": 0.7,
-        "prefer_cheaper": 0.3
-    },
-    timeout=timedelta(minutes=10)
-)
-```
-
-### Agreement Enforcement
-
-- Cryptographic commitments
-- Smart contract integration
-- Penalty mechanisms
-- Reputation tracking
-
-## Use Cases
-
-### Task Allocation
-- Distribute work among agent teams
-- Load balancing
-- Skill-based assignment
-
-### Resource Sharing
-- Compute resource allocation
-- API quota distribution
-- Database connection pooling
-
-### Service Level Agreements
-- Negotiate SLA terms
-- Quality guarantees
-- Pricing agreements
-
-### Multi-Agent Planning
-- Collaborative problem solving
-- Distributed planning
-- Conflict-free scheduling
-
-## Monitoring & Analytics
-
-- Negotiation success rates
-- Average negotiation time
-- Agreement satisfaction scores
-- Strategy effectiveness
-- Resource utilization
-
-## Example: Multi-Agent Research
-
-```python
-# Research coordinator negotiates with specialist agents
-coordinator = ResearchCoordinator()
-
-# Negotiate data collection
-data_agent = await coordinator.negotiate_with(
-    agent_type="data_collector",
-    task="gather_market_data",
-    budget=200,
-    quality_threshold=0.9
-)
-
-# Negotiate analysis
-analysis_agent = await coordinator.negotiate_with(
-    agent_type="data_analyst",
-    task="statistical_analysis",
-    input_from=data_agent,
-    budget=300
-)
-
-# Negotiate report generation
-report_agent = await coordinator.negotiate_with(
-    agent_type="report_writer",
-    task="generate_report",
-    input_from=analysis_agent,
-    format="pdf",
-    budget=100
-)
-```
+### Phase 4: Production Features
+- Automatic negotiation for resource allocation
+- Built-in negotiation strategies (cooperative, competitive, adaptive)
+- Agreement enforcement with cryptographic commitments
 
 ## Status
 
-📋 **Planned** - Design phase and protocol specification
+📋 **Planned** - Research integration and protocol design
 
-## Timeline
+## What's Next
 
-- **Q2 2025** - Protocol design and specification
-- **Q2 2025** - Basic negotiation patterns
-- **Q3 2025** - Advanced strategies and enforcement
-
-## Get Involved
-
-- Share negotiation use cases on [Discord](https://discord.gg/3w5zuYUuwt)
-- Contribute negotiation strategies
-- Discuss protocol design
+- **Learn** - Read the [NegotiationArena paper](https://arxiv.org/abs/2402.05863)
+- **Discuss** - Share your negotiation use cases on [Discord](https://discord.gg/3w5zuYUuwt)
+- **Experiment** - Try [NegotiationArena](https://github.com/vinid/NegotiationArena) yourself
