@@ -12,14 +12,12 @@ info:
 servers:
   - url: http://localhost:3773
     description: Development server (default port)
-  - url: http://localhost:8030
-    description: Development server (alternate port)
 
 security:
   - BearerAuth: []
 
 tags:
-  - name: JSON-RPC
+  - name: All the tasks
     description: JSON-RPC 2.0 endpoints for agent communication
   - name: Agent Discovery
     description: Agent metadata and capability discovery
@@ -31,22 +29,13 @@ tags:
     description: x402 payment protocol endpoints
 
 paths:
-  /:
+  /message/send:
     post:
       tags:
-        - JSON-RPC
-      summary: JSON-RPC 2.0 Endpoint
-      description: |
-        Main JSON-RPC 2.0 endpoint supporting multiple methods:
-        - message/send: Send messages to agent
-        - message/stream: Stream messages from agent
-        - tasks/get: Get task status
-        - tasks/list: List all tasks
-        - tasks/cancel: Cancel a task
-        - tasks/feedback: Submit feedback for a task
-        - contexts/list: List conversation contexts
-        - contexts/clear: Clear a context
-      operationId: jsonRpcEndpoint
+        - All the tasks
+      summary: Send Message to Agent
+      description: Send a message to the agent and receive a response
+      operationId: messageSend
       security:
         - BearerAuth: []
         - {}
@@ -55,17 +44,10 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: '#/components/schemas/MessageSendRequest'
-                - $ref: '#/components/schemas/TasksGetRequest'
-                - $ref: '#/components/schemas/TasksListRequest'
-                - $ref: '#/components/schemas/TasksCancelRequest'
-                - $ref: '#/components/schemas/TasksFeedbackRequest'
-                - $ref: '#/components/schemas/ContextsListRequest'
-                - $ref: '#/components/schemas/ContextsClearRequest'
+              $ref: '#/components/schemas/MessageSendRequest'
             examples:
-              messageSend:
-                summary: Send a message
+              simpleMessage:
+                summary: Simple message
                 value:
                   jsonrpc: "2.0"
                   method: "message/send"
@@ -74,7 +56,7 @@ paths:
                       role: "user"
                       parts:
                         - kind: "text"
-                          text: "provide sunset quote"
+                          text: "whats the capital of india"
                       kind: "message"
                       messageId: "550e8400-e29b-41d4-a716-446655440038"
                       contextId: "550e8400-e29b-41d4-a716-446655440038"
@@ -84,8 +66,8 @@ paths:
                         - "application/json"
                   id: "550e8400-e29b-41d4-a716-446655440024"
               
-              messageSendWithPayment:
-                summary: Send a message with x402 payment
+              interactiveMessage:
+                summary: Interactive message (may require input)
                 value:
                   jsonrpc: "2.0"
                   method: "message/send"
@@ -94,30 +76,38 @@ paths:
                       role: "user"
                       parts:
                         - kind: "text"
-                          text: "provide sunset quote"
+                          text: "provide sunset caption"
                       kind: "message"
-                      messageId: "550e8400-e29b-41d4-a716-446655440039"
+                      messageId: "550e8400-e29b-41d4-a716-446655440038"
                       contextId: "550e8400-e29b-41d4-a716-446655440038"
                       taskId: "550e8400-e29b-41d4-a716-446655440078"
-                      metadata:
-                        x402.payment.status: "payment-submitted"
-                        x402.payment.payload:
-                          resource: "/agent/first Agent"
-                          scheme: "exact"
-                          network: "base-sepolia"
-                          asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
-                          payTo: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
-                          amount: "10000000000"
-                          signature: "0x<YOUR_WALLET_SIGNATURE_HERE>"
-                          timestamp: "2025-10-26T14:47:52.183416+00:00"
-                          payer: "0x<YOUR_WALLET_ADDRESS>"
                     configuration:
                       acceptedOutputModes:
                         - "application/json"
-                  id: "550e8400-e29b-41d4-a716-446655440025"
+                  id: "550e8400-e29b-41d4-a716-446655440024"
               
-              messageSendWithReference:
-                summary: Send a message with reference to previous task
+              followUpMessage:
+                summary: Follow-up message in conversation
+                value:
+                  jsonrpc: "2.0"
+                  method: "message/send"
+                  params:
+                    message:
+                      role: "user"
+                      parts:
+                        - kind: "text"
+                          text: "instagram"
+                      kind: "message"
+                      messageId: "550e8400-e29b-41d4-a716-446655440027"
+                      contextId: "550e8400-e29b-41d4-a716-446655440038"
+                      taskId: "550e8400-e29b-41d4-a716-446655440078"
+                    configuration:
+                      acceptedOutputModes:
+                        - "application/json"
+                  id: "550e8400-e29b-41d4-a716-446655440024"
+              
+              messageWithReference:
+                summary: New task referencing previous task
                 value:
                   jsonrpc: "2.0"
                   method: "message/send"
@@ -132,64 +122,354 @@ paths:
                       contextId: "550e8400-e29b-41d4-a716-446655440027"
                       taskId: "550e8400-e29b-41d4-a716-446655440042"
                       referenceTaskIds:
-                        - "550e8400-e29b-41d4-a716-446655440041"
+                        - "550e8400-e29b-41d4-a716-446655440078"
                     configuration:
                       acceptedOutputModes:
                         - "application/json"
                   id: "550e8400-e29b-41d4-a716-446655440024"
-              
-              tasksGet:
-                summary: Get task status
-                value:
-                  jsonrpc: "2.0"
-                  method: "tasks/get"
-                  params:
-                    taskId: "550e8400-e29b-41d4-a716-446655440013"
-                  id: "550e8400-e29b-41d4-a716-446655440014"
-              
-              tasksList:
-                summary: List all tasks
-                value:
-                  jsonrpc: "2.0"
-                  method: "tasks/list"
-                  params: {}
-                  id: "550e8400-e29b-41d4-a716-446655440099"
-              
-              tasksFeedback:
-                summary: Submit task feedback
-                value:
-                  jsonrpc: "2.0"
-                  method: "tasks/feedback"
-                  params:
-                    taskId: "550e8400-e29b-41d4-a716-446655440045"
-                    feedback: "Great job! The response was very helpful and accurate."
-                    rating: 5
-                    metadata:
-                      category: "quality"
-                      source: "user"
-                      helpful: true
-                  id: "550e8400-e29b-41d4-a716-446655440024"
-              
-              contextsList:
-                summary: List contexts
-                value:
-                  jsonrpc: "2.0"
-                  method: "contexts/list"
-                  params:
-                    length: 10
-                  id: "550e8400-e29b-41d4-a716-446655440025"
-              
-              contextsClear:
-                summary: Clear a context
-                value:
-                  jsonrpc: "2.0"
-                  method: "contexts/clear"
-                  params:
-                    contextId: "550e8400-e29b-41d4-a716-446655440037"
-                  id: "550e8400-e29b-41d4-a716-446655440025"
       responses:
         '200':
-          description: Successful JSON-RPC response
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              examples:
+                submittedState:
+                  summary: Task submitted (processing)
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440024"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440078"
+                      context_id: "550e8400-e29b-41d4-a716-446655440038"
+                      kind: "task"
+                      status:
+                        state: "submitted"
+                        timestamp: "2025-11-03T12:48:51.692372+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "whats the capital of india"
+                          role: "user"
+                
+                inputRequiredState:
+                  summary: Task requires user input
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440024"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440078"
+                      context_id: "550e8400-e29b-41d4-a716-446655440038"
+                      kind: "task"
+                      status:
+                        state: "submitted"
+                        timestamp: "2025-11-03T13:00:09.273271+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "provide sunset caption"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "Which platform should I format the sunset caption for? (Options: Instagram, Pinterest, General, Other)"
+                          kind: "message"
+                          message_id: "a4d0c7d8-8046-4eb6-8958-d533086d15a0"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                
+                taskWithReference:
+                  summary: Task referencing previous task
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440024"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440042"
+                      context_id: "550e8400-e29b-41d4-a716-446655440027"
+                      kind: "task"
+                      status:
+                        state: "submitted"
+                        timestamp: "2025-11-03T13:06:13.467148+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440027"
+                          context_id: "550e8400-e29b-41d4-a716-446655440027"
+                          task_id: "550e8400-e29b-41d4-a716-446655440042"
+                          reference_task_ids:
+                            - "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "make it shorter"
+                          role: "user"
+
+  /tasks/get:
+    post:
+      tags:
+        - All the tasks
+      summary: Get Task Status
+      description: Retrieve the status and results of a specific task
+      operationId: tasksGet
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TasksGetRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "tasks/get"
+              params:
+                taskId: "550e8400-e29b-41d4-a716-446655440013"
+              id: "550e8400-e29b-41d4-a716-446655440014"
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              examples:
+                completedTask:
+                  summary: Completed task with artifacts
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440025"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440078"
+                      context_id: "550e8400-e29b-41d4-a716-446655440038"
+                      kind: "task"
+                      status:
+                        state: "completed"
+                        timestamp: "2025-11-03T13:01:44.366282+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "provide sunset caption"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "Which platform should I format the sunset caption for? (Options: Instagram, Pinterest, General, Other)"
+                          kind: "message"
+                          message_id: "a4d0c7d8-8046-4eb6-8958-d533086d15a0"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                        - message_id: "550e8400-e29b-41d4-a716-446655440027"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "instagram"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "\"Chasing sunsets and dreams. 🌅 #SunsetLovers #GoldenHour\""
+                          kind: "message"
+                          message_id: "c4ae54a1-4b34-450d-86ff-2ef00f1d4719"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                      artifacts:
+                        - artifact_id: "bbdc65fc-cacc-40d0-8c8a-fe3101c9a92b"
+                          name: "result"
+                          parts:
+                            - kind: "text"
+                              text: "\"Chasing sunsets and dreams. 🌅 #SunsetLovers #GoldenHour\""
+                              metadata:
+                                did.message.signature: "5sssfiNSSLJPQ91qFWFbtfyobQoBLagN1jLnBRbc3v3ygP8ttXqhT8sX84YMZmr8PhSrqcKo7NqfGMjjjvfVwkkL"
+                
+                inputRequiredTask:
+                  summary: Task waiting for user input
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440025"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440078"
+                      context_id: "550e8400-e29b-41d4-a716-446655440038"
+                      kind: "task"
+                      status:
+                        state: "input-required"
+                        timestamp: "2025-11-03T13:00:10.845674+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "provide sunset caption"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "Which platform should I format the sunset caption for? (Options: Instagram, Pinterest, General, Other)"
+                          kind: "message"
+                          message_id: "a4d0c7d8-8046-4eb6-8958-d533086d15a0"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                        - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "provide sunset caption"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "Do you want this as an Instagram caption, a Pinterest pin text, or a general quote? (Options: Instagram, Pinterest, General, Other)"
+                          kind: "message"
+                          message_id: "1734a140-d0d3-4e00-a05e-cf3d20f3b246"
+                          task_id: "550e8400-e29b-41d4-a716-446655440078"
+                          context_id: "550e8400-e29b-41d4-a716-446655440038"
+                
+                taskWithReferenceCompleted:
+                  summary: Completed task that referenced previous task
+                  value:
+                    jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440042"
+                    result:
+                      id: "550e8400-e29b-41d4-a716-446655440042"
+                      context_id: "550e8400-e29b-41d4-a716-446655440027"
+                      kind: "task"
+                      status:
+                        state: "completed"
+                        timestamp: "2025-11-03T13:08:32.691596+00:00"
+                      history:
+                        - message_id: "550e8400-e29b-41d4-a716-446655440027"
+                          context_id: "550e8400-e29b-41d4-a716-446655440027"
+                          task_id: "550e8400-e29b-41d4-a716-446655440042"
+                          reference_task_ids:
+                            - "550e8400-e29b-41d4-a716-446655440078"
+                          kind: "message"
+                          parts:
+                            - kind: "text"
+                              text: "make it shorter"
+                          role: "user"
+                        - role: "assistant"
+                          parts:
+                            - kind: "text"
+                              text: "\"Sunset vibes. 🌅 #GoldenHour\""
+                          kind: "message"
+                          message_id: "f5e1e231-44aa-4c1f-9307-57e1b1d042c1"
+                          task_id: "550e8400-e29b-41d4-a716-446655440042"
+                          context_id: "550e8400-e29b-41d4-a716-446655440027"
+                      artifacts:
+                        - artifact_id: "dec77d65-0845-45b3-8bb7-91a089b30b13"
+                          name: "result"
+                          parts:
+                            - kind: "text"
+                              text: "\"Sunset vibes. 🌅 #GoldenHour\""
+                              metadata:
+                                did.message.signature: "cFkuZPcZPeNTDM8iCUrzg5UYvNaAGeg84JCMfYP1VDgKAtqBjyu934RFQsUHdjh29paAPFN9oemMGaL6QvmsYSM"
+
+  /tasks/list:
+    post:
+      tags:
+        - All the tasks
+      summary: List All Tasks
+      description: Get a list of all tasks
+      operationId: tasksList
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TasksListRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "tasks/list"
+              params: {}
+              id: "550e8400-e29b-41d4-a716-446655440099"
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              example:
+                jsonrpc: "2.0"
+                id: "550e8400-e29b-41d4-a716-446655440099"
+                result:
+                  - id: "550e8400-e29b-41d4-a716-446655440078"
+                    context_id: "550e8400-e29b-41d4-a716-446655440038"
+                    kind: "task"
+                    status:
+                      state: "completed"
+                      timestamp: "2025-11-03T12:49:02.412720+00:00"
+                    history:
+                      - message_id: "550e8400-e29b-41d4-a716-446655440038"
+                        context_id: "550e8400-e29b-41d4-a716-446655440038"
+                        task_id: "550e8400-e29b-41d4-a716-446655440078"
+                        kind: "message"
+                        parts:
+                          - kind: "text"
+                            text: "whats the capital if india"
+                        role: "user"
+                      - role: "assistant"
+                        parts:
+                          - kind: "text"
+                            text: "The capital of India is New Delhi."
+                        kind: "message"
+                        message_id: "fd8005a5-d6b5-4034-8b9c-69eba430df51"
+                        task_id: "550e8400-e29b-41d4-a716-446655440078"
+                        context_id: "550e8400-e29b-41d4-a716-446655440038"
+                    artifacts:
+                      - artifact_id: "06f49bb5-b613-456a-867f-325695fb83e8"
+                        name: "result"
+                        parts:
+                          - kind: "text"
+                            text: "The capital of India is New Delhi."
+                            metadata:
+                              did.message.signature: "46H7kmidBa2vvThxLfkSi2mZiseEDQw9surE8SC8bPsbthBM2arzLqdBbhTCtxhzJCJhBtrQPGsf3CinEMseMdWr"
+
+  /tasks/cancel:
+    post:
+      tags:
+        - All the tasks
+      summary: Cancel Task
+      description: Cancel a pending or running task
+      operationId: tasksCancel
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TasksCancelRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "tasks/cancel"
+              params:
+                taskId: "550e8400-e29b-41d4-a716-446655440042"
+              id: "550e8400-e29b-41d4-a716-446655440042"
+      responses:
+        '200':
+          description: Task cancellation response
           content:
             application/json:
               schema:
@@ -198,31 +478,137 @@ paths:
                   - $ref: '#/components/schemas/JsonRpcErrorResponse'
               examples:
                 success:
-                  summary: Successful response
+                  summary: Task canceled successfully
                   value:
                     jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440042"
                     result:
-                      task:
-                        taskId: "550e8400-e29b-41d4-a716-446655440078"
-                        contextId: "550e8400-e29b-41d4-a716-446655440038"
-                        status:
-                          state: "completed"
-                          timestamp: "2025-10-26T14:47:52.183416+00:00"
-                        artifacts:
-                          - kind: "text"
-                            text: "The sunset paints the sky with hope for tomorrow."
-                    id: "550e8400-e29b-41d4-a716-446655440024"
+                      message: "Task canceled successfully"
+                      task_id: "550e8400-e29b-41d4-a716-446655440042"
                 
-                error:
-                  summary: Error response
+                errorCompleted:
+                  summary: Cannot cancel completed task
                   value:
                     jsonrpc: "2.0"
+                    id: "550e8400-e29b-41d4-a716-446655440042"
                     error:
-                      code: -32602
-                      message: "Invalid params"
-                      data:
-                        details: "Missing required field: taskId"
-                    id: "550e8400-e29b-41d4-a716-446655440024"
+                      code: -32001
+                      message: "Task cannot be canceled in 'completed' state. Tasks can only be canceled while pending or running."
+
+  /tasks/feedback:
+    post:
+      tags:
+        - All the tasks
+      summary: Submit Task Feedback
+      description: Provide feedback and rating for a completed task
+      operationId: tasksFeedback
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TasksFeedbackRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "tasks/feedback"
+              params:
+                taskId: "550e8400-e29b-41d4-a716-446655440045"
+                feedback: "Great job! The response was very helpful and accurate."
+                rating: 5
+                metadata:
+                  category: "quality"
+                  source: "user"
+                  helpful: true
+              id: "550e8400-e29b-41d4-a716-446655440024"
+      responses:
+        '200':
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              example:
+                jsonrpc: "2.0"
+                id: "550e8400-e29b-41d4-a716-446655440024"
+                result:
+                  message: "Feedback submitted successfully"
+                  task_id: "550e8400-e29b-41d4-a716-446655440078"
+
+  /contexts/list:
+    post:
+      tags:
+        - All the tasks
+      summary: List Contexts
+      description: Get a list of conversation contexts
+      operationId: contextsList
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextsListRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "contexts/list"
+              params:
+                length: 10
+              id: "550e8400-e29b-41d4-a716-446655440025"
+      responses:
+        '200':
+          description: List of contexts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              example:
+                jsonrpc: "2.0"
+                id: "550e8400-e29b-41d4-a716-446655440025"
+                result:
+                  - context_id: "550e8400-e29b-41d4-a716-446655440038"
+                    task_count: 1
+                    task_ids:
+                      - "550e8400-e29b-41d4-a716-446655440078"
+
+  /contexts/clear:
+    post:
+      tags:
+        - All the tasks
+      summary: Clear Context
+      description: Clear a specific conversation context
+      operationId: contextsClear
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextsClearRequest'
+            example:
+              jsonrpc: "2.0"
+              method: "contexts/clear"
+              params:
+                contextId: "550e8400-e29b-41d4-a716-446655440037"
+              id: "550e8400-e29b-41d4-a716-446655440025"
+      responses:
+        '200':
+          description: Context cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcSuccessResponse'
+              example:
+                jsonrpc: "2.0"
+                id: "550e8400-e29b-41d4-a716-446655440025"
+                result:
+                  message: "Context 550e8400-e29b-41d4-a716-446655440038 and all associated tasks cleared successfully"
 
   /.well-known/agent.json:
     get:

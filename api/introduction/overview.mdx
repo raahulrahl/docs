@@ -1,95 +1,16 @@
 ---
 title: 'API Overview'
-description: 'A2A Protocol compliant API for Bindu agents'
 ---
 
 # Bindu Agent API
 
-The Bindu Agent API is a comprehensive A2A Protocol compliant API supporting JSON-RPC 2.0 methods for agent communication, task management, context management, DID resolution, and payment processing.
+API supporting JSON-RPC 2.0 for agent communication, task management, DID resolution, and x402 payments.
 
-## Base URL
-
-```
-http://localhost:8030
-```
-
-<Note>
-  Default development server runs on port 8030. Production deployments should use HTTPS.
-</Note>
-
----
-
-## Authentication
-
-Most endpoints support optional Bearer token authentication:
-
-```bash
-Authorization: Bearer <your_jwt_token>
-```
-
-**Public Endpoints** (no authentication required):
-- `/.well-known/agent.json` - Agent discovery
-- `/did/resolve` - DID resolution
-- `/agent/skills` - Skills listing
-- `/agent/skills/{skillId}` - Skill details
-
-**Protected Endpoints** (authentication required):
-- `/` - JSON-RPC methods
-- `/api/start-payment-session` - Payment initiation
-- `/api/payment-status/{sessionId}` - Payment status
-
----
-
-## API Categories
-
-<CardGroup cols={2}>
-  <Card title="JSON-RPC" icon="code" href="/api/jsonrpc">
-    Core agent communication using JSON-RPC 2.0
-  </Card>
-  <Card title="Agent Discovery" icon="magnifying-glass" href="/api/discovery">
-    Agent metadata and capability discovery
-  </Card>
-  <Card title="DID Resolution" icon="fingerprint" href="/api/did">
-    Decentralized Identifier resolution
-  </Card>
-  <Card title="Skills" icon="star" href="/api/skills">
-    Agent skills and capabilities
-  </Card>
-  <Card title="Payment" icon="credit-card" href="/api/payment">
-    x402 payment protocol
-  </Card>
-</CardGroup>
+**Base URL:** `http://localhost:8030` (default development)
 
 ---
 
 ## Quick Start
-
-### Send a Message
-
-```bash
-curl -X POST http://localhost:8030/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "message/send",
-    "params": {
-      "message": {
-        "role": "user",
-        "parts": [
-          {
-            "kind": "text",
-            "text": "Hello, agent!"
-          }
-        ],
-        "kind": "message",
-        "messageId": "msg-123",
-        "contextId": "ctx-123",
-        "taskId": "task-123"
-      }
-    },
-    "id": "req-123"
-  }'
-```
 
 ### Get Agent Card
 
@@ -97,167 +18,37 @@ curl -X POST http://localhost:8030/ \
 curl http://localhost:8030/.well-known/agent.json
 ```
 
-### List Skills
+---
+
+## Core Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | POST | JSON-RPC 2.0 methods |
+| `/.well-known/agent.json` | GET | Agent discovery |
+| `/did/resolve` | POST | DID resolution |
+| `/agent/skills` | GET | List skills |
+| `/api/start-payment-session` | POST | Start payment |
+
+<Note>
+  See the [OpenAPI Spec](/openapi.yaml) for complete API documentation with all methods, schemas, and examples.
+</Note>
+
+---
+
+## Authentication
+
+Bearer token authentication (optional for most endpoints):
 
 ```bash
-curl http://localhost:8030/agent/skills
+Authorization: Bearer <your_jwt_token>
 ```
-
----
-
-## JSON-RPC Methods
-
-| Method | Description |
-|--------|-------------|
-| `message/send` | Send messages to agent |
-| `message/stream` | Stream messages from agent |
-| `tasks/get` | Get task status |
-| `tasks/list` | List all tasks |
-| `tasks/cancel` | Cancel a task |
-| `tasks/feedback` | Submit feedback for a task |
-| `contexts/list` | List conversation contexts |
-| `contexts/clear` | Clear a context |
-
----
-
-## Response Format
-
-### Success Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "task": {
-      "taskId": "task-123",
-      "status": {
-        "state": "completed",
-        "timestamp": "2025-10-26T14:47:52Z"
-      },
-      "artifacts": [
-        {
-          "kind": "text",
-          "text": "Response from agent"
-        }
-      ]
-    }
-  },
-  "id": "req-123"
-}
-```
-
-### Error Response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": -32602,
-    "message": "Invalid params",
-    "data": {
-      "details": "Missing required field: taskId"
-    }
-  },
-  "id": "req-123"
-}
-```
-
----
-
-## Error Codes
-
-| Code | Message | Description |
-|------|---------|-------------|
-| `-32700` | Parse error | Invalid JSON |
-| `-32600` | Invalid Request | Invalid JSON-RPC |
-| `-32601` | Method not found | Unknown method |
-| `-32602` | Invalid params | Invalid parameters |
-| `-32603` | Internal error | Server error |
-| `-32001` | Authentication required | No auth token |
-| `-32002` | Invalid token | Token verification failed |
-| `-32003` | Insufficient permissions | Missing permissions |
-
----
-
-## Rate Limiting
-
-<Warning>
-  Rate limits apply to protect server resources. Implement exponential backoff for retries.
-</Warning>
-
-**Default Limits:**
-- 100 requests per minute per IP
-- 1000 requests per hour per IP
-
-**Headers:**
-```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1635264000
-```
-
----
-
-## Versioning
-
-The API follows semantic versioning:
-
-**Current Version:** `1.0.0`
-
-Version is included in the agent card:
-
-```json
-{
-  "version": "1.0.0"
-}
-```
-
----
-
-## SDKs and Libraries
-
-### Python
-
-```python
-from bindu.client import BinduClient
-
-client = BinduClient("http://localhost:8030")
-response = client.send_message("Hello, agent!")
-```
-
-### JavaScript/TypeScript
-
-```typescript
-import { BinduClient } from '@bindu/client';
-
-const client = new BinduClient('http://localhost:8030');
-const response = await client.sendMessage('Hello, agent!');
-```
-
----
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="JSON-RPC Methods" icon="code" href="/api/jsonrpc">
-    Explore all JSON-RPC methods
-  </Card>
-  <Card title="Agent Discovery" icon="magnifying-glass" href="/api/discovery">
-    Learn about agent discovery
-  </Card>
-  <Card title="Skills API" icon="star" href="/api/skills">
-    Work with agent skills
-  </Card>
-  <Card title="Payment API" icon="credit-card" href="/api/payment">
-    Integrate x402 payments
-  </Card>
-</CardGroup>
 
 ---
 
 ## Resources
 
-- **[OpenAPI Spec](https://github.com/Saptha-me/Bindu/blob/main/openapi.yaml)** - Complete API specification
-- **[A2A Protocol](https://github.com/google-agentic-commerce/a2a)** - Protocol documentation
-- **[GitHub](https://github.com/Saptha-me/Bindu)** - Source code and examples
-- **[Discord](https://discord.gg/3w5zuYUuwt)** - Community support
+- **[OpenAPI Spec](/openapi.yaml)** - Complete API specification
+- **[A2A Protocol](https://github.com/google-agentic-commerce/a2a)** - Protocol docs
+- **[GitHub](https://github.com/Saptha-me/Bindu)** - Source code
+- **[Discord](https://discord.gg/3w5zuYUuwt)** - Community
