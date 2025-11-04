@@ -269,11 +269,11 @@
   },
   "fonts": {
     "heading": {
-      "family": "Inter",
+      "family": "JetBrains Mono",
       "weight": 750
     },
     "body": {
-      "family": "Inter",
+      "family": "JetBrains Mono",
       "weight": 400
     }
   },

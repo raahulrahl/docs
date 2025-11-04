@@ -1,0 +1,46 @@
+@import url('https://fonts.cdnfonts.com/css/jetbrains-mono-2');
+
+/* Light Mode (Default) */
+:root {
+  --font-family: "JetBrains Mono", monospace;
+  --text-color: #000;
+  --text-color-alt: #666;
+  --background-color: #fff;
+  --background-color-alt: #eee;
+  --border-thickness: 2px;
+  --line-height: 1.20rem;
+}
+
+/* ASCII Art Overlay Styling */
+.ascii-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  pointer-events: none;
+  font-family: var(--font-family);
+  font-size: 1rem;
+  line-height: 1.2;
+  white-space: pre;
+  overflow: hidden;
+  opacity: 0.4;
+  color: var(--text-color);
+  padding: 2rem;
+  user-select: none;
+  mix-blend-mode: overlay;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-color: #fff;
+    --text-color-alt: #aaa;
+    --background-color: #000;
+    --background-color-alt: #111;
+  }
+  .ascii-overlay {
+    opacity: 0.3;
+  }
+}
