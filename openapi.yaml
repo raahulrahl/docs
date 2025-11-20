@@ -6,8 +6,8 @@ info:
     task management, context management, DID resolution, and payment processing.
   version: 1.0.0
   contact:
-    name: Saptha.me
-    email: raahul@saptha.me
+    name: getbindu.com
+    email: raahul@getbindu.com
 
 servers:
   - url: http://localhost:3773
