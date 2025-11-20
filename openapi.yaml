@@ -639,7 +639,7 @@ paths:
                   - id: "question-answering-v1"
                     name: "Question Answering"
                     description: "Answer questions based on context"
-                did: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
+                did: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
                 endpoints:
                   jsonrpc: "http://localhost:3773/"
                   did: "http://localhost:3773/did/resolve"
@@ -666,7 +666,7 @@ paths:
                 did:
                   type: string
                   description: The DID to resolve
-                  example: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
+                  example: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
       responses:
         '200':
           description: DID document
@@ -678,16 +678,16 @@ paths:
                 "@context":
                   - "https://www.w3.org/ns/did/v1"
                   - "https://bindu.ai/ns/v1"
-                id: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
+                id: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
                 created: "2025-10-26T14:47:52.183416+00:00"
                 authentication:
-                  - id: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6#key-1"
+                  - id: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6#key-1"
                     type: "Ed25519VerificationKey2020"
-                    controller: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
+                    controller: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6"
                     publicKeyBase58: "..."
                 bindu:
                   agentName: "first_agent"
-                  userId: "raahul_at_saptha_me"
+                  userId: "raahul_at_getbindu_com"
                   skills:
                     - "question-answering-v1"
                   capabilities:
@@ -695,7 +695,7 @@ paths:
                   description: "A helpful AI agent"
                   version: "1.0.0"
                 service:
-                  - id: "did:bindu:raahul_at_saptha_me:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6#agent-service"
+                  - id: "did:bindu:raahul_at_getbindu_com:first_agent:e091ddb0b2c84bd8991fdfd1ecbb9da6#agent-service"
                     type: "BinduAgentService"
                     serviceEndpoint: "http://localhost:3773"
         '400':
