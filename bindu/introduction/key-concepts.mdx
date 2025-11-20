@@ -159,11 +159,11 @@ response = await agent.send_message(
 
 ### Infrastructure & Deployment
 
-- **Simple Server Setup**: Turn your AI agent into [a web server using Starlette (a Python web framework)](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/applications.py). The `BinduApplication` class handles all the complex setup. You just provide your agent and it creates a fully functional server ready to receive requests.
+- **Simple Server Setup**: Turn your AI agent into [a web server using Starlette (a Python web framework)](https://github.com/getbindu/Bindu/blob/main/bindu/server/applications.py). The `BinduApplication` class handles all the complex setup. You just provide your agent and it creates a fully functional server ready to receive requests.
 
-- **Built-In Reliability**: Comes with automatic error handling, task retry mechanisms, health checks, and backup systems. If something fails, [Bindu knows how to recover gracefully without crashing your agent](https://github.com/Saptha-me/Bindu/blob/main/bindu/server/task_manager.py).
+- **Built-In Reliability**: Comes with automatic error handling, task retry mechanisms, health checks, and backup systems. If something fails, [Bindu knows how to recover gracefully without crashing your agent](https://github.com/getbindu/Bindu/blob/main/bindu/server/task_manager.py).
 
-- **Run Anywhere**: Start on your local machine (localhost) and deploy to any cloud platform when ready. [Works with Docker and Podman containers](https://github.com/Saptha-me/create-bindu-agent/blob/main/%7B%7Bcookiecutter.project_name%7D%7D/docker-compose.yml), making it easy to package and ship your agent to production environments.
+- **Run Anywhere**: Start on your local machine (localhost) and deploy to any cloud platform when ready. [Works with Docker and Podman containers](https://github.com/getbindu/create-bindu-agent/blob/main/%7B%7Bcookiecutter.project_name%7D%7D/docker-compose.yml), making it easy to package and ship your agent to production environments.
 
 ### Observability & Monitoring
 

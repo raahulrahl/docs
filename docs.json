@@ -51,7 +51,7 @@
         "title": "Request a feature",
         "description": "Join the discussion on GitHub to request a new feature",
         "icon": "plus",
-        "href": "https://github.com/Saptha-me/Bindu/discussions"
+        "href": "https://github.com/getbindu/Bindu/discussions"
       }
     ]
   },
@@ -135,7 +135,7 @@
         ]
       },
       {
-        "tab": "Saptha-me",
+        "tab": "getbindu",
         "groups": [
           {
             "group": "Docs",
@@ -256,13 +256,13 @@
     ],
     "primary": {
       "type": "github",
-      "href": "https://github.com/Saptha-me/bindu"
+      "href": "https://github.com/getbindu/bindu"
     }
   },
   "footer": {
     "socials": {
       "x": "https://x.com/raahulrahl",
-      "github": "https://github.com/Saptha-me",
+      "github": "https://github.com/getbindu",
       "discord": "https://discord.com/invite/3w5zuYUuwt",
       "website": "https://getbindu.com"
     }
