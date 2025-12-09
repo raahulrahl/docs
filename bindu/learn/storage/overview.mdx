@@ -1,0 +1,426 @@
+---
+title: 'PostgreSQL Storage'
+description: 'Production-ready persistent storage for Bindu agents'
+---
+
+# PostgreSQL Storage
+
+PostgreSQL is the recommended persistent storage backend for Bindu agents in production environments. It provides reliable, scalable, and ACID-compliant data storage for agent tasks, conversations, and state management.
+
+---
+
+## Why Use PostgreSQL?
+
+### 1. Production-Ready Persistence
+
+Unlike in-memory storage solutions, PostgreSQL ensures your agent's data survives:
+- Server restarts and crashes
+- Pod redeployments in Kubernetes
+- System upgrades and maintenance windows
+- Power failures and infrastructure issues
+
+Your agent's conversation history, task states, and context are safely persisted to disk and can be recovered instantly.
+
+### 2. Distributed & Multi-Instance Deployments
+
+PostgreSQL enables true horizontal scaling:
+- **Multiple agent instances** can share the same database
+- **Load balancing** across pods without data inconsistency
+- **Zero data loss** when scaling up or down
+- **Shared state** across distributed workers
+
+This is critical for production deployments where you need high availability and can't rely on local memory.
+
+### 3. Hybrid Agent Pattern Support
+
+Bindu's PostgreSQL storage is specifically designed for the [Hybrid Agent Pattern](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-11-trigger-from-anywhere.md):
+
+- **Flexible state transitions**: Tasks can move between `working` → `input-required` → `completed` states
+- **Conversation context preservation**: Maintains full message history across multiple task iterations
+- **Task refinements**: Agents can pause, request human input, and resume with full context
+- **Incremental updates**: Supports appending messages without rewriting entire conversations
+
+### 4. Enterprise-Grade Features
+
+PostgreSQL provides capabilities essential for serious deployments:
+
+- **ACID Transactions**: Ensures data consistency even under concurrent operations
+- **JSONB Support**: Efficient storage and querying of A2A protocol objects (messages, tasks, artifacts)
+- **Connection Pooling**: Handles hundreds of concurrent connections efficiently
+- **Automatic Retries**: Built-in resilience against transient network failures
+- **Indexed Queries**: Fast lookups by task ID, conversation ID, or timestamp
+- **Full-Text Search**: Query conversation history and task metadata
+
+### 5. Long-Term Data Retention
+
+PostgreSQL excels at storing and querying historical data:
+- Analyze agent behavior over time
+- Audit trails for compliance and debugging
+- Training data collection for model improvements
+- Business intelligence and analytics
+
+### 6. Battle-Tested Reliability
+
+PostgreSQL has been the gold standard for relational databases for over 30 years:
+- Used by companies like Apple, Instagram, Spotify, and Reddit
+- Proven at massive scale (petabytes of data)
+- Active community and extensive tooling ecosystem
+- Professional support available from multiple vendors
+
+## When to Use PostgreSQL
+
+✅ **Use PostgreSQL when:**
+- Running in production environments
+- Deploying multiple agent instances
+- Need data persistence across restarts
+- Require audit trails and compliance
+- Building enterprise applications
+- Implementing the Hybrid Agent Pattern
+- Scaling horizontally with load balancers
+
+❌ **Consider alternatives when:**
+- Prototyping or local development (use in-memory storage)
+- Single-instance deployments with no persistence needs
+- Extremely high-throughput, low-latency requirements (consider Redis for task queuing)
+
+## Architecture
+
+Bindu's PostgreSQL implementation uses:
+
+```
+┌─────────────────────────────────────────┐
+│         Bindu Agent Instances           │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐   │
+│  │ Pod1│  │ Pod2│  │ Pod3│  │ Pod4│   │
+│  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘   │
+└─────┼────────┼────────┼────────┼────────┘
+      │        │        │        │
+      └────────┴────────┴────────┘
+                  │
+         ┌────────▼────────┐
+         │   PostgreSQL    │
+         │   Connection    │
+         │      Pool       │
+         └────────┬────────┘
+                  │
+         ┌────────▼────────┐
+         │   PostgreSQL    │
+         │    Database     │
+         │                 │
+         │  ┌───────────┐  │
+         │  │   Tasks   │  │
+         │  ├───────────┤  │
+         │  │ Contexts  │  │
+         │  ├───────────┤  │
+         │  │ Feedback  │  │
+         │  └───────────┘  │
+         └─────────────────┘
+```
+
+### Key Components
+
+1. **SQLAlchemy Async Engine**: Non-blocking database operations
+2. **Connection Pooling**: Reuses connections for performance
+3. **Imperative Mapping**: Uses protocol TypedDicts directly (no duplicate ORM models)
+4. **JSONB Columns**: Stores A2A protocol objects efficiently
+5. **Alembic Migrations**: Version-controlled schema changes
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# PostgreSQL connection URL
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/bindu
+
+# Optional: Connection pool settings
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=10
+DB_POOL_TIMEOUT=30
+```
+
+### Example Configuration
+
+```python
+from bindu.penguin.bindufy import bindufy
+
+config = {
+    "author": "your.email@example.com",
+    "name": "production_agent",
+    "description": "Production agent with PostgreSQL storage",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True
+    },
+    "storage": {
+        "type": "postgres",
+        "url": "postgresql+asyncpg://user:password@db.example.com:5432/bindu"
+    },
+    "skills": ["skills/question-answering"]
+}
+
+def handler(messages):
+    # Your agent logic
+    pass
+
+bindufy(config, handler)
+```
+
+## Database Schema
+
+### Tasks Table
+
+Stores agent tasks with their current state:
+
+```sql
+CREATE TABLE tasks (
+    task_id UUID PRIMARY KEY,
+    conversation_id UUID NOT NULL,
+    status VARCHAR(20) NOT NULL,  -- 'working', 'input-required', 'completed', etc.
+    state JSONB,                   -- Full task state (A2A protocol)
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    INDEX idx_conversation_id (conversation_id),
+    INDEX idx_status (status)
+);
+```
+
+### Contexts Table
+
+Stores conversation contexts and message history:
+
+```sql
+CREATE TABLE contexts (
+    conversation_id UUID PRIMARY KEY,
+    context JSONB NOT NULL,        -- Full conversation context
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+```
+
+### Task Feedback Table
+
+Stores human feedback for task refinements:
+
+```sql
+CREATE TABLE task_feedback (
+    id SERIAL PRIMARY KEY,
+    task_id UUID NOT NULL REFERENCES tasks(task_id),
+    feedback JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    INDEX idx_task_id (task_id)
+);
+```
+
+## Performance Considerations
+
+### Indexing Strategy
+
+Bindu automatically creates indexes on:
+- `task_id` (primary key)
+- `conversation_id` (for context lookups)
+- `status` (for filtering tasks by state)
+- `created_at` and `updated_at` (for time-based queries)
+
+### Connection Pooling
+
+The default pool configuration:
+- **Pool size**: 20 connections
+- **Max overflow**: 10 additional connections
+- **Timeout**: 30 seconds
+
+Adjust based on your workload:
+```python
+# High-throughput configuration
+"storage": {
+    "type": "postgres",
+    "url": "postgresql+asyncpg://...",
+    "pool_size": 50,
+    "max_overflow": 20
+}
+```
+
+### Query Optimization
+
+- Uses `JSONB` for efficient JSON operations
+- Leverages PostgreSQL's native JSON indexing
+- Batch operations where possible
+- Prepared statements for repeated queries
+
+## Monitoring & Observability
+
+### Logging
+
+PostgreSQL storage logs all operations:
+```python
+logger.info("Task created", task_id=task_id)
+logger.warning("Retry attempt", attempt=2, max_retries=3)
+logger.error("Database error", error=str(e))
+```
+
+### Metrics
+
+Track these PostgreSQL metrics:
+- Connection pool utilization
+- Query latency (p50, p95, p99)
+- Transaction success/failure rates
+- Database size growth
+- Index hit ratio
+
+### Health Checks
+
+```python
+# Check database connectivity
+await storage.health_check()
+```
+
+## Migration & Upgrades
+
+Bindu uses [Alembic](https://alembic.sqlalchemy.org/) for schema migrations:
+
+```bash
+# Apply latest migrations
+alembic upgrade head
+
+# Create a new migration
+alembic revision --autogenerate -m "Add new feature"
+
+# Rollback one version
+alembic downgrade -1
+```
+
+## Security Best Practices
+
+1. **Use SSL/TLS connections**:
+   ```
+   postgresql+asyncpg://user:pass@host:5432/db?ssl=require
+   ```
+
+2. **Rotate credentials regularly**
+3. **Use least-privilege database users**
+4. **Enable PostgreSQL audit logging**
+5. **Encrypt data at rest** (PostgreSQL 14+ transparent encryption)
+6. **Use connection pooling** to prevent connection exhaustion attacks
+
+## Backup & Recovery
+
+### Automated Backups
+
+```bash
+# Daily backup with pg_dump
+pg_dump -h localhost -U bindu_user bindu_db > backup_$(date +%Y%m%d).sql
+
+# Point-in-time recovery with WAL archiving
+wal_level = replica
+archive_mode = on
+archive_command = 'cp %p /backup/wal/%f'
+```
+
+### Disaster Recovery
+
+1. **Regular backups**: Daily full backups + continuous WAL archiving
+2. **Replication**: Set up streaming replication for high availability
+3. **Test restores**: Regularly verify backup integrity
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Pool Exhausted**
+```
+Solution: Increase pool_size or investigate connection leaks
+```
+
+**Slow Queries**
+```
+Solution: Check EXPLAIN ANALYZE, add indexes, optimize JSONB queries
+```
+
+**Lock Contention**
+```
+Solution: Reduce transaction duration, use optimistic locking
+```
+
+**Disk Space**
+```
+Solution: Set up VACUUM, archive old data, monitor growth
+```
+
+## Comparison with Alternatives
+
+| Feature | PostgreSQL | In-Memory | Redis |
+|---------|-----------|-----------|-------|
+| Persistence | ✅ Disk | ❌ RAM only | ⚠️ Optional |
+| Multi-instance | ✅ Yes | ❌ No | ✅ Yes |
+| ACID transactions | ✅ Yes | ⚠️ Limited | ❌ No |
+| Complex queries | ✅ SQL | ❌ No | ⚠️ Limited |
+| Scalability | ✅ Vertical + Horizontal | ⚠️ Vertical only | ✅ Horizontal |
+| Best for | Production, Enterprise | Development, Testing | Caching, Queues |
+
+## Getting Started
+
+### 1. Install PostgreSQL
+
+```bash
+# macOS
+brew install postgresql@16
+
+# Ubuntu/Debian
+sudo apt-get install postgresql-16
+
+# Docker
+docker run -d \
+  --name bindu-postgres \
+  -e POSTGRES_PASSWORD=bindu \
+  -e POSTGRES_DB=bindu \
+  -p 5432:5432 \
+  postgres:16-alpine
+```
+
+### 2. Create Database
+
+```sql
+CREATE DATABASE bindu;
+CREATE USER bindu_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE bindu TO bindu_user;
+```
+
+### 3. Run Migrations
+
+```bash
+# Set database URL
+export DATABASE_URL=postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu
+
+# Apply migrations
+alembic upgrade head
+```
+
+### 4. Configure Bindu
+
+```python
+config = {
+    "storage": {
+        "type": "postgres",
+        "url": "postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu"
+    }
+}
+```
+
+## Conclusion
+
+PostgreSQL is the recommended storage backend for production Bindu deployments. It provides:
+
+- ✅ **Reliability**: ACID compliance and data durability
+- ✅ **Scalability**: Horizontal scaling with shared state
+- ✅ **Performance**: Optimized for agent workloads
+- ✅ **Features**: Rich querying, transactions, and indexing
+- ✅ **Ecosystem**: Mature tooling and community support
+
+For production agents that need to scale, persist data, and support the Hybrid Agent Pattern, PostgreSQL is the clear choice.
+
+---
+
+**Next Steps:**
+- [Redis Scheduler Documentation](./redis-scheduler.md)
+- [Bindu Configuration Guide](https://docs.getbindu.com)
+- [Deployment Best Practices](https://docs.getbindu.com/deployment)

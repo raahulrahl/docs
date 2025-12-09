@@ -1,0 +1,682 @@
+# Redis Scheduler in Bindu
+
+## Overview
+
+Redis is a high-performance, in-memory data structure store that Bindu uses as a distributed task scheduler. It enables efficient task queuing, distribution, and coordination across multiple agent instances in production deployments.
+
+## Why Use Redis?
+
+### 1. **Distributed Task Scheduling**
+
+Redis enables true distributed task processing:
+- **Multiple workers** can consume tasks from the same queue
+- **Load balancing** automatically distributes work across agent instances
+- **No duplicate processing** - each task is consumed by exactly one worker
+- **Horizontal scaling** - add more workers to increase throughput
+
+This is essential for production deployments where a single agent instance can't handle the load.
+
+### 2. **High Performance & Low Latency**
+
+Redis is optimized for speed:
+- **Sub-millisecond latency** for most operations
+- **In-memory operations** - no disk I/O bottlenecks
+- **Efficient data structures** - lists, sets, sorted sets optimized for queuing
+- **Pipelining support** - batch multiple operations for maximum throughput
+
+Perfect for real-time agent workloads where response time matters.
+
+### 3. **Blocking Pop Operations**
+
+Redis's `BLPOP` (blocking left pop) is ideal for task queues:
+- **No polling overhead** - workers block until tasks arrive
+- **Instant task delivery** - tasks are processed immediately
+- **Resource efficient** - no CPU wasted on empty queue checks
+- **Fair distribution** - tasks distributed round-robin to waiting workers
+
+This eliminates the inefficiency of traditional polling-based queues.
+
+### 4. **Multi-Process & Multi-Worker Support**
+
+Redis enables process-level parallelism:
+- **Multiple Python processes** can share the same queue
+- **Cross-machine coordination** - workers on different servers
+- **Kubernetes-friendly** - perfect for pod-based deployments
+- **Zero shared memory** - no GIL (Global Interpreter Lock) limitations
+
+Scale beyond a single Python process or machine.
+
+### 5. **Reliability & Fault Tolerance**
+
+Redis provides production-grade reliability:
+- **Persistence options** - RDB snapshots and AOF (Append-Only File) logging
+- **Replication** - master-slave setup for high availability
+- **Sentinel** - automatic failover and monitoring
+- **Redis Cluster** - sharding for massive scale
+- **Connection pooling** - efficient connection reuse
+
+Your task queue survives crashes and network issues.
+
+### 6. **Operational Simplicity**
+
+Redis is easy to operate:
+- **Simple deployment** - single binary, minimal configuration
+- **Rich monitoring** - built-in `INFO` command, Redis CLI tools
+- **Active community** - extensive documentation and support
+- **Cloud-native** - available as managed service (AWS ElastiCache, Redis Cloud, etc.)
+
+Less operational overhead than complex message brokers.
+
+## When to Use Redis Scheduler
+
+✅ **Use Redis Scheduler when:**
+- Running multiple agent instances/workers
+- Need to distribute tasks across pods/processes
+- Require low-latency task processing
+- Scaling horizontally in Kubernetes or cloud environments
+- Building high-throughput agent systems
+- Need reliable task queuing with automatic retries
+
+❌ **Consider alternatives when:**
+- Single-instance deployments (use in-memory scheduler)
+- Tasks don't need distribution (use local queue)
+- Extremely complex workflow orchestration (consider Temporal, Airflow)
+
+## Architecture
+
+Bindu's Redis scheduler uses a producer-consumer pattern:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Task Producers                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │ API Pod1 │  │ API Pod2 │  │ API Pod3 │             │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘             │
+└───────┼─────────────┼─────────────┼────────────────────┘
+        │             │             │
+        │   LPUSH     │   LPUSH     │   LPUSH
+        │             │             │
+        └─────────────┴─────────────┴──────────┐
+                                                │
+                      ┌─────────────────────────▼─────┐
+                      │      Redis Server             │
+                      │                               │
+                      │  ┌─────────────────────────┐  │
+                      │  │  bindu:tasks (List)     │  │
+                      │  │  [Task1, Task2, Task3]  │  │
+                      │  └─────────────────────────┘  │
+                      └─────────────────────────────┬─┘
+                                                    │
+        ┌───────────────┬───────────────┬───────────┘
+        │ BRPOP         │ BRPOP         │ BRPOP
+        │               │               │
+┌───────▼──────┐ ┌──────▼──────┐ ┌─────▼───────┐
+│              │ │             │ │             │
+│ Worker Pod1  │ │ Worker Pod2 │ │ Worker Pod3 │
+│              │ │             │ │             │
+└──────────────┘ └─────────────┘ └─────────────┘
+     Task Consumers
+```
+
+### How It Works
+
+1. **Task Submission**: API instances push tasks to Redis list using `LPUSH`
+2. **Task Distribution**: Worker instances block on `BRPOP` waiting for tasks
+3. **Atomic Consumption**: Redis ensures each task goes to exactly one worker
+4. **Task Processing**: Worker executes the task (run, pause, resume, cancel)
+5. **Completion**: Worker updates task state in storage (PostgreSQL)
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Redis connection URL
+REDIS_URL=redis://localhost:6379/0
+
+# With password
+REDIS_URL=redis://:password@localhost:6379/0
+
+# Redis Sentinel
+REDIS_URL=redis+sentinel://sentinel1:26379,sentinel2:26379/mymaster/0
+
+# Optional: Connection pool settings
+REDIS_MAX_CONNECTIONS=10
+REDIS_QUEUE_NAME=bindu:tasks
+```
+
+### Example Configuration
+
+```python
+from bindu.penguin.bindufy import bindufy
+
+config = {
+    "author": "your.email@example.com",
+    "name": "distributed_agent",
+    "description": "Agent with Redis task scheduling",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True
+    },
+    "scheduler": {
+        "type": "redis",
+        "url": "redis://localhost:6379/0",
+        "queue_name": "bindu:tasks",
+        "max_connections": 10
+    },
+    "storage": {
+        "type": "postgres",
+        "url": "postgresql+asyncpg://user:password@localhost:5432/bindu"
+    },
+    "skills": ["skills/question-answering"]
+}
+
+def handler(messages):
+    # Your agent logic
+    pass
+
+bindufy(config, handler)
+```
+
+## Task Operations
+
+Redis scheduler supports all Bindu task operations:
+
+### 1. Run Task
+```python
+# Producer pushes task to queue
+await scheduler.schedule(_RunTask(
+    task_id="task-123",
+    conversation_id="conv-456",
+    messages=[{"role": "user", "content": "Hello"}]
+))
+```
+
+### 2. Pause Task
+```python
+# Pause a running task
+await scheduler.schedule(_PauseTask(task_id="task-123"))
+```
+
+### 3. Resume Task
+```python
+# Resume a paused task with additional input
+await scheduler.schedule(_ResumeTask(
+    task_id="task-123",
+    messages=[{"role": "user", "content": "Continue"}]
+))
+```
+
+### 4. Cancel Task
+```python
+# Cancel a task
+await scheduler.schedule(_CancelTask(task_id="task-123"))
+```
+
+## Data Structures
+
+### Task Queue (List)
+
+Redis uses a **List** for the task queue:
+
+```redis
+# Queue name: bindu:tasks
+# Structure: List of JSON-encoded task operations
+
+LPUSH bindu:tasks '{"type": "run", "task_id": "123", ...}'
+BRPOP bindu:tasks 0  # Block until task available
+```
+
+**Why List?**
+- FIFO (First-In-First-Out) ordering
+- Atomic push/pop operations
+- Blocking pop for efficient waiting
+- Simple and fast
+
+### Task Encoding
+
+Tasks are JSON-encoded before pushing to Redis:
+
+```python
+{
+    "type": "run",  # or "pause", "resume", "cancel"
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "conversation_id": "660e8400-e29b-41d4-a716-446655440001",
+    "messages": [
+        {"role": "user", "content": "What is AI?"}
+    ],
+    "artifacts": [],
+    "timestamp": "2024-12-09T14:30:00Z"
+}
+```
+
+## Performance Characteristics
+
+### Throughput
+
+Redis can handle:
+- **100,000+ operations/second** on a single instance
+- **Millions of tasks/day** with proper configuration
+- **Sub-millisecond latency** for most operations
+
+### Scalability
+
+- **Vertical**: Single Redis instance can handle most workloads
+- **Horizontal**: Redis Cluster for sharding across multiple nodes
+- **Workers**: Add unlimited worker instances for parallel processing
+
+### Resource Usage
+
+- **Memory**: ~1KB per task (depends on message size)
+- **CPU**: Minimal - Redis is single-threaded but extremely efficient
+- **Network**: Low bandwidth - only task metadata transferred
+
+## Reliability Features
+
+### 1. Connection Pooling
+
+Reuses connections for efficiency:
+```python
+RedisScheduler(
+    redis_url="redis://localhost:6379/0",
+    max_connections=10  # Pool size
+)
+```
+
+### 2. Automatic Retries
+
+Retries on transient failures:
+```python
+RedisScheduler(
+    redis_url="redis://localhost:6379/0",
+    retry_on_timeout=True  # Retry on timeout
+)
+```
+
+### 3. Graceful Degradation
+
+Handles Redis unavailability:
+- Connection errors logged
+- Tasks can be retried
+- Workers reconnect automatically
+
+### 4. Persistence Options
+
+**RDB (Redis Database Backup)**:
+```redis
+# Snapshot every 60 seconds if 1000+ keys changed
+save 60 1000
+```
+
+**AOF (Append-Only File)**:
+```redis
+# Log every write operation
+appendonly yes
+appendfsync everysec
+```
+
+## Monitoring & Observability
+
+### Redis Metrics
+
+Monitor these key metrics:
+
+```bash
+# Connected clients
+redis-cli INFO clients
+
+# Memory usage
+redis-cli INFO memory
+
+# Queue length
+redis-cli LLEN bindu:tasks
+
+# Operations per second
+redis-cli INFO stats
+```
+
+### Bindu Logging
+
+Redis scheduler logs all operations:
+```python
+logger.info("Task scheduled", task_id=task_id, queue=queue_name)
+logger.info("Task consumed", task_id=task_id, worker=worker_id)
+logger.error("Redis error", error=str(e))
+```
+
+### Health Checks
+
+```python
+# Check Redis connectivity
+await scheduler.health_check()
+```
+
+### Alerting
+
+Set up alerts for:
+- Queue depth > threshold (backlog building up)
+- Redis memory > 80% (risk of eviction)
+- Connection errors (Redis unavailable)
+- Worker lag (slow task processing)
+
+## Production Deployment
+
+### 1. Redis Setup
+
+**Docker**:
+```bash
+docker run -d \
+  --name bindu-redis \
+  -p 6379:6379 \
+  -v redis-data:/data \
+  redis:7-alpine \
+  redis-server --appendonly yes
+```
+
+**Kubernetes**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-pvc
+```
+
+### 2. High Availability
+
+**Redis Sentinel** (automatic failover):
+```bash
+# Master
+redis-server --port 6379
+
+# Sentinel
+redis-sentinel sentinel.conf
+```
+
+**Redis Cluster** (sharding):
+```bash
+# 3 masters, 3 replicas
+redis-cli --cluster create \
+  127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
+  127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
+  --cluster-replicas 1
+```
+
+### 3. Security
+
+**Enable Authentication**:
+```redis
+# redis.conf
+requirepass your_strong_password
+```
+
+**Use TLS**:
+```bash
+REDIS_URL=rediss://:password@localhost:6379/0
+```
+
+**Network Isolation**:
+- Run Redis in private network
+- Use firewall rules to restrict access
+- Enable Redis ACLs for fine-grained permissions
+
+### 4. Scaling Workers
+
+**Kubernetes Deployment**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bindu-workers
+spec:
+  replicas: 5  # Scale to 5 workers
+  selector:
+    matchLabels:
+      app: bindu-worker
+  template:
+    metadata:
+      labels:
+        app: bindu-worker
+    spec:
+      containers:
+      - name: worker
+        image: bindu-agent:latest
+        env:
+        - name: REDIS_URL
+          value: redis://redis:6379/0
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: bindu-secrets
+              key: database-url
+```
+
+**Horizontal Pod Autoscaler**:
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bindu-workers-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bindu-workers
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: redis_queue_length
+      target:
+        type: AverageValue
+        averageValue: "100"  # Scale up if queue > 100 tasks
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Queue Building Up**
+```
+Symptom: LLEN bindu:tasks keeps growing
+Solution: Add more workers or optimize task processing time
+```
+
+**Redis Out of Memory**
+```
+Symptom: Redis evicting keys or refusing writes
+Solution: Increase maxmemory, add more RAM, or use Redis Cluster
+```
+
+**Connection Timeouts**
+```
+Symptom: Workers can't connect to Redis
+Solution: Check network, increase timeout, verify Redis is running
+```
+
+**Slow Task Processing**
+```
+Symptom: Tasks taking too long to complete
+Solution: Profile handler function, add more workers, optimize queries
+```
+
+**Task Loss**
+```
+Symptom: Tasks disappear from queue
+Solution: Enable AOF persistence, check for worker crashes
+```
+
+## Comparison with Alternatives
+
+| Feature | Redis | RabbitMQ | Kafka | SQS |
+|---------|-------|----------|-------|-----|
+| Latency | ⚡ Sub-ms | ⚡ Low | ⚠️ Higher | ⚠️ Variable |
+| Throughput | ✅ Very High | ✅ High | ✅ Extreme | ⚠️ Moderate |
+| Persistence | ⚠️ Optional | ✅ Yes | ✅ Yes | ✅ Yes |
+| Complexity | ✅ Simple | ⚠️ Moderate | ❌ Complex | ✅ Simple |
+| Ordering | ✅ FIFO | ✅ FIFO | ✅ Partition-level | ⚠️ Best-effort |
+| Best for | Fast queues | Complex routing | Event streaming | AWS-native |
+
+## Advanced Patterns
+
+### 1. Priority Queues
+
+Use multiple queues for priority:
+```python
+# High priority
+high_scheduler = RedisScheduler(queue_name="bindu:tasks:high")
+
+# Low priority
+low_scheduler = RedisScheduler(queue_name="bindu:tasks:low")
+
+# Workers check high priority first
+while True:
+    task = await redis.brpop(["bindu:tasks:high", "bindu:tasks:low"], timeout=1)
+```
+
+### 2. Dead Letter Queue
+
+Handle failed tasks:
+```python
+try:
+    await process_task(task)
+except Exception as e:
+    # Move to DLQ after max retries
+    await redis.lpush("bindu:tasks:dlq", task)
+```
+
+### 3. Rate Limiting
+
+Limit task processing rate:
+```python
+# Allow 100 tasks per minute
+rate_limiter = redis.incr("rate:limit")
+if rate_limiter > 100:
+    await asyncio.sleep(60)
+```
+
+### 4. Task Deduplication
+
+Prevent duplicate tasks:
+```python
+# Use SET for deduplication
+task_key = f"task:{task_id}"
+if await redis.setnx(task_key, "1"):
+    await scheduler.schedule(task)
+    await redis.expire(task_key, 3600)  # Expire after 1 hour
+```
+
+## Best Practices
+
+1. **Enable Persistence**: Use AOF for durability
+2. **Monitor Queue Depth**: Alert on backlog growth
+3. **Set Memory Limits**: Configure `maxmemory` and eviction policy
+4. **Use Connection Pooling**: Reuse connections efficiently
+5. **Implement Retries**: Handle transient failures gracefully
+6. **Scale Workers**: Match worker count to task volume
+7. **Secure Redis**: Use passwords, TLS, and network isolation
+8. **Regular Backups**: Snapshot Redis data periodically
+9. **Test Failover**: Verify Sentinel/Cluster works as expected
+10. **Profile Tasks**: Optimize slow task handlers
+
+## Getting Started
+
+### 1. Install Redis
+
+```bash
+# macOS
+brew install redis
+
+# Ubuntu/Debian
+sudo apt-get install redis-server
+
+# Docker
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+```
+
+### 2. Start Redis
+
+```bash
+# Start server
+redis-server
+
+# Verify
+redis-cli ping  # Should return PONG
+```
+
+### 3. Configure Bindu
+
+```python
+config = {
+    "scheduler": {
+        "type": "redis",
+        "url": "redis://localhost:6379/0",
+        "queue_name": "bindu:tasks"
+    }
+}
+```
+
+### 4. Run Workers
+
+```bash
+# Terminal 1: Start worker 1
+python my_agent.py
+
+# Terminal 2: Start worker 2
+python my_agent.py
+
+# Terminal 3: Start worker 3
+python my_agent.py
+```
+
+### 5. Monitor Queue
+
+```bash
+# Watch queue length
+watch -n 1 'redis-cli LLEN bindu:tasks'
+
+# View tasks
+redis-cli LRANGE bindu:tasks 0 -1
+```
+
+## Conclusion
+
+Redis is the recommended task scheduler for distributed Bindu deployments. It provides:
+
+- ✅ **Performance**: Sub-millisecond latency and high throughput
+- ✅ **Scalability**: Horizontal scaling with unlimited workers
+- ✅ **Reliability**: Persistence, replication, and automatic failover
+- ✅ **Simplicity**: Easy to deploy, operate, and monitor
+- ✅ **Efficiency**: Blocking operations eliminate polling overhead
+
+For production agents that need to scale across multiple instances and process tasks efficiently, Redis scheduler is the optimal choice.
+
+---
+
+**Next Steps:**
+- [PostgreSQL Storage Documentation](./postgresql-storage.md)
+- [Bindu Configuration Guide](https://docs.getbindu.com)
+- [Scaling Best Practices](https://docs.getbindu.com/scaling)

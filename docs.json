@@ -24,6 +24,7 @@
       "robots": "index, follow",
       "googlebot": "index, follow",
       "google": "notranslate",
+      "generator": "Mintlify",
       "language": "en",
       "distribution": "global",
       "coverage": "Worldwide",
@@ -143,6 +144,18 @@
                 "group": "Payment",
                 "pages": [
                   "bindu/learn/payment/introduction"
+                ] 
+              },
+              {
+                "group": "Storage",
+                "pages": [
+                  "bindu/learn/storage/overview"
+                ] 
+              },
+              {
+                "group": "Scheduler",
+                "pages": [
+                  "bindu/learn/scheduler/overview"
                 ] 
               }
 
