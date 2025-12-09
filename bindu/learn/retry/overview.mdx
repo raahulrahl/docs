@@ -1,0 +1,821 @@
+---
+title: 'Retry Mechanism'
+description: 'Automatic retry logic with exponential backoff for resilient Bindu agents'
+---
+
+# Retry Mechanism
+
+Bindu includes a built-in Tenacity-based retry mechanism to handle transient failures gracefully across workers, storage, schedulers, and API calls. This ensures your agents remain resilient in production environments.
+
+---
+
+## Why Use Retry Mechanism?
+
+### 1. Automatic Failure Recovery
+
+Handle transient failures without manual intervention:
+- **Network timeouts** - Retry when connections drop
+- **Database connection errors** - Recover from temporary DB issues
+- **Redis connection failures** - Handle queue service interruptions
+- **API rate limits** - Automatically back off and retry
+- **Temporary service unavailability** - Wait and retry when services recover
+
+Never lose tasks due to temporary infrastructure issues.
+
+### 2. Exponential Backoff with Jitter
+
+Smart retry strategy prevents system overload:
+- **Exponential backoff** - Wait longer between each retry attempt
+- **Random jitter** - Distribute retry attempts over time
+- **Prevents thundering herd** - Avoid overwhelming recovering services
+- **Configurable timing** - Adjust wait times per operation type
+
+Optimize recovery time while protecting infrastructure.
+
+### 3. Comprehensive Coverage
+
+Retry logic applied across all critical operations:
+- **Worker operations** - Task execution and cancellation
+- **Storage operations** - Database reads and writes
+- **Scheduler operations** - Task queuing and distribution
+- **API calls** - External service integration
+- **Application startup** - Resilient initialization
+
+Complete protection against transient failures.
+
+### 4. Observability
+
+Full visibility into retry behavior:
+- **Retry attempt logging** - Track when retries occur
+- **Failure tracking** - Monitor what's failing and why
+- **Performance metrics** - Measure retry impact
+- **Debug information** - Detailed context for troubleshooting
+
+Know exactly what's happening in production.
+
+### 5. Flexible Configuration
+
+Customize retry behavior per environment:
+- **Environment variables** - Configure via `.env` files
+- **Per-operation overrides** - Fine-tune specific operations
+- **Different strategies** - Separate settings for workers, storage, schedulers
+- **Easy tuning** - Adjust without code changes
+
+Adapt retry behavior to your needs.
+
+---
+
+## When to Use Retry Mechanism
+
+✅ **Automatically enabled for:**
+- Production deployments with external dependencies
+- Distributed systems with network calls
+- Database and Redis operations
+- Worker task processing
+- API integrations
+
+❌ **Not needed for:**
+- Pure in-memory operations (though still available)
+- Operations that should fail fast
+- Non-idempotent operations without proper handling
+
+---
+
+## Architecture
+
+Bindu's retry mechanism uses Tenacity for robust retry logic:
+
+```
+┌─────────────────────────────────────────┐
+│         Bindu Application               │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   Worker Operations               │ │
+│  │   @retry_worker_operation()       │ │
+│  │   • run_task()                    │ │
+│  │   • cancel_task()                 │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   Storage Operations              │ │
+│  │   @retry_storage_operation()      │ │
+│  │   • load_task()                   │ │
+│  │   • submit_task()                 │ │
+│  │   • update_task()                 │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   Scheduler Operations            │ │
+│  │   @retry_scheduler_operation()    │ │
+│  │   • run_task()                    │ │
+│  │   • pause_task()                  │ │
+│  │   • resume_task()                 │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   API Operations                  │ │
+│  │   @retry_api_call()               │ │
+│  │   • External API calls            │ │
+│  └───────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+                  │
+         ┌────────▼────────┐
+         │   Tenacity      │
+         │   Retry Engine  │
+         │                 │
+         │  • Exponential  │
+         │    Backoff      │
+         │  • Jitter       │
+         │  • Logging      │
+         └─────────────────┘
+```
+
+### How It Works
+
+1. **Operation Execution**: Decorated function is called
+2. **Failure Detection**: Exception is caught by retry decorator
+3. **Retry Decision**: Tenacity determines if retry should occur
+4. **Backoff Calculation**: Exponential backoff with jitter applied
+5. **Wait Period**: Sleep for calculated duration
+6. **Retry Attempt**: Function is called again
+7. **Success or Fail**: Either succeeds or exhausts retry attempts
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Configure retry behavior via `.env` file:
+
+```bash
+# Worker Retry Settings
+RETRY__WORKER_MAX_ATTEMPTS=3
+RETRY__WORKER_MIN_WAIT=1.0
+RETRY__WORKER_MAX_WAIT=10.0
+
+# Storage Retry Settings
+RETRY__STORAGE_MAX_ATTEMPTS=5
+RETRY__STORAGE_MIN_WAIT=0.5
+RETRY__STORAGE_MAX_WAIT=5.0
+
+# Scheduler Retry Settings
+RETRY__SCHEDULER_MAX_ATTEMPTS=3
+RETRY__SCHEDULER_MIN_WAIT=1.0
+RETRY__SCHEDULER_MAX_WAIT=8.0
+
+# API Retry Settings
+RETRY__API_MAX_ATTEMPTS=4
+RETRY__API_MIN_WAIT=1.0
+RETRY__API_MAX_WAIT=15.0
+```
+
+### Default Settings
+
+If not configured, Bindu uses these defaults:
+
+| Operation Type | Max Attempts | Min Wait | Max Wait |
+|---------------|--------------|----------|----------|
+| Worker | 3 | 1.0s | 10.0s |
+| Storage | 5 | 0.5s | 5.0s |
+| Scheduler | 3 | 1.0s | 8.0s |
+| API | 4 | 1.0s | 15.0s |
+
+### Configuration Parameters
+
+- **max_attempts**: Maximum number of retry attempts before giving up
+- **min_wait**: Minimum wait time between retries (seconds)
+- **max_wait**: Maximum wait time between retries (seconds)
+
+Wait time grows exponentially: `min_wait * (2 ^ attempt) + random_jitter`, capped at `max_wait`.
+
+---
+
+## Retry Decorators
+
+### 1. Worker Operations
+
+For task execution and worker operations:
+
+```python
+from bindu.utils.retry import retry_worker_operation
+
+@retry_worker_operation()
+async def run_task(self, params: TaskSendParams) -> None:
+    # Task execution logic
+    # Retries: 3 attempts, 1-10s wait
+    pass
+
+@retry_worker_operation(max_attempts=2)
+async def cancel_task(self, task_id: UUID) -> None:
+    # Task cancellation logic
+    # Custom: 2 attempts
+    pass
+```
+
+**Default**: 3 attempts, 1-10s exponential backoff
+
+**Use for**: Task processing, worker operations, agent execution
+
+### 2. Storage Operations
+
+For database and storage operations:
+
+```python
+from bindu.utils.retry import retry_storage_operation
+
+@retry_storage_operation()
+async def load_task(self, task_id: UUID) -> Task:
+    # Database read operation
+    # Retries: 5 attempts, 0.5-5s wait
+    pass
+
+@retry_storage_operation(max_attempts=10, min_wait=2.0)
+async def update_task(self, task_id: UUID, state: str) -> Task:
+    # Database write with custom retry
+    # Custom: 10 attempts, 2-5s wait
+    pass
+```
+
+**Default**: 5 attempts, 0.5-5s exponential backoff
+
+**Use for**: PostgreSQL operations, database queries, storage reads/writes
+
+### 3. Scheduler Operations
+
+For task scheduling and queue operations:
+
+```python
+from bindu.utils.retry import retry_scheduler_operation
+
+@retry_scheduler_operation()
+async def run_task(self, task: Task) -> None:
+    # Queue task for execution
+    # Retries: 3 attempts, 1-8s wait
+    pass
+
+@retry_scheduler_operation(max_attempts=5)
+async def pause_task(self, task_id: UUID) -> None:
+    # Pause task with custom retry
+    # Custom: 5 attempts
+    pass
+```
+
+**Default**: 3 attempts, 1-8s exponential backoff
+
+**Use for**: Redis operations, task queuing, scheduler commands
+
+### 4. API Operations
+
+For external API calls:
+
+```python
+from bindu.utils.retry import retry_api_call
+
+@retry_api_call()
+async def call_external_service(self, data: dict) -> dict:
+    # External API call
+    # Retries: 4 attempts, 1-15s wait
+    pass
+
+@retry_api_call(max_attempts=6, max_wait=30.0)
+async def call_llm_api(self, prompt: str) -> str:
+    # LLM API with longer retry
+    # Custom: 6 attempts, 1-30s wait
+    pass
+```
+
+**Default**: 4 attempts, 1-15s exponential backoff
+
+**Use for**: LLM APIs, external services, HTTP requests
+
+---
+
+## Ad-hoc Retry
+
+For one-off retry logic without decorators:
+
+```python
+from bindu.utils.retry import execute_with_retry
+
+# Retry an async function
+result = await execute_with_retry(
+    some_async_function,
+    arg1, arg2,
+    kwarg1="value",
+    max_attempts=5,
+    min_wait=1.0,
+    max_wait=10.0
+)
+
+# Retry a sync function
+result = await execute_with_retry(
+    some_sync_function,
+    arg1, arg2,
+    max_attempts=3,
+    min_wait=0.5,
+    max_wait=5.0
+)
+```
+
+**Use for**: Dynamic retry logic, testing, special cases
+
+---
+
+## Retryable Exceptions
+
+By default, retries occur on:
+
+- `ConnectionError` - Network connection failures
+- `TimeoutError` - Operation timeouts
+- `asyncio.TimeoutError` - Async operation timeouts
+- Generic `Exception` - Catch-all (can be refined)
+
+### Custom Exception Handling
+
+You can customize which exceptions trigger retries:
+
+```python
+from tenacity import retry_if_exception_type
+
+@retry_worker_operation(
+    retry=retry_if_exception_type((ConnectionError, TimeoutError))
+)
+async def specific_retry(self) -> None:
+    # Only retry on connection/timeout errors
+    pass
+```
+
+---
+
+## Applied Retry Logic
+
+### Worker Operations
+
+**File**: `bindu/server/workers/manifest_worker.py`
+
+```python
+@retry_worker_operation()
+async def run_task(self, params: TaskSendParams) -> None:
+    """Execute task with automatic retry on transient failures."""
+    # Task execution logic
+    pass
+
+@retry_worker_operation(max_attempts=2)
+async def cancel_task(self, task_id: UUID) -> None:
+    """Cancel task with limited retry attempts."""
+    # Cancellation logic
+    pass
+```
+
+### PostgreSQL Storage
+
+**File**: `bindu/server/storage/postgres_storage.py`
+
+All database operations use `execute_with_retry()` via `_retry_on_connection_error()`:
+
+```python
+async def load_task(self, task_id: UUID) -> Task:
+    """Load task with automatic retry on connection errors."""
+    return await self._retry_on_connection_error(
+        self._load_task_impl, task_id
+    )
+```
+
+### Redis Scheduler
+
+**File**: `bindu/server/scheduler/redis_scheduler.py`
+
+```python
+@retry_scheduler_operation()
+async def run_task(self, task: Task) -> None:
+    """Queue task with retry on Redis connection issues."""
+    # Redis LPUSH operation
+    pass
+
+@retry_scheduler_operation()
+async def pause_task(self, task_id: UUID) -> None:
+    """Pause task with retry on transient failures."""
+    # Redis operation
+    pass
+```
+
+### In-Memory Storage
+
+**File**: `bindu/server/storage/memory_storage.py`
+
+```python
+@retry_storage_operation(max_attempts=3, min_wait=0.1, max_wait=1.0)
+async def load_task(self, task_id: UUID) -> Task:
+    """Load task with short retry window (in-memory)."""
+    # Memory operation
+    pass
+```
+
+### Application Initialization
+
+**File**: `bindu/server/applications.py`
+
+```python
+# Retry storage initialization
+storage = await execute_with_retry(
+    create_storage,
+    storage_config,
+    max_attempts=app_settings.retry.storage_max_attempts,
+    min_wait=app_settings.retry.storage_min_wait,
+    max_wait=app_settings.retry.storage_max_wait
+)
+
+# Retry scheduler initialization
+scheduler = await execute_with_retry(
+    create_scheduler,
+    scheduler_config,
+    max_attempts=app_settings.retry.scheduler_max_attempts,
+    min_wait=app_settings.retry.scheduler_min_wait,
+    max_wait=app_settings.retry.scheduler_max_wait
+)
+```
+
+---
+
+## Best Practices
+
+### 1. Use Appropriate Retry Settings
+
+Match retry settings to operation characteristics:
+
+```bash
+# Fast in-memory operations
+RETRY__STORAGE_MAX_ATTEMPTS=3
+RETRY__STORAGE_MIN_WAIT=0.1
+RETRY__STORAGE_MAX_WAIT=1.0
+
+# Network-dependent operations
+RETRY__API_MAX_ATTEMPTS=5
+RETRY__API_MIN_WAIT=2.0
+RETRY__API_MAX_WAIT=30.0
+```
+
+### 2. Override Defaults When Needed
+
+Customize retry behavior for specific operations:
+
+```python
+# Critical operation - more retries
+@retry_storage_operation(max_attempts=10)
+async def critical_update(self, data: dict) -> None:
+    pass
+
+# Quick operation - fewer retries
+@retry_worker_operation(max_attempts=2, max_wait=5.0)
+async def quick_task(self) -> None:
+    pass
+```
+
+### 3. Monitor Retry Attempts
+
+Watch logs for retry patterns:
+
+```
+[WARNING] Retry attempt 1/3 for run_task failed: ConnectionError
+[WARNING] Retry attempt 2/3 for run_task failed: ConnectionError
+[INFO] Retry succeeded on attempt 3/3 for run_task
+```
+
+### 4. Ensure Idempotency
+
+Make operations safe to retry:
+
+```python
+@retry_storage_operation()
+async def update_task_status(self, task_id: UUID, status: str) -> None:
+    # Idempotent: Setting status to same value is safe
+    await self.db.execute(
+        "UPDATE tasks SET status = :status WHERE task_id = :task_id",
+        {"status": status, "task_id": task_id}
+    )
+```
+
+### 5. Handle Non-Retryable Errors
+
+Distinguish between transient and permanent failures:
+
+```python
+from tenacity import retry_if_exception_type
+
+@retry_api_call(
+    retry=retry_if_exception_type((ConnectionError, TimeoutError))
+)
+async def call_api(self, data: dict) -> dict:
+    # Only retry on connection/timeout, not on validation errors
+    response = await api_client.post("/endpoint", json=data)
+    if response.status_code == 400:
+        raise ValueError("Invalid request")  # Don't retry
+    return response.json()
+```
+
+### 6. Set Reasonable Timeouts
+
+Combine retries with timeouts:
+
+```python
+import asyncio
+
+@retry_api_call(max_attempts=3)
+async def call_with_timeout(self, data: dict) -> dict:
+    try:
+        return await asyncio.wait_for(
+            api_client.post("/endpoint", json=data),
+            timeout=10.0  # 10 second timeout per attempt
+        )
+    except asyncio.TimeoutError:
+        raise  # Will be retried
+```
+
+### 7. Log Retry Context
+
+Add context to retry logs:
+
+```python
+from bindu.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+@retry_worker_operation()
+async def process_task(self, task_id: UUID) -> None:
+    logger.info("Processing task", task_id=str(task_id))
+    try:
+        # Task processing
+        pass
+    except Exception as e:
+        logger.error("Task processing failed", task_id=str(task_id), error=str(e))
+        raise  # Will be retried
+```
+
+---
+
+## Monitoring & Observability
+
+### Retry Logs
+
+Retry attempts are automatically logged:
+
+```
+[WARNING] Retry attempt 1/5 for load_task failed: ConnectionError: Database connection lost
+[INFO] Waiting 0.8s before retry attempt 2/5
+[WARNING] Retry attempt 2/5 for load_task failed: ConnectionError: Database connection lost
+[INFO] Waiting 1.9s before retry attempt 3/5
+[INFO] Retry succeeded on attempt 3/5 for load_task
+```
+
+### Key Metrics to Monitor
+
+1. **Retry Rate**: Percentage of operations requiring retries
+2. **Retry Success Rate**: Percentage of retries that eventually succeed
+3. **Average Retry Attempts**: Mean number of attempts per operation
+4. **Retry Duration**: Total time spent in retry loops
+5. **Failure Types**: Which exceptions trigger most retries
+
+### Integration with Sentry
+
+Retry failures are automatically captured by Sentry:
+
+```python
+# Failed retries appear in Sentry with full context
+# Including: operation name, attempt count, exception details
+```
+
+---
+
+## Troubleshooting
+
+### Too Many Retries
+
+**Symptom**: Operations taking too long due to excessive retries
+
+**Solutions**:
+1. Reduce `max_attempts`
+2. Decrease `max_wait` time
+3. Fix underlying issue causing failures
+4. Add circuit breaker pattern
+
+```bash
+# Reduce retry attempts
+RETRY__WORKER_MAX_ATTEMPTS=2
+RETRY__WORKER_MAX_WAIT=5.0
+```
+
+---
+
+### Retries Not Working
+
+**Symptom**: Operations failing without retry attempts
+
+**Solutions**:
+1. Check decorator is applied: `@retry_worker_operation()`
+2. Verify exception is retryable
+3. Check retry settings are loaded
+4. Review logs for retry messages
+
+```python
+# Ensure decorator is present
+@retry_worker_operation()  # ← Must be here
+async def my_operation(self) -> None:
+    pass
+```
+
+---
+
+### Thundering Herd
+
+**Symptom**: All instances retry simultaneously, overwhelming service
+
+**Solutions**:
+1. Jitter is automatic, but increase `max_wait`
+2. Stagger instance startup times
+3. Add circuit breaker
+4. Use rate limiting
+
+```bash
+# Increase max wait for more jitter spread
+RETRY__API_MAX_WAIT=30.0
+```
+
+---
+
+### Non-Idempotent Operations
+
+**Symptom**: Retries cause duplicate operations or data corruption
+
+**Solutions**:
+1. Make operations idempotent
+2. Use idempotency keys
+3. Check state before retry
+4. Reduce retry attempts
+
+```python
+@retry_storage_operation(max_attempts=2)  # Limit retries
+async def non_idempotent_operation(self, data: dict) -> None:
+    # Check if already processed
+    if await self.is_processed(data["id"]):
+        return
+    # Process only once
+    await self.process(data)
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+Test retry behavior:
+
+```python
+import pytest
+from bindu.utils.retry import retry_worker_operation
+
+@pytest.mark.asyncio
+async def test_retry_success_after_failure():
+    """Test that operation succeeds after transient failure."""
+    attempts = 0
+    
+    @retry_worker_operation(max_attempts=3, min_wait=0.1, max_wait=0.5)
+    async def flaky_operation():
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise ConnectionError("Transient failure")
+        return "success"
+    
+    result = await flaky_operation()
+    assert result == "success"
+    assert attempts == 3
+```
+
+### Integration Tests
+
+Test retry with real dependencies:
+
+```bash
+# Run retry tests
+uv run pytest tests/unit/test_retry.py -v
+
+# Run all tests
+uv run pytest tests/ -v
+```
+
+---
+
+## Performance Considerations
+
+### Retry Overhead
+
+Each retry adds latency:
+- **1 retry**: ~1-2s additional latency
+- **3 retries**: ~5-10s additional latency
+- **5 retries**: ~15-30s additional latency
+
+Balance reliability vs. latency based on your use case.
+
+### Memory Impact
+
+Minimal memory overhead:
+- Retry state: ~100 bytes per operation
+- Logging: ~500 bytes per retry attempt
+- Total: Negligible for most applications
+
+### CPU Impact
+
+Negligible CPU overhead:
+- Backoff calculation: ~0.01ms
+- Jitter generation: ~0.001ms
+- Logging: ~0.1ms
+
+---
+
+## Future Enhancements
+
+### 1. Circuit Breaker
+
+Prevent retry storms when service is down:
+
+```python
+# Planned feature
+@retry_with_circuit_breaker(
+    failure_threshold=5,
+    recovery_timeout=60.0
+)
+async def call_service(self) -> dict:
+    pass
+```
+
+### 2. Retry Metrics
+
+Export retry metrics to observability platforms:
+
+```python
+# Planned feature
+- retry_attempts_total
+- retry_success_rate
+- retry_duration_seconds
+```
+
+### 3. Adaptive Backoff
+
+Adjust backoff based on system load:
+
+```python
+# Planned feature
+@retry_with_adaptive_backoff()
+async def smart_retry(self) -> None:
+    pass
+```
+
+### 4. Retry Budget
+
+Limit total retry time across all operations:
+
+```python
+# Planned feature
+@retry_with_budget(max_total_time=30.0)
+async def bounded_retry(self) -> None:
+    pass
+```
+
+---
+
+## Comparison with Alternatives
+
+| Feature | Tenacity | Backoff | Retry | Custom |
+|---------|----------|---------|-------|--------|
+| Async support | ✅ Native | ⚠️ Limited | ❌ No | ⚠️ Manual |
+| Exponential backoff | ✅ Built-in | ✅ Built-in | ✅ Built-in | ⚠️ Manual |
+| Jitter | ✅ Built-in | ✅ Built-in | ❌ No | ⚠️ Manual |
+| Decorators | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ Manual |
+| Configurability | ✅ Extensive | ⚠️ Moderate | ⚠️ Basic | ✅ Full |
+| Logging | ✅ Integrated | ⚠️ Basic | ❌ No | ⚠️ Manual |
+| Best for | Production | Simple cases | Legacy code | Special needs |
+
+---
+
+## Conclusion
+
+Bindu's retry mechanism provides robust, automatic failure recovery for production deployments. It offers:
+
+- ✅ **Automatic retry**: Handle transient failures without code changes
+- ✅ **Smart backoff**: Exponential backoff with jitter prevents overload
+- ✅ **Full coverage**: Workers, storage, schedulers, and APIs
+- ✅ **Observability**: Integrated logging and monitoring
+- ✅ **Flexibility**: Configurable per environment and operation
+- ✅ **Battle-tested**: Built on Tenacity, used by thousands of projects
+
+For production Bindu agents, the retry mechanism ensures reliability and resilience in the face of infrastructure issues.
+
+---
+
+**Next Steps:**
+- [Sentry Error Tracking](../sentry/overview)
+- [PostgreSQL Storage](../storage/overview)
+- [Redis Scheduler](../scheduler/overview)
+- [Tenacity Documentation](https://tenacity.readthedocs.io)

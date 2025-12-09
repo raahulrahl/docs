@@ -163,6 +163,12 @@
                 "pages": [
                   "bindu/learn/sentry/overview"
                 ] 
+              },
+              {
+                "group": "Retry",
+                "pages": [
+                  "bindu/learn/retry/overview"
+                ] 
               }
 
             ]
