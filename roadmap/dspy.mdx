@@ -2,112 +2,205 @@
 title: 'DSPy Integration'
 ---
 
-## Overview
+## What is This?
 
-**The Problem:** Hand-crafted prompts are hard to optimize. How do we make agents learn from real user feedback and improve over time?
+**The Problem:** Writing good prompts for AI agents is hard. You write a prompt, test it, tweak it, test again... it takes forever.
 
-**The Solution:** Use Bindu's feedback API to collect real interactions, create golden datasets, and use DSPy to automatically optimize prompts.
+**The Solution:** Let your agent **learn from real users** and automatically improve its prompts over time.
 
-## The Workflow
+## Simple Analogy
+
+Imagine you're teaching someone to answer customer questions:
+
+**Old Way (Manual):**
+- You write instructions
+- They answer questions
+- You manually rewrite instructions based on what worked
+- Repeat forever ❌
+
+**New Way (DSPy + Bindu):**
+- You write basic instructions
+- They answer questions
+- Users say "good answer" or "bad answer"
+- The system automatically learns what works
+- Instructions improve themselves ✅
+
+## How It Works (Simple Steps)
 
 ```
-1. Agent runs with initial prompts
-2. Users provide feedback via Bindu's feedback API
-3. Collect good examples → Create golden dataset
-4. Export dataset for DSPy
-5. DSPy optimizes prompts automatically
-6. Deploy improved agent
+1. Your agent answers questions (with basic prompts)
+   ↓
+2. Users give feedback: 👍 "Good answer" or 👎 "Bad answer"
+   ↓
+3. Bindu collects all the 👍 good examples
+   ↓
+4. DSPy studies what made them good
+   ↓
+5. DSPy rewrites your prompts to be better
+   ↓
+6. Your agent is now smarter! 🎉
 ```
 
-## Why This Matters
+**In One Sentence:**
+Your agent learns from real users and gets better automatically.
 
-**Manual prompt engineering is slow.** You tweak prompts, test, repeat. With DSPy + Bindu feedback:
+## Why This is Amazing
 
-- **Learn from real usage** - Not synthetic examples
-- **Automatic optimization** - DSPy tunes prompts for you
-- **Continuous improvement** - Agents get better over time
-- **Data-driven** - Optimize based on actual performance
+**Without This:**
+- You spend hours tweaking prompts ⏰
+- You guess what works 🤔
+- Your agent stays the same forever 📉
+- You don't know if changes help or hurt ❓
 
-## How It Works
+**With This:**
+- Your agent learns from real users 👥
+- It improves automatically 🤖
+- It gets smarter over time 📈
+- You see exactly what works 📊
 
-### Step 1: Collect Feedback
+## How to Use It
+
+### Step 1: Users Give Feedback
+
+Bindu automatically tracks everything. Users just rate responses:
+
 ```python
 from bindu import bindufy
 
 agent = bindufy(my_agent, config, handler)
 
-# Bindu automatically tracks all interactions
-# Users provide feedback via API:
-# POST /feedback
-# {
-#   "task_id": "task-123",
-#   "rating": 5,
-#   "comment": "Perfect answer!"
-# }
+# That's it! Bindu tracks all interactions automatically.
+# Users can rate responses:
+# ⭐⭐⭐⭐⭐ "Perfect answer!"
+# ⭐⭐⭐⭐ "Good, but could be better"
+# ⭐⭐ "Not helpful"
 ```
 
-### Step 2: Create Golden Dataset
+**What happens:**
+- Every conversation is saved
+- Users rate how helpful the answer was
+- Bindu remembers which answers got 5 stars ⭐⭐⭐⭐⭐
+
+### Step 2: Collect the Good Examples
+
 ```python
 from bindu.dspy import create_golden_dataset
 
-# Export high-quality examples
+# Get all the 5-star examples
 golden_dataset = create_golden_dataset(
     agent_id="my-agent",
-    min_rating=4,  # Only 4+ star feedback
-    limit=100
+    min_rating=4,  # Only grab 4 and 5 star responses
+    limit=100       # Get 100 examples
 )
 
-# Exports to DSPy format
-golden_dataset.export("training_data.json")
+# Save them
+golden_dataset.export("good_examples.json")
 ```
 
-## Internal Prompt Versioning
+**What this does:**
+- Finds all your best responses (4+ stars)
+- Saves them in a file
+- These become your "teaching examples"
 
-Bindu automatically versions your prompts:
+### Step 3: Test the New Version Safely
+
+Bindu lets you test improved prompts without breaking things:
 
 ```python
-# Deploy multiple prompt versions
 agent = bindufy(my_agent, config, handler)
 
-# Version 1 (original)
-agent.deploy_prompt_version("v1", "original_prompts.json")
+# Your original prompts
+agent.deploy_prompt_version("v1", "original.json")
 
-# Version 2 (DSPy optimized)
-agent.deploy_prompt_version("v2", "optimized_agent.json")
+# DSPy's improved prompts
+agent.deploy_prompt_version("v2", "improved.json")
 
-# Route traffic to different versions
+# Test carefully: send 10% of users to new version
 agent.set_routing({
-    "v1": 0.2,  # 20% traffic to original
-    "v2": 0.8   # 80% traffic to optimized
+    "v1": 0.9,  # 90% get old version (safe)
+    "v2": 0.1   # 10% get new version (testing)
 })
 
-# Or A/B test
-agent.ab_test(
-    control="v1",
-    treatment="v2",
-    metric="user_satisfaction"
-)
+# If v2 is better, gradually increase:
+agent.set_routing({
+    "v1": 0.5,  # 50% old
+    "v2": 0.5   # 50% new
+})
+
+# If v2 is worse, easy to go back:
+agent.set_routing({
+    "v1": 1.0,  # Everyone back to old version
+    "v2": 0.0
+})
 ```
 
-**Benefits:**
-- **Safe rollouts** - Test optimized prompts with small traffic
-- **A/B testing** - Compare performance scientifically
-- **Easy rollback** - Revert if optimization doesn't work
-- **Version history** - Track prompt improvements over time
+**Why this is safe:**
+- Start with 10% of users (if it breaks, only 10% affected)
+- Compare which version gets better ratings
+- Gradually increase if it's working
+- Instantly rollback if something goes wrong
 
-## Use Cases
+## Real Examples
 
-**Customer Support** - Learn from 5-star responses  
-**Research Agents** - Optimize based on accurate answers  
-**Code Generation** - Improve from working code examples  
-**Data Analysis** - Learn from validated insights
+**Customer Support Agent:**
+- Answers customer questions
+- Customers rate answers
+- Learns which answers make customers happy
+- Gets better at helping customers
 
-## Status
+**Research Agent:**
+- Finds information for users
+- Users rate accuracy
+- Learns what "good research" looks like
+- Becomes more accurate over time
 
-📋 **Planned** - Feedback API integration with DSPy export
+**Code Helper:**
+- Writes code for developers
+- Developers say if code works
+- Learns what "good code" means
+- Writes better code next time
 
-## What's Next
+**Data Analyst:**
+- Analyzes data and gives insights
+- Users verify if insights are correct
+- Learns what makes good analysis
+- Provides better insights
 
-- **Learn** - Read about [DSPy](https://github.com/stanfordnlp/dspy)
-- **Discuss** - Share your optimization needs on [Discord](https://discord.gg/3w5zuYUuwt)
-- Request features
+## Current Status
+
+🚀 **In Progress** - We're building this now!
+
+## The Big Picture
+
+**Traditional AI Agent:**
+```
+You write prompts → Agent uses them forever → Never improves
+```
+
+**Bindu + DSPy Agent:**
+```
+You write basic prompts → Agent learns from users → Gets better automatically → Keeps improving
+```
+
+## Simple Summary
+
+**What DSPy Does:**
+Automatically rewrites your prompts to make them better
+
+**What Bindu Does:**
+Collects real user feedback so DSPy knows what "better" means
+
+**Together:**
+Your agent learns from real users and improves itself over time
+
+**You Get:**
+- Smarter agents without manual work ✅
+- Learning from real usage, not guessing ✅
+- Safe testing before full rollout ✅
+- Continuous improvement ✅
+
+## Want to Learn More?
+
+- **Technical Details** - Read about [DSPy](https://github.com/stanfordnlp/dspy)
+- **Ask Questions** - Join our [Discord](https://discord.gg/3w5zuYUuwt)
+- **Request Features** - Tell us what you need!

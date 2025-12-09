@@ -2,81 +2,181 @@
 title: 'Negotiation Support'
 ---
 
-## Overview
+## What is This?
 
-**The Story:** Humans negotiate everything—prices, resources, agreements. As LLM agents act on behalf of users, they need to negotiate too. But how well can they actually do it?
+Imagine two AI agents need to work together and split up tasks. How do they decide who does what?
 
-**The Solution:** [NegotiationArena](https://github.com/vinid/NegotiationArena) - A research platform that tests how well LLMs negotiate with each other through games and scenarios.
+**That's negotiation!** Just like humans negotiate prices or split chores, AI agents need to negotiate too.
 
-## Why This Matters
+## Simple Example
 
-When agents negotiate:
-- They split tasks among teams
-- They allocate limited resources
-- They resolve conflicts
-- They reach consensus without human intervention
+**Scenario:** Two agents need to complete 10 tasks, but each can only do 5.
 
-**The Research Question:** Can GPT-4 negotiate better than GPT-3.5? What strategies do they use? Do they cooperate or compete?
+**Without Negotiation:**
+- Both try to do the same tasks ❌
+- Some tasks never get done ❌
+- Chaos! ❌
 
-## What NegotiationArena Discovered
+**With Negotiation:**
+- Agent A: "I'll do tasks 1-5"
+- Agent B: "I'll do tasks 6-10"
+- Agreement reached ✅
+- All tasks completed ✅
 
-**"Babysitting" Effect:**
-When a strong model (GPT-4) negotiates with a weaker one (GPT-3.5), GPT-4 often guides the conversation to help the weaker model—but makes worse offers for itself in the process.
+## Why Do Agents Need to Negotiate?
 
-**Reasoning Patterns:**
-By analyzing agent conversations, researchers found LLMs use different negotiation strategies based on their initialization and opponent behavior.
+In the real world, agents need to:
 
-## Use Cases in Bindu
+**Share Resources:**
+- "I need the database for 5 minutes"
+- "Okay, I'll use it after you"
 
-**Task Allocation** - Agents negotiate who does what in a workflow  
-**Resource Sharing** - Agents bid for compute resources or API quotas  
-**Service Agreements** - Agents negotiate SLA terms and pricing  
-**Collaborative Planning** - Multi-agent teams reach consensus on approach
+**Split Work:**
+- "You handle customer emails"
+- "I'll handle phone calls"
 
-## Integration Plan
+**Resolve Conflicts:**
+- "We both want to use the API at the same time"
+- "Let's take turns"
 
-### Phase 1: NegotiationArena Integration
-- Integrate NegotiationArena framework into Bindu
-- Support game-based negotiation scenarios
-- Enable agent-to-agent negotiation via A2A protocol
+**Make Decisions:**
+- "Should we use approach A or B?"
+- "Let's vote and decide together"
 
-### Phase 2: Negotiation Protocols
+## What We Learned from Research
+
+Researchers tested how AI agents negotiate using [NegotiationArena](https://github.com/vinid/NegotiationArena).
+
+### Interesting Discovery: The "Babysitting" Effect
+
+**What happens:**
+- Smart agent (GPT-4) negotiates with less smart agent (GPT-3.5)
+- GPT-4 tries to help GPT-3.5 understand
+- GPT-4 ends up accepting worse deals for itself
+
+**It's like:**
+A chess master playing with a beginner and letting them win to keep it fun.
+
+### Different Strategies
+
+AI agents use different negotiation styles:
+
+**Cooperative:**
+- "Let's both win"
+- "How can we help each other?"
+
+**Competitive:**
+- "I want the best deal for me"
+- "You take what's left"
+
+**Adaptive:**
+- Starts cooperative
+- Becomes competitive if needed
+
+## Real-World Examples
+
+**Example 1: Task Splitting**
+- 3 agents need to process 100 files
+- They negotiate: "I'll do 40, you do 30, you do 30"
+- Work gets done faster
+
+**Example 2: Resource Sharing**
+- 5 agents need to use the same database
+- They negotiate time slots: "I'll use it 9-10am, you use it 10-11am"
+- No conflicts, everyone gets a turn
+
+**Example 3: Making Decisions**
+- Team of agents needs to choose a solution
+- They negotiate and vote
+- Reach agreement without human help
+
+**Example 4: Pricing**
+- Agent A offers a service
+- Agent B wants to use it
+- They negotiate a fair price automatically
+
+## How It Will Work in Bindu
+
+### Simple Example Code
+
 ```python
 from bindu.negotiation import NegotiationGame
 
-# Create negotiation scenario
+# Set up a negotiation between two agents
 game = NegotiationGame(
-    scenario="task_allocation",
+    scenario="split_tasks",
     agents=[agent_a, agent_b],
     rules={
-        "max_rounds": 5,
-        "timeout": timedelta(minutes=2)
+        "max_rounds": 5,      # Try 5 times to reach agreement
+        "timeout": "2 minutes" # Give up after 2 minutes
     }
 )
 
-# Run negotiation
+# Let them negotiate
 result = await game.play()
+
+# See what they agreed on
 print(f"Agreement: {result.agreement}")
-print(f"Payoffs: {result.payoffs}")
+print(f"Agent A gets: {result.agent_a_tasks}")
+print(f"Agent B gets: {result.agent_b_tasks}")
 ```
 
-### Phase 3: Evaluation & Analytics
-- Track negotiation success rates
-- Analyze agent strategies
-- Measure win rates and payoffs
-- Export conversation logs for analysis
+### What You'll Get
 
-### Phase 4: Production Features
-- Automatic negotiation for resource allocation
-- Built-in negotiation strategies (cooperative, competitive, adaptive)
-- Agreement enforcement with cryptographic commitments
+**Built-in Strategies:**
+- Cooperative ("let's both win")
+- Competitive ("I want the best deal")
+- Adaptive ("adjust based on situation")
 
-## Status
+**Automatic Tracking:**
+- See which negotiations succeeded
+- See which strategies work best
+- Learn from past negotiations
 
-📋 **Planned** - Research integration and protocol design
+**Safety Features:**
+- Agreements are binding (can't back out)
+- Time limits (no endless negotiations)
+- Fair rules (no cheating)
 
-## What's Next
+## Current Status
 
-- **Learn** - Read the [NegotiationArena paper](https://arxiv.org/abs/2402.05863)
-- **Discuss** - Share your negotiation use cases on [Discord](https://discord.gg/3w5zuYUuwt)
-- **Experiment** - Try [NegotiationArena](https://github.com/vinid/NegotiationArena) yourself
+🚀 **In Progress** - We're building this now!
+
+## The Big Picture
+
+**Without Negotiation:**
+```
+Agent A: "I'm doing task 1"
+Agent B: "I'm doing task 1 too"
+→ Conflict! ❌
+→ Human has to step in and decide ❌
+```
+
+**With Negotiation:**
+```
+Agent A: "I want task 1"
+Agent B: "I want task 1 too"
+→ They negotiate ✅
+→ Agent A gets task 1, Agent B gets task 2 ✅
+→ Problem solved automatically! ✅
+```
+
+## Simple Summary
+
+**What Negotiation Does:**
+Lets AI agents make deals and agreements with each other
+
+**Why It's Useful:**
+- Agents can work together without human help
+- Automatically split work fairly
+- Resolve conflicts on their own
+- Make group decisions
+
+**Real Benefit:**
+Your agents become a team that can organize themselves
+
+## Want to Learn More?
+
+- **Research Paper** - [NegotiationArena paper](https://arxiv.org/abs/2402.05863) (technical)
+- **Ask Questions** - Join our [Discord](https://discord.gg/3w5zuYUuwt)
+- **Try It** - Experiment with [NegotiationArena](https://github.com/vinid/NegotiationArena) yourself
