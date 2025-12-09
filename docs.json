@@ -157,6 +157,12 @@
                 "pages": [
                   "bindu/learn/scheduler/overview"
                 ] 
+              },
+              {
+                "group": "Sentry",
+                "pages": [
+                  "bindu/learn/sentry/overview"
+                ] 
               }
 
             ]
