@@ -1,7 +1,48 @@
 ---
-title: 'Bindu v0.3.19 Changelog'
+title: 'Bindu Changelog'
 ---
 
+## v2025.50.5 - Latest Release
+
+### ✨ New Features
+
+**Observability & Monitoring**
+- **Sentry Integration** - Comprehensive error tracking and performance monitoring
+  - Configurable SentrySettings with DSN, environment, traces sample rate, and profiles sample rate
+  - SentryConfig dataclass for flexible configuration
+  - Automatic initialization in BinduApplication with config override support
+  - Helper functions in observability module for easy setup
+
+**Scheduler Infrastructure**
+- **Redis Scheduler Implementation** - Production-ready distributed task scheduling
+  - RedisScheduler with connection pooling and blocking pop operations
+  - Configurable Redis backend (host, port, password, db, queue_name)
+  - Support for both memory and Redis backends via factory pattern
+  - UUID serialization/deserialization for task parameters
+  - Comprehensive error handling and retry logic
+  - Password masking for secure logging
+
+**Reliability & Resilience**
+- **Tenacity-based Retry Mechanism** - Configurable retry logic for critical operations
+  - RetrySettings with separate configurations for worker, storage, scheduler, and API operations
+  - Retry decorators: `retry_worker_operation`, `retry_storage_operation`, `retry_scheduler_operation`
+  - `execute_with_retry` utility function for flexible async operations
+  - Exponential backoff strategy
+  - Applied to ManifestWorker operations
+
+**Storage & Database**
+- **PostgreSQL Storage Enhancements** - Improved security and reliability
+  - Password masking utility for safe database URL logging
+  - Enhanced error handling and connection management
+  - Fixed JSONB to JSON cast for task_ids aggregation in contexts query
+  - Improved foreign key constraint handling (context creation before task creation)
+  - Retry mechanism integration for storage operations
+
+---
+
+## v0.3.19
+
+### Summary
 - Research agent examples simplified with DuckDuckGo integration
 - X402 payment infrastructure with browser-based paywall UI
 - Task manager refactored into specialized handlers
