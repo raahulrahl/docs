@@ -176,24 +176,18 @@
                   "bindu/learn/notification/overview"
                 ] 
               },
-
+              {
+                "group": "DSPy",
+                "pages": [
+                  "bindu/learn/dspy/overview"
+                ] 
+              }
             ]
           },
           {
             "group": "How to",
             "pages": [
               "bindu/how-to/install"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "sapthame",
-        "groups": [
-          {
-            "group": "Docs",
-            "pages": [
-              "sapthame/introduction/overview"
             ]
           }
         ]
