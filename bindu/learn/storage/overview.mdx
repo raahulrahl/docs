@@ -1,11 +1,11 @@
 ---
 title: 'PostgreSQL Storage'
-description: 'Production-ready persistent storage for Bindu agents'
+description: 'Production-ready persistent storage for Bindu agents with multi-tenancy support'
 ---
 
 # PostgreSQL Storage
 
-PostgreSQL is the recommended persistent storage backend for Bindu agents in production environments. It provides reliable, scalable, and ACID-compliant data storage for agent tasks, conversations, and state management.
+PostgreSQL is the recommended persistent storage backend for Bindu agents in production environments. It provides reliable, scalable, and ACID-compliant data storage for agent tasks, conversations, state management, and DSPy prompt optimization.
 
 ---
 
@@ -19,7 +19,7 @@ Unlike in-memory storage solutions, PostgreSQL ensures your agent's data survive
 - System upgrades and maintenance windows
 - Power failures and infrastructure issues
 
-Your agent's conversation history, task states, and context are safely persisted to disk and can be recovered instantly.
+Your agent's conversation history, task states, context, and DSPy prompts are safely persisted to disk and can be recovered instantly.
 
 ### 2. Distributed & Multi-Instance Deployments
 
@@ -40,7 +40,28 @@ Bindu's PostgreSQL storage is specifically designed for the [Hybrid Agent Patter
 - **Task refinements**: Agents can pause, request human input, and resume with full context
 - **Incremental updates**: Supports appending messages without rewriting entire conversations
 
-### 4. Enterprise-Grade Features
+### 4. Multi-Tenant Isolation with DIDs
+
+Bindu supports **DID-based multi-tenancy** through PostgreSQL schemas:
+
+- **Complete data isolation**: Each DID (Decentralized Identifier) gets its own PostgreSQL schema
+- **Separate tables per agent**: Tasks, contexts, feedback, and prompts are isolated by DID
+- **Zero data leakage**: Different agents cannot access each other's data
+- **Scalable architecture**: Supports unlimited agents/tenants in a single database
+
+Perfect for SaaS deployments, multi-agent systems, and enterprise environments requiring strict data boundaries.
+
+### 5. DSPy Integration & Prompt Management
+
+Native support for DSPy-powered prompt optimization:
+
+- **Prompt versioning**: Store multiple prompt versions with traffic allocation
+- **A/B testing**: Track active and candidate prompts with automatic canary deployment
+- **Feedback collection**: Link user feedback to tasks for training optimization
+- **Metrics calculation**: On-demand computation of prompt performance metrics
+- **Automatic rollback**: Support for promoting winning prompts or rolling back failed ones
+
+### 6. Enterprise-Grade Features
 
 PostgreSQL provides capabilities essential for serious deployments:
 
@@ -48,18 +69,19 @@ PostgreSQL provides capabilities essential for serious deployments:
 - **JSONB Support**: Efficient storage and querying of A2A protocol objects (messages, tasks, artifacts)
 - **Connection Pooling**: Handles hundreds of concurrent connections efficiently
 - **Automatic Retries**: Built-in resilience against transient network failures
-- **Indexed Queries**: Fast lookups by task ID, conversation ID, or timestamp
-- **Full-Text Search**: Query conversation history and task metadata
+- **GIN Indexes**: Fast JSONB queries on history, artifacts, and metadata
+- **Foreign Key Constraints**: Referential integrity between tasks, contexts, and prompts
 
-### 5. Long-Term Data Retention
+### 7. Long-Term Data Retention
 
 PostgreSQL excels at storing and querying historical data:
 - Analyze agent behavior over time
 - Audit trails for compliance and debugging
-- Training data collection for model improvements
+- Training data collection for DSPy prompt improvements
 - Business intelligence and analytics
+- Webhook configuration persistence for long-running tasks
 
-### 6. Battle-Tested Reliability
+### 8. Battle-Tested Reliability
 
 PostgreSQL has been the gold standard for relational databases for over 30 years:
 - Used by companies like Apple, Instagram, Spotify, and Reddit
@@ -77,44 +99,65 @@ PostgreSQL has been the gold standard for relational databases for over 30 years
 - Building enterprise applications
 - Implementing the Hybrid Agent Pattern
 - Scaling horizontally with load balancers
+- Using DSPy for prompt optimization
+- Need multi-tenant isolation (multiple agents/DIDs)
+- Require A/B testing for prompts
 
 ❌ **Consider alternatives when:**
 - Prototyping or local development (use in-memory storage)
 - Single-instance deployments with no persistence needs
-- Extremely high-throughput, low-latency requirements (consider Redis for task queuing)
+- Extremely high-throughput, low-latency queuing (consider Redis for task scheduler)
+
+---
 
 ## Architecture
 
-Bindu's PostgreSQL implementation uses:
+Bindu's PostgreSQL implementation uses SQLAlchemy with imperative mapping:
 
 ```
-┌─────────────────────────────────────────┐
-│         Bindu Agent Instances           │
-│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐   │
-│  │ Pod1│  │ Pod2│  │ Pod3│  │ Pod4│   │
-│  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘   │
-└─────┼────────┼────────┼────────┼────────┘
-      │        │        │        │
-      └────────┴────────┴────────┘
-                  │
-         ┌────────▼────────┐
-         │   PostgreSQL    │
-         │   Connection    │
-         │      Pool       │
-         └────────┬────────┘
-                  │
-         ┌────────▼────────┐
-         │   PostgreSQL    │
-         │    Database     │
-         │                 │
-         │  ┌───────────┐  │
-         │  │   Tasks   │  │
-         │  ├───────────┤  │
-         │  │ Contexts  │  │
-         │  ├───────────┤  │
-         │  │ Feedback  │  │
-         │  └───────────┘  │
-         └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│              Bindu Agent Instances (Multi-DID)             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │ Agent A  │  │ Agent B  │  │ Agent C  │  │ Agent D  │  │
+│  │ DID: a1  │  │ DID: b1  │  │ DID: a1  │  │ DID: c1  │  │
+│  └─────┬────┘  └─────┬────┘  └─────┬────┘  └─────┬────┘  │
+└────────┼─────────────┼─────────────┼─────────────┼────────┘
+         │             │             │             │
+         └─────────────┴─────────────┴─────────────┘
+                         │
+                ┌────────▼────────┐
+                │   PostgreSQL    │
+                │   Connection    │
+                │      Pool       │
+                └────────┬────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │      PostgreSQL Database       │
+         │                               │
+         │  Schema: did_bindu_a1_...     │
+         │  ┌─────────────────────────┐  │
+         │  │ tasks                   │  │
+         │  │ contexts                │  │
+         │  │ task_feedback           │  │
+         │  │ webhook_configs         │  │
+         │  │ agent_prompts           │  │
+         │  └─────────────────────────┘  │
+         │                               │
+         │  Schema: did_bindu_b1_...     │
+         │  ┌─────────────────────────┐  │
+         │  │ tasks                   │  │
+         │  │ contexts                │  │
+         │  │ task_feedback           │  │
+         │  │ webhook_configs         │  │
+         │  │ agent_prompts           │  │
+         │  └─────────────────────────┘  │
+         │                               │
+         │  Schema: public (legacy)      │
+         │  ┌─────────────────────────┐  │
+         │  │ tasks (shared)          │  │
+         │  │ contexts (shared)       │  │
+         │  └─────────────────────────┘  │
+         └───────────────────────────────┘
 ```
 
 ### Key Components
@@ -124,22 +167,31 @@ Bindu's PostgreSQL implementation uses:
 3. **Imperative Mapping**: Uses protocol TypedDicts directly (no duplicate ORM models)
 4. **JSONB Columns**: Stores A2A protocol objects efficiently
 5. **Alembic Migrations**: Version-controlled schema changes
+6. **Schema-based Multi-tenancy**: Each DID gets isolated PostgreSQL schema
+7. **Automatic Schema Initialization**: Creates tables on-demand for new DIDs
+
+---
 
 ## Configuration
 
 ### Environment Variables
 
 ```bash
-# PostgreSQL connection URL
+# PostgreSQL connection URL (required)
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/bindu
 
 # Optional: Connection pool settings
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
-DB_POOL_TIMEOUT=30
+POSTGRES_POOL_MIN=5
+POSTGRES_POOL_MAX=20
+POSTGRES_TIMEOUT=30
+POSTGRES_COMMAND_TIMEOUT=60
+
+# Optional: DID for multi-tenant schema isolation
+# If not set, uses 'public' schema (legacy behavior)
+BINDU_DID=did:bindu:mycompany:agent1:v1
 ```
 
-### Example Configuration
+### Configuration with DID (Multi-tenancy)
 
 ```python
 from bindu.penguin.bindufy import bindufy
@@ -147,7 +199,8 @@ from bindu.penguin.bindufy import bindufy
 config = {
     "author": "your.email@example.com",
     "name": "production_agent",
-    "description": "Production agent with PostgreSQL storage",
+    "description": "Production agent with isolated PostgreSQL storage",
+    "did": "did:bindu:mycompany:sales-agent:v1",  # Enables schema isolation
     "deployment": {
         "url": "http://localhost:3773",
         "expose": True
@@ -166,23 +219,64 @@ def handler(messages):
 bindufy(config, handler)
 ```
 
+**How DID Isolation Works:**
+1. DID `did:bindu:mycompany:sales-agent:v1` is sanitized to `did_bindu_mycompany_sales_agent_v1`
+2. A PostgreSQL schema with this name is created automatically
+3. All tables (tasks, contexts, etc.) are created within this schema
+4. The agent only accesses data in its own schema
+5. Other agents with different DIDs cannot see this data
+
+### Configuration without DID (Legacy/Shared)
+
+```python
+config = {
+    "storage": {
+        "type": "postgres",
+        "url": "postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu"
+    }
+}
+# Uses 'public' schema - all agents share the same tables
+```
+
+---
+
 ## Database Schema
 
 ### Tasks Table
 
-Stores agent tasks with their current state:
+Stores agent tasks with their current state and history:
 
 ```sql
 CREATE TABLE tasks (
-    task_id UUID PRIMARY KEY,
-    conversation_id UUID NOT NULL,
-    status VARCHAR(20) NOT NULL,  -- 'working', 'input-required', 'completed', etc.
-    state JSONB,                   -- Full task state (A2A protocol)
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    INDEX idx_conversation_id (conversation_id),
-    INDEX idx_status (status)
+    id UUID PRIMARY KEY,                           -- Task unique identifier
+    context_id UUID NOT NULL,                      -- Foreign key to contexts
+    prompt_id INTEGER,                             -- Foreign key to agent_prompts (for DSPy)
+    kind VARCHAR(50) NOT NULL DEFAULT 'task',      -- Task type
+    state VARCHAR(50) NOT NULL,                    -- Current state (submitted, working, completed, etc.)
+    state_timestamp TIMESTAMP WITH TIME ZONE,      -- When state was last updated
+    history JSONB NOT NULL DEFAULT '[]',           -- Message history (A2A protocol)
+    artifacts JSONB DEFAULT '[]',                  -- Task artifacts
+    metadata JSONB DEFAULT '{}',                   -- Custom metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT fk_tasks_context 
+        FOREIGN KEY (context_id) REFERENCES contexts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tasks_prompt 
+        FOREIGN KEY (prompt_id) REFERENCES agent_prompts(id) ON DELETE SET NULL
 );
+
+-- Indexes for performance
+CREATE INDEX idx_tasks_context_id ON tasks(context_id);
+CREATE INDEX idx_tasks_prompt_id ON tasks(prompt_id);
+CREATE INDEX idx_tasks_state ON tasks(state);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+CREATE INDEX idx_tasks_updated_at ON tasks(updated_at);
+
+-- GIN indexes for JSONB queries
+CREATE INDEX idx_tasks_history_gin ON tasks USING GIN(history);
+CREATE INDEX idx_tasks_metadata_gin ON tasks USING GIN(metadata);
+CREATE INDEX idx_tasks_artifacts_gin ON tasks USING GIN(artifacts);
 ```
 
 ### Contexts Table
@@ -191,61 +285,152 @@ Stores conversation contexts and message history:
 
 ```sql
 CREATE TABLE contexts (
-    conversation_id UUID PRIMARY KEY,
-    context JSONB NOT NULL,        -- Full conversation context
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    id UUID PRIMARY KEY,                           -- Context unique identifier
+    context_data JSONB NOT NULL DEFAULT '{}',      -- Context metadata
+    message_history JSONB DEFAULT '[]',            -- Full message history
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Indexes for performance
+CREATE INDEX idx_contexts_created_at ON contexts(created_at);
+CREATE INDEX idx_contexts_updated_at ON contexts(updated_at);
+
+-- GIN indexes for JSONB queries
+CREATE INDEX idx_contexts_data_gin ON contexts USING GIN(context_data);
+CREATE INDEX idx_contexts_history_gin ON contexts USING GIN(message_history);
 ```
 
 ### Task Feedback Table
 
-Stores human feedback for task refinements:
+Stores user feedback for tasks (used by DSPy for training):
 
 ```sql
 CREATE TABLE task_feedback (
     id SERIAL PRIMARY KEY,
-    task_id UUID NOT NULL REFERENCES tasks(task_id),
-    feedback JSONB NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    INDEX idx_task_id (task_id)
+    task_id UUID NOT NULL,                         -- Foreign key to tasks
+    feedback_data JSONB NOT NULL,                  -- Feedback content (ratings, scores, etc.)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT fk_task_feedback_task 
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
+
+-- Indexes
+CREATE INDEX idx_task_feedback_task_id ON task_feedback(task_id);
+CREATE INDEX idx_task_feedback_created_at ON task_feedback(created_at);
 ```
+
+### Webhook Configs Table
+
+Stores webhook configurations for long-running task notifications:
+
+```sql
+CREATE TABLE webhook_configs (
+    task_id UUID PRIMARY KEY,                      -- One config per task
+    config JSONB NOT NULL,                         -- Webhook configuration
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT fk_webhook_configs_task 
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+-- Index
+CREATE INDEX idx_webhook_configs_created_at ON webhook_configs(created_at);
+```
+
+### Agent Prompts Table
+
+Stores DSPy-optimized prompts with traffic allocation for A/B testing:
+
+```sql
+-- Create prompt status enum
+CREATE TYPE promptstatus AS ENUM ('active', 'candidate', 'deprecated', 'rolled_back');
+
+CREATE TABLE agent_prompts (
+    id SERIAL PRIMARY KEY,
+    prompt_text TEXT NOT NULL,                     -- The prompt content
+    status promptstatus NOT NULL,                  -- Prompt lifecycle status
+    traffic NUMERIC(5, 4) NOT NULL DEFAULT 0,      -- Traffic allocation (0.0 to 1.0)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT chk_agent_prompts_traffic_range 
+        CHECK (traffic >= 0 AND traffic <= 1)
+);
+
+-- Partial unique indexes: Only one active and one candidate allowed
+CREATE UNIQUE INDEX uq_agent_prompts_status_active 
+    ON agent_prompts(status) WHERE status = 'active';
+    
+CREATE UNIQUE INDEX uq_agent_prompts_status_candidate 
+    ON agent_prompts(status) WHERE status = 'candidate';
+```
+
+**Prompt Lifecycle:**
+- `active`: Current production prompt (typically 60-100% traffic)
+- `candidate`: New optimized prompt being tested (typically 0-40% traffic)
+- `deprecated`: Old prompt that was replaced (0% traffic)
+- `rolled_back`: Failed candidate that underperformed (0% traffic)
+
+---
 
 ## Performance Considerations
 
 ### Indexing Strategy
 
 Bindu automatically creates indexes on:
-- `task_id` (primary key)
-- `conversation_id` (for context lookups)
-- `status` (for filtering tasks by state)
-- `created_at` and `updated_at` (for time-based queries)
+- **Primary keys**: `id` columns (UUID and SERIAL)
+- **Foreign keys**: `context_id`, `task_id`, `prompt_id`
+- **State columns**: `state`, `status`
+- **Timestamp columns**: `created_at`, `updated_at`, `state_timestamp`
+- **GIN indexes**: JSONB columns (`history`, `artifacts`, `metadata`, `context_data`, `message_history`)
+
+GIN (Generalized Inverted Index) indexes enable fast queries on JSONB content:
+```sql
+-- Fast queries on JSONB fields
+SELECT * FROM tasks WHERE history @> '[{"role": "user"}]';
+SELECT * FROM tasks WHERE metadata->>'priority' = 'high';
+```
 
 ### Connection Pooling
 
 The default pool configuration:
-- **Pool size**: 20 connections
-- **Max overflow**: 10 additional connections
-- **Timeout**: 30 seconds
+- **Pool min**: 5 connections (configurable via `POSTGRES_POOL_MIN`)
+- **Pool max**: 20 connections (configurable via `POSTGRES_POOL_MAX`)
+- **Timeout**: 30 seconds (configurable via `POSTGRES_TIMEOUT`)
+- **Command timeout**: 60 seconds (configurable via `POSTGRES_COMMAND_TIMEOUT`)
+- **Pool pre-ping**: Enabled (verifies connections before use)
 
 Adjust based on your workload:
-```python
+```bash
 # High-throughput configuration
-"storage": {
-    "type": "postgres",
-    "url": "postgresql+asyncpg://...",
-    "pool_size": 50,
-    "max_overflow": 20
-}
+export POSTGRES_POOL_MIN=10
+export POSTGRES_POOL_MAX=50
+export POSTGRES_TIMEOUT=60
 ```
 
 ### Query Optimization
 
-- Uses `JSONB` for efficient JSON operations
-- Leverages PostgreSQL's native JSON indexing
-- Batch operations where possible
-- Prepared statements for repeated queries
+- Uses **JSONB** for efficient JSON operations (binary format, indexed)
+- Leverages PostgreSQL's **native JSON indexing** (GIN indexes)
+- **Batch operations** where possible (upserts, bulk inserts)
+- **Prepared statements** for repeated queries
+- **Connection reuse** via SQLAlchemy pooling
+- **Async operations** for non-blocking I/O
+- **Foreign key constraints** for referential integrity
+
+### Schema Isolation Performance
+
+Each DID gets its own schema, which provides:
+- ✅ **Complete data isolation** (security benefit)
+- ✅ **Independent schema migrations** (per-tenant flexibility)
+- ✅ **Query performance** (smaller table scans within schema)
+- ⚠️ **Connection overhead** (uses `SET search_path` on each connection)
+
+For most deployments, schema isolation has minimal performance impact while providing significant security benefits.
+
+---
 
 ## Monitoring & Observability
 
@@ -279,7 +464,7 @@ await storage.health_check()
 Bindu uses [Alembic](https://alembic.sqlalchemy.org/) for schema migrations:
 
 ```bash
-# Apply latest migrations
+# Apply latest migrations to public schema
 alembic upgrade head
 
 # Create a new migration
@@ -287,7 +472,43 @@ alembic revision --autogenerate -m "Add new feature"
 
 # Rollback one version
 alembic downgrade -1
+
+# View migration history
+alembic history
+
+# Check current version
+alembic current
 ```
+
+### Multi-Tenant Schema Migrations
+
+When using DIDs, schemas are created automatically on first connection:
+
+1. Agent connects with DID `did:bindu:company:agent:v1`
+2. Schema name is sanitized to `did_bindu_company_agent_v1`
+3. System checks if schema exists
+4. If not, creates schema and all tables automatically
+5. Sets `search_path` to use this schema for all queries
+
+**Manual schema creation (if needed):**
+```python
+from bindu.utils.schema_manager import initialize_did_schema, sanitize_did_for_schema
+from sqlalchemy.ext.asyncio import create_async_engine
+
+engine = create_async_engine("postgresql+asyncpg://user:pass@localhost/bindu")
+schema_name = sanitize_did_for_schema("did:bindu:company:agent:v1")
+
+await initialize_did_schema(engine, schema_name, create_tables=True)
+```
+
+### Recent Migrations
+
+- **20251207_0001**: Initial schema (tasks, contexts, task_feedback)
+- **20251207_0905**: Added foreign key constraints
+- **20250614_0001**: Added webhook_configs table
+- **20260119_0001**: Added schema support for DID-based multi-tenancy and agent_prompts table
+
+---
 
 ## Security Best Practices
 
@@ -326,36 +547,172 @@ archive_command = 'cp %p /backup/wal/%f'
 
 ### Common Issues
 
-**Connection Pool Exhausted**
-```
-Solution: Increase pool_size or investigate connection leaks
-```
+<AccordionGroup>
+  <Accordion title="Connection Pool Exhausted">
+    **Problem:** `TimeoutError: QueuePool limit exceeded`
+    
+    **Solutions:**
+    - Increase `POSTGRES_POOL_MAX` (e.g., to 50)
+    - Check for connection leaks (ensure sessions are properly closed)
+    - Verify concurrent request load matches pool size
+    - Monitor active connections: `SELECT count(*) FROM pg_stat_activity;`
+  </Accordion>
 
-**Slow Queries**
-```
-Solution: Check EXPLAIN ANALYZE, add indexes, optimize JSONB queries
-```
+  <Accordion title="Slow Queries">
+    **Problem:** Queries taking > 1 second
+    
+    **Solutions:**
+    - Use `EXPLAIN ANALYZE` to identify bottlenecks
+    - Ensure GIN indexes exist on JSONB columns
+    - Check for missing indexes on foreign keys
+    - Optimize JSONB queries using containment operators (`@>`, `?`)
+    - Consider pg_stat_statements extension for query analysis
+  </Accordion>
 
-**Lock Contention**
-```
-Solution: Reduce transaction duration, use optimistic locking
-```
+  <Accordion title="Lock Contention">
+    **Problem:** Transactions waiting on locks
+    
+    **Solutions:**
+    - Reduce transaction duration (keep transactions short)
+    - Use optimistic locking patterns
+    - Monitor locks: `SELECT * FROM pg_locks WHERE NOT granted;`
+    - Consider using `SELECT FOR UPDATE SKIP LOCKED` for concurrent processing
+  </Accordion>
 
-**Disk Space**
-```
-Solution: Set up VACUUM, archive old data, monitor growth
-```
+  <Accordion title="Disk Space Issues">
+    **Problem:** Database growing too large
+    
+    **Solutions:**
+    - Set up regular `VACUUM` (auto-vacuum should handle this)
+    - Archive old tasks and contexts to separate storage
+    - Monitor table sizes: `SELECT pg_size_pretty(pg_total_relation_size('tasks'));`
+    - Consider partitioning large tables by date
+  </Accordion>
 
-## Comparison with Alternatives
+  <Accordion title="Schema Not Found (DID)">
+    **Problem:** `schema "did_bindu_..." does not exist`
+    
+    **Solutions:**
+    - Ensure DID is properly configured in agent config
+    - Check that automatic schema initialization is enabled
+    - Manually create schema using `initialize_did_schema()`
+    - Verify database user has CREATE SCHEMA permission
+  </Accordion>
+
+  <Accordion title="Foreign Key Constraint Violations">
+    **Problem:** `violates foreign key constraint`
+    
+    **Solutions:**
+    - Ensure context exists before creating tasks
+    - Use cascade deletes appropriately
+    - Check that prompt_id references valid agent_prompts entry
+    - Verify data integrity between related tables
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Features Comparison
 
 | Feature | PostgreSQL | In-Memory | Redis |
 |---------|-----------|-----------|-------|
 | Persistence | ✅ Disk | ❌ RAM only | ⚠️ Optional |
 | Multi-instance | ✅ Yes | ❌ No | ✅ Yes |
 | ACID transactions | ✅ Yes | ⚠️ Limited | ❌ No |
-| Complex queries | ✅ SQL | ❌ No | ⚠️ Limited |
+| Complex queries | ✅ SQL + JSONB | ❌ No | ⚠️ Limited |
 | Scalability | ✅ Vertical + Horizontal | ⚠️ Vertical only | ✅ Horizontal |
+| Multi-tenancy (DIDs) | ✅ Schema isolation | ❌ No | ❌ No |
+| DSPy support | ✅ Full (prompts + feedback) | ❌ No | ❌ No |
+| Webhook persistence | ✅ Yes | ❌ No | ⚠️ Partial |
 | Best for | Production, Enterprise | Development, Testing | Caching, Queues |
+
+---
+
+## Advanced Features
+
+### DSPy Prompt Management
+
+PostgreSQL is the only storage backend that supports DSPy's prompt optimization features:
+
+```python
+# Store optimized prompts with A/B testing
+await storage.insert_prompt(
+    text="You are a helpful AI assistant...",
+    status="candidate",
+    traffic=0.2  # 20% of traffic
+)
+
+# Get active prompt with metrics
+active = await storage.get_active_prompt()
+print(f"Active prompt traffic: {active['traffic']}")
+print(f"Average feedback: {active['average_feedback_score']}")
+
+# Update traffic allocation for canary deployment
+await storage.update_prompt_traffic(prompt_id=2, traffic=0.4)
+```
+
+See [DSPy Integration](/bindu/learn/dspy/overview) for more details.
+
+### Webhook Configuration Persistence
+
+Long-running tasks can persist webhook configs for notifications:
+
+```python
+from bindu.common.protocol.types import PushNotificationConfig
+
+# Save webhook config for task
+webhook_config = {
+    "url": "https://api.example.com/webhook",
+    "headers": {"Authorization": "Bearer token"},
+    "on_complete": True
+}
+
+await storage.save_webhook_config(task_id, webhook_config)
+
+# Load webhook config (e.g., after server restart)
+config = await storage.load_webhook_config(task_id)
+
+# Delete when no longer needed
+await storage.delete_webhook_config(task_id)
+```
+
+### Task Feedback Collection
+
+Collect user feedback for training and analytics:
+
+```python
+# Store feedback for a task
+await storage.store_task_feedback(
+    task_id=task.id,
+    feedback_data={
+        "rating": 5,
+        "helpful": True,
+        "comment": "Great response!"
+    }
+)
+
+# Retrieve feedback
+feedback_list = await storage.get_task_feedback(task_id)
+
+# Fetch tasks with feedback (for DSPy training)
+tasks_with_feedback = await storage.fetch_tasks_with_feedback(limit=1000)
+for task in tasks_with_feedback:
+    print(f"Task {task['id']}: {task['feedback_data']}")
+```
+
+### Context-based Task Queries
+
+Query all tasks within a conversation context:
+
+```python
+# List all tasks for a specific conversation
+tasks = await storage.list_tasks_by_context(context_id, length=50)
+
+# Clear all tasks in a context
+await storage.clear_context(context_id)
+```
+
+---
 
 ## Getting Started
 
@@ -364,63 +721,163 @@ Solution: Set up VACUUM, archive old data, monitor growth
 ```bash
 # macOS
 brew install postgresql@16
+brew services start postgresql@16
 
 # Ubuntu/Debian
+sudo apt-get update
 sudo apt-get install postgresql-16
+sudo systemctl start postgresql
 
-# Docker
+# Docker (recommended for development)
 docker run -d \
   --name bindu-postgres \
-  -e POSTGRES_PASSWORD=bindu \
+  -e POSTGRES_USER=bindu_user \
+  -e POSTGRES_PASSWORD=bindu_pass \
   -e POSTGRES_DB=bindu \
   -p 5432:5432 \
   postgres:16-alpine
 ```
 
-### 2. Create Database
+### 2. Create Database & User
 
 ```sql
+-- Connect as postgres user
+psql -U postgres
+
+-- Create database
 CREATE DATABASE bindu;
+
+-- Create user with password
 CREATE USER bindu_user WITH PASSWORD 'secure_password';
+
+-- Grant permissions
 GRANT ALL PRIVILEGES ON DATABASE bindu TO bindu_user;
+
+-- Connect to bindu database
+\c bindu
+
+-- Grant schema permissions (for public schema)
+GRANT ALL ON SCHEMA public TO bindu_user;
+
+-- For DID-based multi-tenancy, also grant CREATE privilege
+ALTER USER bindu_user CREATEDB;
+GRANT CREATE ON DATABASE bindu TO bindu_user;
 ```
 
-### 3. Run Migrations
+### 3. Set Environment Variables
 
 ```bash
-# Set database URL
+# Database connection URL
 export DATABASE_URL=postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu
 
-# Apply migrations
-alembic upgrade head
+# Optional: Pool configuration
+export POSTGRES_POOL_MIN=5
+export POSTGRES_POOL_MAX=20
+export POSTGRES_TIMEOUT=30
+
+# Optional: DID for multi-tenancy
+export BINDU_DID=did:bindu:mycompany:agent1:v1
 ```
 
-### 4. Configure Bindu
+### 4. Run Migrations
+
+```bash
+# Navigate to Bindu project directory
+cd /path/to/bindu
+
+# Apply all migrations
+alembic upgrade head
+
+# Verify migration status
+alembic current
+```
+
+### 5. Configure Your Agent
 
 ```python
+from bindu.penguin.bindufy import bindufy
+
 config = {
+    "author": "your.email@example.com",
+    "name": "my_agent",
+    "description": "Agent with PostgreSQL storage",
+    "did": "did:bindu:mycompany:agent1:v1",  # Optional: enables schema isolation
     "storage": {
         "type": "postgres",
         "url": "postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu"
     }
 }
+
+def handler(messages):
+    return "Hello from PostgreSQL!"
+
+bindufy(config, handler)
 ```
+
+### 6. Verify Connection
+
+```python
+# Test your storage connection
+import asyncio
+from bindu.server.storage import PostgresStorage
+
+async def test_connection():
+    storage = PostgresStorage(
+        database_url="postgresql+asyncpg://bindu_user:secure_password@localhost:5432/bindu",
+        did="did:bindu:mycompany:agent1:v1"
+    )
+    
+    await storage.connect()
+    print("✅ Connected to PostgreSQL!")
+    
+    # Verify schema was created
+    print(f"Using schema: {storage.schema_name}")
+    
+    await storage.disconnect()
+
+asyncio.run(test_connection())
+```
+
+---
 
 ## Conclusion
 
 PostgreSQL is the recommended storage backend for production Bindu deployments. It provides:
 
 - ✅ **Reliability**: ACID compliance and data durability
-- ✅ **Scalability**: Horizontal scaling with shared state
-- ✅ **Performance**: Optimized for agent workloads
-- ✅ **Features**: Rich querying, transactions, and indexing
-- ✅ **Ecosystem**: Mature tooling and community support
+- ✅ **Scalability**: Horizontal scaling with shared state across instances
+- ✅ **Multi-tenancy**: DID-based schema isolation for complete data separation
+- ✅ **Performance**: Optimized JSONB storage and GIN indexes
+- ✅ **DSPy Support**: Full integration for prompt optimization and A/B testing
+- ✅ **Features**: Rich querying, transactions, foreign keys, and webhooks
+- ✅ **Ecosystem**: Mature tooling (Alembic, pgAdmin, monitoring) and community support
+- ✅ **Hybrid Agent Pattern**: Full support for stateful conversations and task refinements
 
-For production agents that need to scale, persist data, and support the Hybrid Agent Pattern, PostgreSQL is the clear choice.
+For production agents that need to scale, persist data, support multi-tenancy, and leverage DSPy for continuous improvement, PostgreSQL is the clear choice.
 
 ---
 
-**Next Steps:**
-- [Redis Scheduler Documentation](./redis-scheduler.md)
-- [Bindu Configuration Guide](https://docs.getbindu.com)
-- [Deployment Best Practices](https://docs.getbindu.com/deployment)
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="DSPy Integration" icon="brain" href="/bindu/learn/dspy/overview">
+    Learn how to use DSPy for automatic prompt optimization
+  </Card>
+  <Card title="DID Configuration" icon="fingerprint" href="/bindu/learn/did/overview">
+    Set up multi-tenant isolation with DIDs
+  </Card>
+  <Card title="Redis Scheduler" icon="clock" href="/bindu/learn/scheduler/overview">
+    Distribute tasks across workers with Redis
+  </Card>
+  <Card title="Observability" icon="chart-line" href="/bindu/learn/observability/overview">
+    Monitor your agent with tracing and metrics
+  </Card>
+</CardGroup>
+
+---
+
+**Additional Resources:**
+- [PostgreSQL Official Documentation](https://www.postgresql.org/docs/)
+- [SQLAlchemy Async Documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+- [Alembic Migrations Guide](https://alembic.sqlalchemy.org/en/latest/tutorial.html)
+- [Bindu GitHub Repository](https://github.com/getbindu/Bindu)
