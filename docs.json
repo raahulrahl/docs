@@ -181,6 +181,12 @@
                 "pages": [
                   "bindu/learn/dspy/overview"
                 ] 
+              },
+              {
+                "group": "Bindu Edge",
+                "pages": [
+                  "bindu/learn/bindu-edge/overview"
+                ] 
               }
             ]
           },
