@@ -1,0 +1,417 @@
+---
+title: 'DSPy Integration'
+description: 'Automated prompt optimization and continuous improvement for your Bindu agents'
+---
+
+# DSPy Integration
+
+Bindu's DSPy integration enables your AI agents to continuously improve through machine learning-powered prompt optimization. Instead of manually tweaking prompts through trial and error, DSPy uses real user feedback to automatically refine and optimize your agent's system prompts over time.
+
+---
+
+## What is DSPy?
+
+DSPy is a framework for programming language models through machine learning optimization rather than manual prompt engineering. In Bindu, DSPy:
+
+- **Learns from real interactions** - Uses actual user feedback to improve prompts
+- **Optimizes automatically** - No manual prompt tweaking required
+- **Tests safely** - Gradually rolls out improvements through A/B testing
+- **Adapts continuously** - Keeps improving as more users interact with your agent
+
+Think of it as **automatic prompt engineering** that gets smarter with every user interaction.
+
+---
+
+## Why Use DSPy?
+
+<CardGroup cols={2}>
+  <Card title="Save Time" icon="clock">
+    Stop manually crafting and testing prompts. Let DSPy learn from user feedback automatically.
+  </Card>
+  <Card title="Data-Driven Decisions" icon="chart-line">
+    Base prompt improvements on real user interactions and feedback scores, not guesswork.
+  </Card>
+  <Card title="Safe Deployment" icon="shield-check">
+    Test new prompts with a small percentage of traffic before full rollout.
+  </Card>
+  <Card title="Continuous Improvement" icon="arrows-rotate">
+    Your agent keeps getting better as it collects more feedback and learns from users.
+  </Card>
+</CardGroup>
+
+---
+
+## How It Works
+
+DSPy creates a continuous improvement loop for your agent:
+
+```mermaid
+graph LR
+    A[Users Interact] --> B[Collect Feedback]
+    B --> C[Build Training Data]
+    C --> D[Optimize Prompts]
+    D --> E[A/B Test New Prompts]
+    E --> F{Performance Better?}
+    F -->|Yes| G[Promote to Production]
+    F -->|No| H[Rollback]
+    G --> A
+    H --> A
+    
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+### The Process
+
+1. **Collect Feedback** - As users interact with your agent, feedback scores (ratings, thumbs up/down) are stored
+2. **Build Golden Dataset** - High-quality interactions (above a feedback threshold) become training examples
+3. **Optimize Prompts** - DSPy machine learning algorithms generate improved prompt candidates
+4. **A/B Test** - New prompts are tested with a small percentage of traffic (e.g., 20%)
+5. **Promote or Rollback** - Based on performance metrics, the system automatically promotes winners or rolls back losers
+
+---
+
+## Key Features
+
+### 🎯 Automatic Prompt Selection
+
+When enabled, your agent automatically pulls optimized prompts from the database instead of using static configuration files. The system selects between active and candidate prompts based on traffic allocation.
+
+```json
+{
+  "name": "My Agent",
+  "enable_dspy": true
+}
+```
+
+### 🧪 A/B Testing with Canary Deployment
+
+New prompts start with a small traffic allocation (e.g., 20%) and gradually increase if they perform better. This ensures you never deploy a worse prompt to all users at once.
+
+**Example traffic progression:**
+- Day 1: Active 80%, Candidate 20%
+- Day 2: Active 60%, Candidate 40% (candidate winning)
+- Day 3: Active 40%, Candidate 60% (candidate still winning)
+- Day 4: Active 0%, Candidate 100% → Promoted to new active
+
+### 📊 Multiple Optimization Strategies
+
+DSPy supports different ways to learn from conversations:
+
+- **Last Turn** - Focus on individual question-answer pairs
+- **Full History** - Use entire conversation context
+- **Last N Turns** - Consider recent context only
+- **Sliding Window** - Create multiple training examples from long conversations
+
+Choose the strategy that matches how your agent works.
+
+### 🔒 Multi-Tenant Isolation
+
+Each agent gets its own isolated prompts and feedback through Decentralized Identifiers (DIDs). Perfect for managing multiple agents or versions independently.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+Before using DSPy, you need:
+
+- **PostgreSQL database** - For storing prompts and feedback
+- **OpenRouter API key** - For running DSPy optimization
+- **User feedback mechanism** - Ratings or thumbs up/down from users
+
+### Step 1: Enable DSPy
+
+Add to your agent configuration:
+
+```json
+{
+  "name": "Sales Assistant",
+  "description": "Helps customers with product inquiries",
+  "enable_dspy": true,
+  "version": "1.0.0"
+}
+```
+
+Set required environment variables:
+
+```bash
+# Database connection
+export STORAGE_TYPE=postgres
+export DATABASE_URL=postgresql+asyncpg://user:password@localhost/bindu
+
+# DSPy configuration
+export OPENROUTER_API_KEY=your_api_key_here
+export DSPY__DEFAULT_MODEL=openrouter/openai/gpt-4o-mini
+export DSPY__MIN_FEEDBACK_THRESHOLD=0.8
+```
+
+### Step 2: Collect Feedback
+
+Your agent needs user feedback to learn. Bindu normalizes feedback to a 0.0-1.0 scale:
+
+- **5-star ratings**: 1 star = 0.0, 5 stars = 1.0
+- **Thumbs up/down**: Down = 0.0, Up = 1.0
+- **Custom scores**: Automatically normalized to [0.0, 1.0]
+
+Only interactions with feedback scores above `DSPY__MIN_FEEDBACK_THRESHOLD` (default 0.8) are used for training.
+
+### Step 3: Train Optimized Prompts
+
+Run the training command to generate improved prompts:
+
+```bash
+python -m bindu.dspy.cli.train \
+  --optimizer simba \
+  --strategy last_turn \
+  --require-feedback \
+  --did "did:bindu:mycompany:sales-agent:v1"
+```
+
+This will:
+1. Build a golden dataset from high-rated interactions
+2. Use DSPy's SIMBA optimizer to create improved prompts
+3. Insert the new prompt as a candidate with 40% traffic
+4. Keep your current prompt active with 60% traffic
+
+### Step 4: Monitor & Promote
+
+Set up automatic canary deployment to monitor performance:
+
+```bash
+# Run hourly to check if the candidate is performing better
+python -m bindu.dspy.cli.canary \
+  --did "did:bindu:mycompany:sales-agent:v1"
+```
+
+The canary controller will:
+- Compare average feedback scores between active and candidate
+- Gradually increase traffic to the winner (by 20% each run)
+- Automatically promote when a prompt reaches 100% traffic
+- Rollback if the candidate underperforms
+
+---
+
+## Configuration Options
+
+### Core Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `DSPY__DEFAULT_MODEL` | `openrouter/openai/gpt-4o-mini` | Model used for prompt optimization |
+| `DSPY__MIN_FEEDBACK_THRESHOLD` | `0.8` | Minimum feedback score (0.0-1.0) for training inclusion |
+| `DSPY__MIN_EXAMPLES` | `2` | Minimum examples required to start training |
+| `DSPY__MAX_EXAMPLES` | `10000` | Maximum examples to use in training |
+
+### Canary Deployment
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `DSPY__INITIAL_CANDIDATE_TRAFFIC` | `0.4` | Starting traffic for new candidates (40%) |
+| `DSPY__INITIAL_ACTIVE_TRAFFIC` | `0.6` | Traffic for active when candidate created (60%) |
+| `DSPY__CANARY_TRAFFIC_STEP` | `0.2` | Traffic adjustment per canary run (20%) |
+| `DSPY__MIN_CANARY_INTERACTIONS_THRESHOLD` | `2` | Minimum interactions before comparing metrics |
+
+---
+
+## Optimization Strategies
+
+### SIMBA (Recommended)
+
+**Similarity-Based Meta-Prompting with Adaptation**
+
+Best for general-purpose prompt optimization with balanced exploration and exploitation. Good default choice for most use cases.
+
+```bash
+--optimizer simba
+```
+
+### GEPA
+
+**Guided Exploration with Probabilistic Adaptation**
+
+More aggressive optimization with probabilistic exploration. Use when you want to explore more creative prompt variations and have well-defined success metrics.
+
+```bash
+--optimizer gepa
+```
+
+---
+
+## Extraction Strategies
+
+Choose how DSPy learns from conversations:
+
+### Last Turn (Default)
+
+Extracts only the final question-answer pair. Best for stateless agents where each interaction is independent.
+
+```bash
+--strategy last_turn
+```
+
+### Full History
+
+Uses the complete conversation. Best when entire conversation context is critical.
+
+```bash
+--strategy full_history
+```
+
+### Last N Turns
+
+Considers recent context only. Good when recent history matters but full conversation is too noisy.
+
+```bash
+--strategy last_n:3  # Last 3 turns
+```
+
+---
+
+## Automation with Cron
+
+For production deployments, automate DSPy training and canary deployment:
+
+```bash
+# Train daily at 2 AM
+0 2 * * * python -m bindu.dspy.cli.train \
+  --optimizer simba \
+  --did "did:bindu:mycompany:agent:v1" \
+  --require-feedback
+
+# Run canary hourly
+0 * * * * python -m bindu.dspy.cli.canary \
+  --did "did:bindu:mycompany:agent:v1"
+```
+
+This creates a fully automated improvement loop:
+- Daily: Generate new optimized prompts from user feedback
+- Hourly: Monitor A/B test and automatically promote/rollback
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start with sufficient feedback data">
+    Wait until you have at least 20-30 high-quality interactions before training. More data leads to better optimizations.
+  </Accordion>
+
+  <Accordion title="Monitor the first A/B test closely">
+    Watch logs and metrics during your first canary deployment to understand how the system behaves with your specific use case.
+  </Accordion>
+
+  <Accordion title="Use appropriate feedback thresholds">
+    Set `DSPY__MIN_FEEDBACK_THRESHOLD` based on your feedback distribution. If most scores are between 0.6-0.8, lower the threshold to 0.6.
+  </Accordion>
+
+  <Accordion title="Choose the right extraction strategy">
+    Match your strategy to your agent's behavior:
+    - Stateless Q&A → `last_turn`
+    - Context-aware conversations → `last_n:3` or `full_history`
+    - Long conversations → `sliding_window`
+  </Accordion>
+
+  <Accordion title="Test optimizers on your data">
+    Try both SIMBA and GEPA to see which works better for your specific agent and user interactions.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common Scenarios
+
+### Scenario 1: Customer Support Agent
+
+Your support agent answers product questions. You want to improve response quality based on user satisfaction ratings.
+
+**Setup:**
+- Strategy: `last_turn` (each question is independent)
+- Optimizer: `simba` (general-purpose)
+- Feedback: 5-star ratings from customers
+- Threshold: `0.8` (only learn from 4-5 star interactions)
+
+### Scenario 2: Conversational Assistant
+
+Your assistant maintains context across multi-turn conversations and needs to remember previous exchanges.
+
+**Setup:**
+- Strategy: `last_n:3` (consider recent context)
+- Optimizer: `simba` (balanced)
+- Feedback: Thumbs up/down
+- Threshold: `0.5` (learn from all positive feedback)
+
+### Scenario 3: Specialized Domain Expert
+
+Your agent provides detailed technical advice in a specific domain and conversations can be long.
+
+**Setup:**
+- Strategy: `full_history` (complete context matters)
+- Optimizer: `gepa` (explore creative variations)
+- Feedback: Custom scoring with expert review
+- Threshold: `0.9` (only highest-quality examples)
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No active prompt found">
+    **Problem:** Database has no active prompt to optimize from.
+    
+    **Solution:** Insert an initial active prompt manually or through your agent initialization:
+    ```sql
+    INSERT INTO prompts (prompt_text, status, traffic, created_at)
+    VALUES ('You are a helpful AI assistant.', 'active', 1.0, NOW());
+    ```
+  </Accordion>
+
+  <Accordion title="Golden dataset is empty">
+    **Problem:** No interactions meet the feedback threshold.
+    
+    **Solutions:**
+    - Lower `DSPY__MIN_FEEDBACK_THRESHOLD` (e.g., to 0.5)
+    - Remove `--require-feedback` flag to use all interactions
+    - Collect more user feedback before training
+  </Accordion>
+
+  <Accordion title="Experiment still active">
+    **Problem:** Training fails because a candidate already exists.
+    
+    **Solution:** Wait for the canary controller to complete the A/B test (promote or rollback), or manually resolve by promoting or rolling back the current candidate.
+  </Accordion>
+
+  <Accordion title="Candidate not getting enough traffic">
+    **Problem:** Too few interactions to compare metrics.
+    
+    **Solution:** Increase `DSPY__INITIAL_CANDIDATE_TRAFFIC` to get more data faster, or lower `DSPY__MIN_CANARY_INTERACTIONS_THRESHOLD` for quicker comparisons.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Storage Configuration" icon="database" href="/bindu/learn/storage/overview">
+    Set up PostgreSQL for prompt storage and feedback
+  </Card>
+  <Card title="DID Configuration" icon="fingerprint" href="/bindu/learn/did/overview">
+    Learn about multi-tenant agent isolation with DIDs
+  </Card>
+  <Card title="Observability" icon="chart-mixed" href="/bindu/learn/observability/overview">
+    Monitor DSPy training and A/B test performance
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/reference">
+    Explore the full Bindu API documentation
+  </Card>
+</CardGroup>
+
+---
+
+## Learn More
+
+- **GitHub Repository**: [Bindu DSPy Module](https://github.com/getbindu/Bindu/tree/main/bindu/dspy)
+- **DSPy Framework**: [Official DSPy Documentation](https://dspy-docs.vercel.app/)
+- **Support**: [GitHub Issues](https://github.com/getbindu/Bindu/issues)
