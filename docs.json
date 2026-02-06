@@ -274,6 +274,14 @@
           {
             "group": "Changelog",
             "pages": ["changelog/introduction/overview"]
+          },
+          {
+            "group": "2026 Releases",
+            "pages": [
+              "changelog/v2026.6.6",
+              "changelog/v2026.3.5",
+              "changelog/v2026.3.3"
+            ]
           }
         ]
       },
