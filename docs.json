@@ -175,18 +175,6 @@
                 "pages": [
                   "bindu/learn/notification/overview"
                 ] 
-              },
-              {
-                "group": "DSPy",
-                "pages": [
-                  "bindu/learn/dspy/overview"
-                ] 
-              },
-              {
-                "group": "Bindu Edge",
-                "pages": [
-                  "bindu/learn/bindu-edge/overview"
-                ] 
               }
             ]
           },
