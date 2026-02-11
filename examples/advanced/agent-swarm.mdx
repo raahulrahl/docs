@@ -1,0 +1,104 @@
+---
+title: "3.1 Agent Swarm"
+---
+
+Multi-agent collaboration system with specialized roles.
+
+## Code
+
+```python
+from bindu.penguin.bindufy import bindufy
+from orchestrator import Orchestrator
+from dotenv import load_dotenv
+
+load_dotenv()
+
+orchestrator = Orchestrator()
+
+def handler(messages: list[dict[str, str]]) -> str:
+    if not isinstance(messages, list):
+        return "Invalid input format: messages must be a list."
+    
+    if not messages:
+        return "No input message received."
+    
+    last_msg = messages[-1]
+    
+    if not isinstance(last_msg, dict):
+        return "Invalid message structure."
+    
+    user_input = last_msg.get("content")
+    
+    if not user_input or not isinstance(user_input, str):
+        return "Empty or invalid message content."
+    
+    try:
+        result = orchestrator.run(user_input)
+        return result
+    except Exception as e:
+        return f"Internal agent error: {str(e)}"
+
+config = {
+    "author": "nivasm2823@gmail.com",
+    "name": "killer-agent-swarm",
+    "description": "Multi-agent AI system for deep research, summarization, critique and reflection.",
+    "capabilities": {"streaming": True},
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/agent-swarm-intelligence"],
+    "storage": {"type": "memory"},
+    "scheduler": {"type": "memory"}
+}
+
+bindufy(config=config, handler=handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Agent Roles**
+- **Planner**: Breaks query into structured tasks
+- **Researcher**: Performs deep factual research
+- **Summarizer**: Condenses research into clear explanations
+- **Critic**: Reviews and refines outputs
+- **Reflection**: Evaluates quality and triggers self-improvement
+
+**Orchestrator**
+- Coordinates agent execution pipeline
+- Manages task flow: Planner → Researcher → Summarizer → Critic → Reflection
+- Handles retries and error recovery
+- Validates output quality
+
+**Execution Flow**
+1. Planner decomposes query into tasks
+2. Researcher gathers information
+3. Summarizer creates concise output
+4. Critic reviews and refines
+5. Reflection evaluates quality
+6. If quality is low, retry with improvements
+
+**Self-Correction**
+- Reflection agent assesses output quality
+- Triggers automatic refinement loops
+- Max 2 retries for quality improvement
+
+## Run
+
+```bash
+# Set API key
+echo "OPENROUTER_API_KEY=your-key-here" > examples/agent_swarm/.env
+
+# Run agent swarm
+uv run examples/agent_swarm/bindu_super_agent.py
+```
+
+Try: "Research about quantum computing and explain its applications"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with agent swarm

@@ -213,18 +213,19 @@
               "examples/specialized/weather-research",
               "examples/specialized/premium-advisor"
             ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "examples/advanced/agent-swarm",
+              "examples/advanced/cbt-therapy"
+            ]
           }
         ]
       },
       {
         "tab": "API",
-        "openapi": "/openapi.yaml",
-        "groups": [
-          {
-            "group": "Overview",
-            "pages": ["api/introduction/overview"]
-          }
-        ]
+        "openapi": "/openapi.yaml"
       },
       {
         "tab": "Roadmap",
@@ -285,6 +286,7 @@
           {
             "group": "2026 Releases",
             "pages": [
+              "changelog/v2026.7.3",
               "changelog/v2026.6.6",
               "changelog/v2026.3.5",
               "changelog/v2026.3.3"

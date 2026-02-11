@@ -1,0 +1,130 @@
+---
+title: "3.2 CBT Therapy Protocol"
+---
+
+CBT therapy protocol generator for mental health applications.
+
+## Code
+
+```python
+from bindu.penguin.bindufy import bindufy
+from bindu.utils.logging import get_logger
+from langgraph_integration import LangGraphWorkflowAdapter
+from state_mapper import (
+    build_langgraph_input,
+    protocol_state_to_bindu_artifact,
+    bindu_message_from_artifact,
+)
+from uuid import UUID, uuid4
+
+logger = get_logger("cerina_bindu.cbt.supervisor")
+
+_workflow_adapter: LangGraphWorkflowAdapter | None = None
+
+def get_workflow_adapter() -> LangGraphWorkflowAdapter:
+    global _workflow_adapter
+    if _workflow_adapter is None:
+        _workflow_adapter = LangGraphWorkflowAdapter()
+    return _workflow_adapter
+
+async def handler(messages: list[dict]):
+    if not messages:
+        return [{"role": "assistant", "content": "No input provided"}]
+    
+    last_message = messages[-1]
+    context_id = UUID(last_message.get("context_id") or str(uuid4()))
+    task_id = UUID(last_message.get("task_id") or str(uuid4()))
+    
+    try:
+        langgraph_input = build_langgraph_input(messages, context_id, task_id)
+        user_intent = langgraph_input["user_intent"]
+        thread_id = langgraph_input["thread_id"]
+        
+        if not user_intent:
+            return [{"role": "assistant", "content": "No user intent provided"}]
+        
+        adapter = get_workflow_adapter()
+        final_state = await adapter.invoke(
+            user_intent=user_intent,
+            thread_id=thread_id,
+            task_id=str(task_id),
+            metadata=langgraph_input.get("metadata", {}),
+        )
+        
+        artifact_id = uuid4()
+        artifact = protocol_state_to_bindu_artifact(final_state, artifact_id)
+        assistant_messages = bindu_message_from_artifact(artifact)
+        
+        if assistant_messages:
+            assistant_messages[0]["metadata"] = artifact.get("metadata", {})
+        
+        return assistant_messages
+    
+    except Exception as e:
+        logger.error(f"Error processing CBT request: {str(e)}", exc_info=True)
+        return [{"role": "assistant", "content": f"Error generating CBT exercise: {str(e)}"}]
+
+config = {
+    "author": "imdanishakhtar7@gmail.com",
+    "name": "cerina_supervisor_cbt",
+    "description": "Supervisor orchestrator for Cerina CBT integration with LangGraph workflow.",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["../../skills/cbt-supervisor-orchestrator"],
+}
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Multi-Agent Workflow**
+- **Drafter Agent**: Creates initial CBT exercise draft
+- **Safety Guardian**: Validates clinical safety and ethics
+- **Clinical Critic**: Reviews therapeutic quality
+
+**LangGraph Integration**
+- Uses LangGraph for workflow orchestration
+- Stateless execution (one-shot invocation)
+- Maps Bindu context to LangGraph thread
+
+**State Mapping**
+- Converts Bindu messages to LangGraph input
+- Transforms ProtocolState to Bindu artifacts
+- Includes safety scores and clinical feedback
+
+**Workflow Flow**
+1. Extract user concern from Bindu message
+2. Map context_id to LangGraph thread_id
+3. Invoke multi-agent workflow (Drafter → Safety → Critic)
+4. Convert ProtocolState to Bindu artifact format
+5. Return structured CBT exercise with metadata
+
+**Safety & Quality**
+- Safety score (0-100) from Safety Guardian
+- Clinical score (0-100) from Clinical Critic
+- Safety verdict validation
+- Quality feedback in metadata
+
+## Run
+
+```bash
+# Set API key
+echo "OPENROUTER_API_KEY=your-key-here" > examples/cerina_bindu/cbt/.env
+
+# Run CBT supervisor
+cd examples/cerina_bindu/cbt
+uv run python supervisor_cbt.py
+```
+
+Try: "I am overwhelmed with sleep problems"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with CBT agent
