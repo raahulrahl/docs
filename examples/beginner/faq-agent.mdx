@@ -1,0 +1,92 @@
+---
+title: "1.5 FAQ Agent"
+---
+
+Documentation search agent for answering questions.
+
+## Code
+
+```python
+import os
+from dotenv import load_dotenv
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openrouter import OpenRouter
+from agno.tools.duckduckgo import DuckDuckGoTools
+
+load_dotenv()
+
+agent = Agent(
+    name="Bindu Docs Agent",
+    instructions="""
+    You are an expert assistant for Bindu (GetBindu).
+
+    TASK:
+    1. Search the Bindu documentation (docs.getbindu.com) for the user's query.
+    2. Answer the question clearly.
+
+    FORMATTING RULES:
+    - Return your answer in CLEAN Markdown.
+    - Use '##' for main headers.
+    - Use bullet points for lists.
+    - Do NOT wrap the entire response in JSON code blocks. Just return the text.
+    - At the end, include a '### Sources' section with links found.
+    """,
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+    tools=[DuckDuckGoTools()],
+    markdown=True,
+)
+
+config = {
+    "author": "your.email@example.com",
+    "name": "bindu_docs_agent",
+    "description": "Answers questions about Bindu documentation",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"],
+}
+
+def handler(messages: list[dict[str, str]]):
+    result = agent.run(input=messages)
+    return result
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Specialized Instructions**
+- Search specific documentation site
+- Clear task definition
+- Formatting rules for consistent output
+
+**Markdown Output**
+- `markdown=True` enables markdown formatting
+- Structured responses with headers
+- Includes source links
+
+**Documentation Focus**
+- Searches `docs.getbindu.com`
+- Answers Bindu-specific questions
+- Provides citations
+
+## Run
+
+```bash
+uv run examples/beginner/faq_agent.py
+```
+
+Try: "How do I create a Bindu agent?"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent

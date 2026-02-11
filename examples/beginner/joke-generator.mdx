@@ -1,0 +1,83 @@
+---
+title: "1.3 Joke Generator"
+---
+
+Simple agent that generates jokes on demand.
+
+## Code
+
+```python
+import os
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.models.openrouter import OpenRouter
+from dotenv import load_dotenv
+
+load_dotenv()
+
+agent = Agent(
+    instructions=(
+        "You are a witty joke-telling agent. "
+        "Your job is to entertain users with clever, clean, and funny jokes. "
+        "You can tell puns, dad jokes, tech jokes, and situational humor. "
+        "Keep the tone light, playful, and human-like. "
+        "If a topic is given, tailor the joke to that topic."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+    tools=[DuckDuckGoTools()],
+)
+
+config = {
+    "author": "your.email@example.com",
+    "name": "joke_agent",
+    "description": "A research assistant agent",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"],
+}
+
+def handler(messages: list[dict[str, str]]):
+    result = agent.run(input=messages)
+    return result
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Instructions**
+- Defines agent personality as joke teller
+- Specifies joke types: puns, dad jokes, tech jokes
+- Sets tone: light, playful, human-like
+- Allows topic-specific jokes
+
+**Tools**
+- `DuckDuckGoTools()`: Search for trending jokes
+- Optional but adds topical humor capability
+
+**Model**
+- `openai/gpt-oss-120b`: Advanced reasoning for humor
+- Via OpenRouter API
+- Sometimes it can generate offensive or inappropriate jokes :P
+
+## Run
+
+```bash
+uv run examples/beginner/agno_example.py
+```
+
+Try: "Tell me a joke about Python programming"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent

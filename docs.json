@@ -194,6 +194,17 @@
             "pages": [
               "examples/introduction/overview"
             ]
+          },
+          {
+            "group": "Beginner",
+            "pages": [
+              "examples/beginner/echo-agent",
+              "examples/beginner/zero-config-agent",
+              "examples/beginner/joke-generator",
+              "examples/beginner/research-assistant",
+              "examples/beginner/faq-agent",
+              "examples/beginner/notion-agent"
+            ]
           }
         ]
       },

@@ -1,0 +1,60 @@
+---
+title: "1.1 Echo Agent"
+---
+
+Minimal echo bot that repeats your input.
+
+## Code
+
+```python
+from bindu.penguin.bindufy import bindufy
+
+def handler(messages):
+    return [{"role": "assistant", "content": messages[-1]["content"]}]
+
+config = {
+    "author": "gaurikasethi88@gmail.com",
+    "name": "echo_agent",
+    "description": "A basic echo agent for quick testing.",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"],
+}
+
+bindufy(config, handler)
+# This will create a bindu agent with name echo_agent and expose it on port 3773
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Handler Function**
+- Takes `messages` list as input
+- Returns the last user message as assistant response
+- `messages[-1]["content"]` gets the most recent message
+- We are not calling any llm model here, just returning the last message
+
+**Config**
+- `name`: Agent identifier
+- `deployment.url`: Local server address
+- `deployment.expose`: Makes agent accessible
+- `skills`: Capabilities the agent can use
+
+**Bindufy**
+- Wraps your handler with Bindu protocol
+- Handles A2A communication
+
+## Run
+
+```bash
+uv run examples/beginner/echo_simple_agent.py
+```
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent

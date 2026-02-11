@@ -1,0 +1,77 @@
+---
+title: "1.2 Zero Config Agent"
+---
+
+Zero-config agent with web search capabilities.
+
+## Code
+
+```python
+import os
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openrouter import OpenRouter
+from agno.tools.duckduckgo import DuckDuckGoTools
+from dotenv import load_dotenv
+
+load_dotenv()
+
+agent = Agent(
+    instructions="You are a friendly assistant that explains things simply.",
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+    tools=[DuckDuckGoTools()],
+)
+
+config = {
+    "author": "21uad051@kamarajengg.edu.in",
+    "name": "beginner_zero_config_agent",
+    "description": "Zero-config local Bindu agent for first-time users",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"],
+}
+
+def handler(messages):
+    return agent.run(input=messages)
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Agent Setup**
+- `instructions`: Defines agent behavior
+- `model`: OpenRouter's GPT model
+- `tools`: DuckDuckGo for web search
+
+**Handler**
+- Passes messages to agent
+- Agent processes with LLM and tools
+- Returns structured response
+
+**Environment**
+- Requires `OPENROUTER_API_KEY` in `.env`
+- `load_dotenv()` loads environment variables
+
+## Run
+
+```bash
+# Create .env file
+echo "OPENROUTER_API_KEY=your-key-here" > examples/beginner/.env
+
+# Run agent
+uv run examples/beginner/beginner_zero_config_agent.py
+```
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent

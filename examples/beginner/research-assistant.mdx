@@ -1,0 +1,78 @@
+---
+title: "1.4 Research Assistant"
+---
+
+Research assistant with DuckDuckGo search integration.
+
+## Code
+
+```python
+import os
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.models.openrouter import OpenRouter
+from dotenv import load_dotenv
+
+load_dotenv()
+
+agent = Agent(
+    instructions="You are a research assistant that finds and summarizes information.",
+    model=OpenRouter(
+        id="openai/gpt-5-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+    tools=[DuckDuckGoTools()],
+)
+
+config = {
+    "author": "your.email@example.com",
+    "name": "research_agent",
+    "description": "A research assistant agent",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"]
+}
+
+def handler(messages: list[dict[str, str]]):
+    result = agent.run(input=messages)
+    return result
+
+if __name__ == "__main__":
+    os.environ["AUTH_ENABLED"] = "false"
+    bindufy(config, handler)
+    #bindufy(config, handler, launch=True)
+    # This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Research Capability**
+- Agent searches web via DuckDuckGo
+- Finds relevant information
+- Summarizes findings clearly
+
+**Instructions**
+- Simple, focused directive
+- "Find and summarize information"
+- Guides agent behavior
+
+**Auth Disabled**
+- `AUTH_ENABLED = "false"` for local dev
+- Frontend connects without OAuth
+- Production should enable auth
+
+## Run
+
+```bash
+uv run examples/beginner/agno_simple_example.py
+```
+
+Try: "Research the latest developments in quantum computing"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent

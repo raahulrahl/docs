@@ -1,0 +1,113 @@
+---
+title: "1.6 Notion Agent"
+---
+
+Agent with Notion workspace integration.
+
+## Code
+
+```python
+import os
+from dotenv import load_dotenv
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openrouter import OpenRouter
+from notion_client import Client
+
+load_dotenv()
+
+NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+notion = Client(auth=NOTION_API_KEY)
+
+def create_notion_page(title: str, content: str):
+    """Create a page in Notion database"""
+    return notion.pages.create(
+        parent={"database_id": NOTION_DATABASE_ID},
+        properties={"Name": {"title": [{"text": {"content": title}}]}},
+        children=[{
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"text": [{"type": "text", "text": {"content": content}}]},
+        }],
+    )
+
+def search_notion(query: str):
+    """Search pages in Notion database"""
+    return notion.databases.query(
+        database_id=NOTION_DATABASE_ID,
+        filter={
+            "or": [
+                {"property": "Name", "title": {"contains": query}},
+                {"property": "Content", "rich_text": {"contains": query}},
+            ]
+        }
+    )
+
+agent = Agent(
+    instructions="You are a Notion assistant. Use tools to create and search Notion pages.",
+    model=OpenRouter(id="openai/gpt-oss-120b", api_key=OPENROUTER_API_KEY),
+    tools=[create_notion_page, search_notion],
+)
+
+config = {
+    "author": "paras.chamoli@gmail.com",
+    "name": "agno-notion-agent",
+    "description": "Notion assistant agent (OpenRouter)",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/pdf-processing", "skills/question-answering"],
+}
+
+def handler(messages: list[dict[str, str]]):
+    return agent.run(input=messages)
+
+bindufy(config, handler)
+```
+
+## How It Works
+
+**Custom Tools**
+- `create_notion_page()`: Creates pages in Notion
+- `search_notion()`: Searches database entries
+- Tools passed to agent via `tools` parameter
+
+**Notion Client**
+- `notion_client` library for API access
+- Authenticated with `NOTION_API_KEY`
+- Targets specific database via `NOTION_DATABASE_ID`
+
+**Environment Variables**
+- `NOTION_API_KEY`: Your Notion integration token
+- `NOTION_DATABASE_ID`: Target database ID
+- `OPENROUTER_API_KEY`: LLM access
+
+## Setup
+
+1. Create Notion integration at [notion.so/my-integrations](https://www.notion.so/my-integrations)
+2. Share database with integration
+3. Copy database ID from URL
+4. Add to `.env`:
+
+```bash
+NOTION_API_KEY=secret_xxx
+NOTION_DATABASE_ID=xxx
+OPENROUTER_API_KEY=sk-or-v1-xxx
+```
+
+## Run
+
+```bash
+uv run examples/beginner/agno_notion_agent.py
+```
+
+Try: "Create a page titled 'Meeting Notes' with content 'Discussed Q1 goals'"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with echo agent
