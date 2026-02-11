@@ -26,86 +26,20 @@ export OPENROUTER_API_KEY="your-key-here"
 uv run examples/beginner/echo_simple_agent.py
 ```
 
-Agents run on ports 3773-3780 with UI at `http://localhost:[port]/docs`
-
 ## Series 1: Beginner
 
-### 1.1 Echo Agent
-**File**: `beginner/echo_simple_agent.py`
-
-Minimal echo bot that repeats your input.
-
-### 1.2 Zero Config Agent
-**File**: `beginner/beginner_zero_config_agent.py`
-
-Zero-config agent with web search capabilities.
-
-### 1.3 Joke Generator
-**File**: `beginner/agno_simple_example.py`
-
-Simple agent that generates jokes on demand.
-
-### 1.4 Research Assistant
-**File**: `beginner/agno_example.py`
-
-Research assistant with DuckDuckGo search integration.
-
-### 1.5 FAQ Agent
-**File**: `beginner/faq_agent.py`
-
-Documentation search agent for answering questions.
-
-### 1.6 Notion Agent
-**File**: `beginner/agno_notion_agent.py`
-
-Agent with Notion workspace integration.
+- [1.1 Echo Agent](/examples/beginner/echo-agent) - Minimal echo bot
+- [1.2 Zero Config Agent](/examples/beginner/zero-config-agent) - Web search capabilities
+- [1.3 Joke Generator](/examples/beginner/joke-generator) - Generates jokes on demand
+- [1.4 Research Assistant](/examples/beginner/research-assistant) - DuckDuckGo search integration
+- [1.5 FAQ Agent](/examples/beginner/faq-agent) - Documentation search
+- [1.6 Notion Agent](/examples/beginner/notion-agent) - Notion workspace integration
 
 ## Series 2: Specialized
 
-### 2.1 Text Summarizer
-**Folder**: `summarizer/`
-
-Creates concise summaries of any input text using OpenRouter's `openai/gpt-oss-120b` model.
-
-**Features**:
-- Context-aware content condensation
-- Key point preservation
-- Multi-format support
-
-**Run**:
-```bash
-uv run examples/summarizer/summarizer_agent.py
-```
-
-### 2.2 Weather Research
-**Folder**: `weather-research/`
-
-Weather intelligence agent providing real-time weather data and forecasts.
-
-**Features**:
-- Real-time weather via DuckDuckGo search
-- Global coverage
-- Clean synthesized responses
-
-**Run**:
-```bash
-uv run examples/weather-research/weather_research_agent.py
-```
-
-### 2.3 Premium Advisor
-**Folder**: `premium-advisor/`
-
-Paid agent with X402 payments (0.01 USDC per query).
-
-**Features**:
-- Market analysis and investment insights
-- X402 payment gating
-- Premium content delivery
-
-**Run**:
-```bash
-uv run examples/premium-advisor/premium_advisor.py
-```
+- [2.1 Text Summarizer](/examples/specialized/text-summarizer) - Concise text summaries
+- [2.2 Weather Research](/examples/specialized/weather-research) - Real-time weather data
+- [2.3 Premium Advisor](/examples/specialized/premium-advisor) - Paid agent with X402 payments
 
 ## Series 3: Advanced
 

@@ -1,0 +1,98 @@
+---
+title: "2.2 Weather Research"
+---
+
+Weather intelligence agent providing real-time weather data and forecasts.
+
+## Code
+
+```python
+import os
+from dotenv import load_dotenv
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.models.openrouter import OpenRouter
+
+load_dotenv()
+
+agent = Agent(
+    instructions="You are a weather research assistant. When asked about weather, provide a clear, concise weather report with current conditions, temperature, and forecast. Focus on the most relevant information and present it in an organized, easy-to-read format. Avoid showing multiple search results - synthesize the information into a single coherent response.",
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+    tools=[DuckDuckGoTools()],
+)
+
+config = {
+    "author": "bindu.builder@getbindu.com",
+    "name": "weather_research_agent",
+    "description": "Research agent that finds current weather and forecasts for any city worldwide",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/weather-research-skill"],
+}
+
+def handler(messages: list[dict[str, str]]):
+    if messages:
+        latest_message = messages[-1].get('content', '') if isinstance(messages[-1], dict) else str(messages[-1])
+        result = agent.run(input=latest_message)
+        
+        if hasattr(result, 'content'):
+            return result.content
+        elif hasattr(result, 'response'):
+            return result.response
+        else:
+            return str(result)
+    
+    return "Please provide a location for weather information."
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Weather Instructions**
+- Clear directive: "Provide clear, concise weather report"
+- Synthesizes information from multiple sources
+- Organized, easy-to-read format
+- Avoids raw search results
+
+**Handler**
+- Extracts latest message content
+- Handles different message formats
+- Returns clean response (content, response, or string)
+- Fallback message if no location provided
+
+**Tools**
+- `DuckDuckGoTools()`: Real-time web search
+- Searches for current weather data
+- Finds forecasts for any location worldwide
+
+**Model**
+- `openai/gpt-oss-120b`: Advanced reasoning
+- Synthesizes multiple search results
+- Formats weather data clearly
+
+## Run
+
+```bash
+# Set API key
+echo "OPENROUTER_API_KEY=your-key-here" > examples/weather-research/.env
+
+# Run agent
+uv run examples/weather-research/weather_research_agent.py
+```
+
+Try: "What's the weather like in Tokyo?"
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with weather agent

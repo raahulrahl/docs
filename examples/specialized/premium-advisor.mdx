@@ -1,0 +1,124 @@
+---
+title: "2.3 Premium Advisor"
+---
+
+Paid agent with X402 payments (0.01 USDC per query).
+
+## Code
+
+```python
+import os
+from dotenv import load_dotenv
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openrouter import OpenRouter
+
+load_dotenv()
+
+agent = Agent(
+    instructions="""You are the Oracle of Value, a premium market insight advisor.
+    Provide high-value, actionable market insights and investment recommendations.
+
+    Your expertise includes:
+    - Deep-chain analysis of blockchain projects
+    - Market trend identification and forecasting
+    - Risk assessment and safety analysis
+    - Developer activity evaluation
+    - Investment strategy guidance
+
+    Always provide:
+    1. Clear, actionable insights
+    2. Risk assessments when relevant
+    3. Specific recommendations with reasoning
+    4. Market context and timing considerations
+
+    Focus on premium, high-value insights that justify the cost. Be direct,
+    confident, and provide specific, actionable advice.""",
+
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+)
+
+def handler(messages: list[dict[str, str]]):
+    if messages:
+        latest_message = messages[-1].get('content', '') if isinstance(messages[-1], dict) else str(messages[-1])
+        result = agent.run(input=latest_message)
+        
+        if hasattr(result, 'content'):
+            return result.content
+        elif hasattr(result, 'response'):
+            return result.response
+        else:
+            return str(result)
+    
+    return "🔮 Welcome to Oracle of Value! Ask me about market insights, investment opportunities, or financial analysis. Premium insights require 0.01 USDC payment."
+
+config = {
+    "author": "premium.advisor@example.com",
+    "name": "Oracle_of_Value",
+    "description": "I provide high-value market insights and investment recommendations. Payment required upfront.",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "execution_cost": {
+        "amount": "0.01",
+        "token": "USDC",
+        "network": "base-sepolia",
+        "pay_to_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    },
+    "skills": ["skills/premium-market-insight-skill"],
+    "storage": {"type": "memory"},
+    "scheduler": {"type": "memory"},
+    "debug_mode": True,
+}
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Premium Instructions**
+- Defines expertise: blockchain analysis, market trends, risk assessment
+- Structured output: insights, risk assessments, recommendations
+- High-value focus to justify payment cost
+
+**X402 Payment Gating**
+- `execution_cost`: Payment configuration
+- `amount`: 0.01 USDC per query
+- `network`: base-sepolia (testnet)
+- `pay_to_address`: Recipient wallet address
+- Payment required before agent responds
+
+**Handler**
+- Protected by X402 paywall
+- Only executes after payment confirmation
+- Returns premium market insights
+
+**Model**
+- `openai/gpt-oss-120b`: Advanced financial reasoning
+- Provides actionable investment advice
+
+## Run
+
+```bash
+# Set API key
+echo "OPENROUTER_API_KEY=your-key-here" > examples/premium-advisor/.env
+
+# Run agent
+uv run examples/premium-advisor/premium_advisor.py
+```
+
+Try: "What are the best investment opportunities right now?"
+
+**Payment Required**: You'll need 0.01 USDC on Base Sepolia to test.
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with premium advisor

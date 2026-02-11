@@ -205,6 +205,14 @@
               "examples/beginner/faq-agent",
               "examples/beginner/notion-agent"
             ]
+          },
+          {
+            "group": "Specialized",
+            "pages": [
+              "examples/specialized/text-summarizer",
+              "examples/specialized/weather-research",
+              "examples/specialized/premium-advisor"
+            ]
           }
         ]
       },

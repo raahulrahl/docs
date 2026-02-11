@@ -1,0 +1,84 @@
+---
+title: "2.1 Text Summarizer"
+---
+
+Creates concise summaries of any input text.
+
+## Code
+
+```python
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openrouter import OpenRouter
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+agent = Agent(
+    instructions="You are a professional summarization assistant. Create clear, concise summaries that capture the main points and essential information from any input text. Aim for 2-3 sentences that preserve the core meaning while being significantly shorter than the original.",
+    model=OpenRouter(
+        id="openai/gpt-oss-120b",
+        api_key=os.getenv("OPENROUTER_API_KEY")
+    ),
+)
+
+def handler(messages):
+    user_input = messages[-1]["content"]
+    result = agent.run(input=user_input)
+    return result
+
+config = {
+    "author": "gaurikasethi88@gmail.com",
+    "name": "summarizer_agent",
+    "description": "Professional text summarization agent using OpenRouter's openai/gpt-oss-120b model.",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/text-summarization-skill"],
+}
+
+bindufy(config, handler)
+
+#bindufy(config, handler, launch=True)
+# This will create a tunnel to your agent and expose it on port 3773
+```
+
+## How It Works
+
+**Summarization Instructions**
+- Clear directive: "Create clear, concise summaries"
+- Target length: 2-3 sentences
+- Preserves core meaning while reducing length
+
+**Handler**
+- Extracts user input: `messages[-1]["content"]`
+- Passes to agent for summarization
+- Returns condensed version
+
+**Model**
+- `openai/gpt-oss-120b`: Advanced text understanding
+- Via OpenRouter API
+- Optimized for text transformation tasks
+
+**Skills**
+- `text-summarization-skill`: Defines summarization capabilities
+- Enables skill-based discovery
+
+## Run
+
+```bash
+# Set API key
+echo "OPENROUTER_API_KEY=your-key-here" > examples/summarizer/.env
+
+# Run agent
+uv run examples/summarizer/summarizer_agent.py
+```
+
+Try: "Climate change refers to long-term shifts in global temperatures and weather patterns. While climate variations are natural, human activities have been the main driver of climate change since the mid-20th century, primarily due to fossil fuel burning."
+
+Go to frontend and run npm run dev
+
+Open http://localhost:5173 and try to chat with summarizer agent
