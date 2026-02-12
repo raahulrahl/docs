@@ -119,15 +119,22 @@ paths:
         - JSON-RPC
       summary: JSON-RPC 2.0 Endpoint
       description: |
-        Main JSON-RPC 2.0 endpoint supporting multiple methods:
-        - message/send: Send messages to agent
-        - message/stream: Stream messages from agent
-        - tasks/get: Get task status
-        - tasks/list: List all tasks
-        - tasks/cancel: Cancel a task
-        - tasks/feedback: Submit feedback for a task
-        - contexts/list: List conversation contexts
-        - contexts/clear: Clear a context
+        Main JSON-RPC 2.0 endpoint for agent communication.
+        
+        All requests follow JSON-RPC 2.0 format with:
+        - `jsonrpc`: "2.0"
+        - `method`: The method name (e.g., "message/send", "tasks/get")
+        - `params`: Method-specific parameters
+        - `id`: Request identifier
+        
+        **Available Methods:**
+        - `message/send` - Send messages to agent
+        - `tasks/get` - Get task status
+        - `tasks/list` - List all tasks
+        - `tasks/cancel` - Cancel a task
+        - `tasks/feedback` - Submit feedback for a task
+        - `contexts/list` - List conversation contexts
+        - `contexts/clear` - Clear a context
       operationId: jsonRpcEndpoint
       security:
         - BearerAuth: []
@@ -137,14 +144,24 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: '#/components/schemas/MessageSendRequest'
-                - $ref: '#/components/schemas/TasksGetRequest'
-                - $ref: '#/components/schemas/TasksListRequest'
-                - $ref: '#/components/schemas/TasksCancelRequest'
-                - $ref: '#/components/schemas/TasksFeedbackRequest'
-                - $ref: '#/components/schemas/ContextsListRequest'
-                - $ref: '#/components/schemas/ContextsClearRequest'
+              type: object
+              required:
+                - jsonrpc
+                - method
+                - id
+              properties:
+                jsonrpc:
+                  type: string
+                  enum: ["2.0"]
+                method:
+                  type: string
+                  description: JSON-RPC method name
+                params:
+                  type: object
+                  description: Method-specific parameters
+                id:
+                  type: string
+                  description: Request identifier
             examples:
               messageSend:
                 summary: Send a message
@@ -280,16 +297,36 @@ paths:
                   id: "550e8400-e29b-41d4-a716-446655440025"
       responses:
         '200':
-          description: Successful JSON-RPC response
+          description: JSON-RPC response (success or error)
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/JsonRpcSuccessResponse'
-                  - $ref: '#/components/schemas/JsonRpcErrorResponse'
+                type: object
+                required:
+                  - jsonrpc
+                  - id
+                properties:
+                  jsonrpc:
+                    type: string
+                    enum: ["2.0"]
+                  result:
+                    type: object
+                    description: Result object (present on success)
+                  error:
+                    type: object
+                    description: Error object (present on error)
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                      data:
+                        type: object
+                  id:
+                    type: string
               examples:
-                success:
-                  summary: Successful response
+                messageSendResponse:
+                  summary: "message/send → Success"
                   value:
                     jsonrpc: "2.0"
                     result:
@@ -304,31 +341,62 @@ paths:
                             text: "The sunset paints the sky with hope for tomorrow."
                     id: "550e8400-e29b-41d4-a716-446655440024"
 
-                taskCancelSuccess:
-                  summary: Task canceled successfully
+                tasksGetResponse:
+                  summary: "tasks/get → Success"
+                  value:
+                    jsonrpc: "2.0"
+                    result:
+                      task:
+                        taskId: "550e8400-e29b-41d4-a716-446655440013"
+                        status:
+                          state: "completed"
+                    id: "550e8400-e29b-41d4-a716-446655440014"
+
+                tasksListResponse:
+                  summary: "tasks/list → Success"
+                  value:
+                    jsonrpc: "2.0"
+                    result:
+                      tasks: []
+                    id: "550e8400-e29b-41d4-a716-446655440099"
+
+                tasksCancelResponse:
+                  summary: "tasks/cancel → Success"
                   value:
                     jsonrpc: "2.0"
                     result:
                       task:
                         taskId: "550e8400-e29b-41d4-a716-446655440042"
-                        contextId: "550e8400-e29b-41d4-a716-446655440038"
                         status:
                           state: "canceled"
-                          timestamp: "2025-10-26T14:47:52.183416+00:00"
-                        history:
-                          - role: "user"
-                            parts:
-                              - kind: "text"
-                                text: "Generate a long report"
-                            kind: "message"
-                            messageId: "550e8400-e29b-41d4-a716-446655440040"
-                            contextId: "550e8400-e29b-41d4-a716-446655440038"
-                            taskId: "550e8400-e29b-41d4-a716-446655440042"
-                        metadata: {}
                     id: "550e8400-e29b-41d4-a716-446655440042"
 
-                error:
-                  summary: Error response
+                tasksFeedbackResponse:
+                  summary: "tasks/feedback → Success"
+                  value:
+                    jsonrpc: "2.0"
+                    result:
+                      success: true
+                    id: "550e8400-e29b-41d4-a716-446655440024"
+
+                contextsListResponse:
+                  summary: "contexts/list → Success"
+                  value:
+                    jsonrpc: "2.0"
+                    result:
+                      contexts: []
+                    id: "550e8400-e29b-41d4-a716-446655440025"
+
+                contextsClearResponse:
+                  summary: "contexts/clear → Success"
+                  value:
+                    jsonrpc: "2.0"
+                    result:
+                      success: true
+                    id: "550e8400-e29b-41d4-a716-446655440025"
+
+                errorInvalidParams:
+                  summary: "Error → Invalid params"
                   value:
                     jsonrpc: "2.0"
                     error:
@@ -338,22 +406,13 @@ paths:
                         details: "Missing required field: taskId"
                     id: "550e8400-e29b-41d4-a716-446655440024"
 
-                taskNotCancelable:
-                  summary: Cannot cancel completed task
-                  value:
-                    jsonrpc: "2.0"
-                    error:
-                      code: -32002
-                      message: "Task cannot be canceled in 'completed' state. Tasks can only be canceled while pending or running."
-                    id: "550e8400-e29b-41d4-a716-446655440042"
-
-                taskNotFound:
-                  summary: Task not found
+                errorTaskNotFound:
+                  summary: "Error → Task not found"
                   value:
                     jsonrpc: "2.0"
                     error:
                       code: -32001
-                      message: "The specified task ID was not found. The task may have been completed, canceled, or expired. Check task status: GET /tasks/{id}"
+                      message: "The specified task ID was not found"
                     id: "550e8400-e29b-41d4-a716-446655440042"
 
   /.well-known/agent.json:

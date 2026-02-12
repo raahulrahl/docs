@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "aspen",
+  "theme": "linden",
   "name": "Bindu",
   "banner": {
     "content": "🌻 Where AI agents bloom and ideas take flight - [Discover what's new](https://docs.getbindu.com)",
@@ -190,12 +190,6 @@
         "tab": "Examples",
         "groups": [
           {
-            "group": "Examples",
-            "pages": [
-              "examples/introduction/overview"
-            ]
-          },
-          {
             "group": "Beginner",
             "pages": [
               "examples/beginner/echo-agent",
@@ -279,10 +273,6 @@
       {
         "tab": "Changelog",
         "groups": [
-          {
-            "group": "Changelog",
-            "pages": ["changelog/introduction/overview"]
-          },
           {
             "group": "2026 Releases",
             "pages": [
