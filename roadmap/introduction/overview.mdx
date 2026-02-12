@@ -2,34 +2,163 @@
 title: 'Roadmap'
 ---
 
-Building production-ready agent infrastructure. Here's what's coming next.
+Building the infrastructure for a secure, autonomous internet of agents.
 
-## ✅ Completed
-
-**[Redis Scheduler](/roadmap/redis-scheduler)** - Distributed task scheduling  
-**[Postgres Memory](/roadmap/postgres-memory)** - Persistent storage with vector search  
-**[Sentry Integration](/roadmap/sentry-integration)** - Error tracking and monitoring  
-**[Retry Mechanism](/roadmap/retry-mechanism)** - Tenacity-based retry logic
+---
 
 ## 🚀 In Progress
 
-**[Multi-Provider Auth](/roadmap/authentication)** - GitHub, Google, Azure, AWS Cognito 
-**[X402 Payments](/roadmap/x402)** - Crypto micropayments on Base Sepolia
-**[Negotiation](/roadmap/negotiation)** - NegotiationArena integration  
-**[DSPy Integration](/roadmap/dspy)** - Prompt optimization from feedback
+### gRPC Transport
+High-performance binary protocol for agent communication. Faster than HTTP/JSON for high-throughput scenarios.
 
-## 📋 Planned
+---
 
-**[AP2 Protocol](/roadmap/ap2-support)** - Agent payments with X402 integration  
-**[gRPC Transport](/roadmap/grpc-transport)** - High-performance binary protocol  
-**[Test Coverage 80%](/roadmap/test-coverage)** - Comprehensive testing  
-**[mTLS Support](/roadmap/mlts)** - Certificate-based authentication  
+## 📋 Planned Features
 
+### X402 Payments
+The foundation for a secure, monetized internet of agents where AI systems can autonomously transact without human intervention.
+
+**The Vision**
+Today's internet is built for humans clicking "buy now" buttons. Tomorrow's internet will be billions of AI agents autonomously discovering, negotiating, and paying for services in real-time. X402 creates the economic layer that makes this possible—where every API call, every computation, every byte of data can be instantly monetized and secured behind intelligent paywalls.
+
+**Current Reality**
+- **Base Sepolia testnet** with USDC - Proving the concept works
+- Agents successfully paying for APIs, AI services, and data storage
+- Zero human intervention required
+
+**Production Vision**
+When we move to mainnet, the internet of agents becomes economically viable:
+
+- **Multi-Network Support** - Lightning Network for instant Bitcoin micropayments, Optimism/Arbitrum/Polygon for low-cost Ethereum transactions, enabling agents to choose the most efficient payment rail for each transaction
+
+- **Intelligent Paywalls** - Services can dynamically price based on demand, quality, and consumer reputation. Premium agents pay premium prices for premium data. Budget agents access basic tiers. All automated.
+
+- **Economic Security** - Bad actors can't spam services because every request costs real money. DDoS attacks become economically infeasible. Quality of service improves when there's skin in the game.
+
+- **Agent Reputation Economy** - Agents build payment histories and credit scores. Trusted agents get better rates, faster service, and access to exclusive APIs. The system self-regulates through economic incentives.
+
+- **Frictionless Commerce** - No subscriptions, no invoices, no billing departments. Agents pay per use, in real-time, with sub-cent precision. Services scale revenue with usage automatically.
+
+**What This Enables**
+
+A world where your research agent can autonomously purchase access to academic papers, hire specialist agents for complex analysis, rent GPU compute for heavy processing, and pay for premium data feeds—all while you sleep. The internet of agents becomes self-sustaining, self-securing, and economically rational.
+
+<Frame>
+  <img className="rounded-xl" src="/assets/sunflower_1.jpeg" alt="Bindu - Building the internet of agents" />
+</Frame>
+
+---
+
+### AP2 Protocol
+The trust layer for agent commerce—solving the fundamental crisis of "who authorized this purchase?" when AI agents transact autonomously.
+
+**The Problem**
+Today's payment systems assume a human is clicking "buy" on a trusted website. When an autonomous agent initiates a payment, three critical questions emerge that current systems cannot answer:
+
+- **Authorization** - How do we prove the user actually gave the agent permission for this specific purchase?
+- **Authenticity** - How can merchants trust the agent's request reflects true user intent, not an AI hallucination or error?
+- **Accountability** - If fraud occurs, who's responsible? The user? The agent developer? The merchant? The bank?
+
+Without answers, agent commerce cannot scale. We'd get a fragmented mess of proprietary payment solutions—confusing for users, expensive for merchants, impossible for financial institutions to manage.
+
+**The Solution: Verifiable Digital Credentials**
+AP2 engineers trust into the system through cryptographically-signed digital contracts called Mandates. These are tamper-proof, non-repudiable proofs of user intent:
+
+- **Intent Mandate** - "Buy concert tickets when they go on sale, max $200" - Pre-authorized rules for human-not-present scenarios. The agent has provable authority to act within defined constraints.
+
+- **Cart Mandate** - "Yes, buy these exact shoes for $89.99" - Explicit approval for human-present scenarios. Your cryptographic signature on the exact items and price. What you see is what you pay for.
+
+- **Payment Mandate** - Shared with payment networks to signal AI agent involvement and assess transaction context for fraud prevention.
+
+**What This Enables**
+A world where your agent can autonomously execute complex, multi-party transactions with cryptographic proof of authorization at every step:
+
+- **Smarter Shopping** - "Find this jacket in green, willing to pay 20% more" - Agent monitors availability and executes the moment it's found, with provable authority.
+
+- **Coordinated Purchases** - "Book flight + hotel in Palm Springs, $700 budget" - Agent negotiates with multiple merchants simultaneously, executes both bookings atomically with signed mandates.
+
+- **Personalized Commerce** - Merchants' agents can create custom bundle offers knowing the user's intent is cryptographically verified, turning queries into higher-value sales.
+
+**The Bigger Picture**
+AP2 creates a non-repudiable audit trail from intent → cart → payment. Every transaction has a complete chain of evidence answering authorization, authenticity, and accountability. This isn't just about payments—it's about building the legal and trust infrastructure for an economy where billions of agents transact autonomously, securely, and with clear accountability.
+
+**Current Status**
+- ✅ Core protocol complete (15 data types, mandate framework, cryptographic signing)
+- 🚀 X402 integration for crypto payments (with Coinbase, Ethereum Foundation, MetaMask)
+- 📋 Traditional payment processors (Stripe, PayPal) coming next
+- 🌍 Designed for global scale: Cards today, real-time bank transfers (UPI, PIX) and digital currencies tomorrow
+
+<Frame>
+  <img className="rounded-xl" src="/assets/sunflower_2.jpeg" alt="Bindu - Building the internet of agents" />
+</Frame>
+
+---
+
+### mTLS Support
+Securing the communication channel between agents—because knowing who you're talking to isn't enough if someone can eavesdrop on the conversation.
+
+**The Problem**
+DIDs solve identity: Your agent can cryptographically prove "I am Agent X owned by User Y." But identity alone doesn't secure the communication channel. When Agent A talks to Agent B:
+
+- **Eavesdropping** - Without encryption, anyone on the network can read the messages, including sensitive data, payment information, or proprietary business logic.
+- **Man-in-the-Middle Attacks** - An attacker can intercept and modify messages in transit, changing "pay $10" to "pay $1000" without either agent knowing.
+- **Impersonation** - Even with DIDs, without mutual authentication of the transport layer, a malicious server can pretend to be Agent B and steal Agent A's credentials or data.
+
+DIDs tell you *who* the agent is. mTLS ensures *the connection itself* is authentic and encrypted end-to-end.
+
+**The Solution: Mutual TLS**
+mTLS (mutual Transport Layer Security) creates a cryptographically secure tunnel between agents where both parties prove their identity before any data flows:
+
+- **Mutual Authentication** - Both the client agent and server agent present certificates and verify each other's identity. Not just "the server is who it claims to be" but also "the client is authorized to connect."
+
+- **End-to-End Encryption** - All communication is encrypted in transit. Even if someone intercepts the network traffic, they see only encrypted gibberish, not the actual agent messages.
+
+- **Certificate-Based Trust** - Certificates are issued by trusted authorities and tied to agent DIDs. An agent can't fake its identity because it can't forge a valid certificate signed by the authority.
+
+**Integration with Hydra**
+We're leveraging Ory Hydra's OAuth2 infrastructure to manage mTLS certificates:
+
+- **Certificate Issuance** - When an agent registers with Hydra, it receives an mTLS certificate bound to its DID. This certificate becomes the agent's cryptographic identity for secure connections.
+
+- **Automatic Renewal** - Certificates expire and rotate automatically. Agents don't need manual intervention—Hydra handles the lifecycle.
+
+- **Revocation** - If an agent is compromised, its certificate can be instantly revoked across the network. No more trusting a bad actor.
+
+- **Zero-Trust Architecture** - Every connection requires fresh certificate validation. Even if an agent was trusted yesterday, it must prove itself again today.
+
+**What This Enables**
+A secure internet of agents where communication channels are as trustworthy as the identities themselves:
+
+- **Confidential Transactions** - Payment details, API keys, proprietary algorithms—all transmitted securely between agents without risk of interception.
+
+- **Regulatory Compliance** - Financial services, healthcare, legal—industries with strict data protection requirements can safely deploy agent networks.
+
+- **Enterprise Adoption** - Corporations can run agent swarms across public networks knowing their internal communications are encrypted and authenticated at the transport layer.
+
+- **Defense Against Nation-State Attacks** - Even sophisticated attackers with network access can't decrypt or modify agent communications without breaking modern cryptography.
+
+**The Bigger Picture**
+
+mTLS completes the security stack: DIDs provide identity, AP2 provides payment trust, X402 provides economic security, and mTLS provides communication security. Together, they create a defense-in-depth architecture where agents can transact autonomously in a hostile internet environment with cryptographic guarantees at every layer.
+
+Without mTLS, the internet of agents is vulnerable at the transport layer. With it, we have end-to-end security from identity through communication to payment—the foundation for a truly trustworthy autonomous agent economy.
+
+<Frame>
+  <img className="rounded-xl" src="/assets/sunflower_3.jpeg" alt="Bindu - Building the internet of agents" />
+</Frame>
+
+---
+
+### Test Coverage
+
+Comprehensive test suite with 80%+ code coverage across all modules to ensure reliability and stability of the agent infrastructure.
 
 ---
 
 ## Get Involved
 
-- **[Discord](https://discord.gg/3w5zuYUuwt)** - Join discussions
-- **[GitHub](https://github.com/getbindu/Bindu)** - Star and contribute
-- **[Issues](https://github.com/getbindu/Bindu/issues)** - Request features
+Join us in building the internet of agents:
+
+- **[Discord](https://discord.gg/3w5zuYUuwt)** - Community discussions and support
+- **[GitHub](https://github.com/getbindu/Bindu)** - Star the project and contribute
+- **[Issues](https://github.com/getbindu/Bindu/issues)** - Request features and report bugs
