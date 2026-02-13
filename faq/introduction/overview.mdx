@@ -2,31 +2,70 @@
 title: 'Frequently Asked Questions'
 ---
 
+## General
 
-<Note>
-  **🚧 Under Development**
-  
-  This FAQ section is currently being developed. We're working on compiling comprehensive answers to common questions about Bindu, A2A protocol, agent development, and the getbindu.com ecosystem.
-  
-  In the meantime, feel free to:
-  - Check our [documentation](https://docs.getbindu.com)
-  - Join our [Discord community](https://discord.gg/3w5zuYUuwt)
-  - Visit our [GitHub repository](https://github.com/getbindu/Bindu)
-</Note>
+### What is Bindu?
 
-## Coming Soon
+Bindu is an AI agent framework for A2A, AP2, and X402. It handles infrastructure identity, observability, and payments.
 
-We'll be adding answers to questions like:
+### How does the A2A protocol work?
 
-- **What is Bindu?**
-- **How does the A2A protocol work?**
-- **How do I create my first agent?**
-- **What are Skills and how do I define them?**
-- **How does agent discovery work?**
-- **What is the AP2 payment protocol?**
-- **How do I secure my agent with trust levels?**
-- **Can I deploy agents to production?**
-- **How do I integrate with enterprise identity providers?**
-- **What's the difference between agents, teams, and workflows?**
+The A2A (Agent-to-Agent) protocol is a standardized communication layer. It allows different agents to talk, share information, and collaborate with each other automatically.
 
-Have a question? Join our community and ask!
+---
+
+## Getting Started
+
+### How do I create my first agent?
+
+Just add the `bindufy()` function to your code. It takes about two minutes to transform your agent into a web-ready node.
+
+### What are Skills and how do I define them?
+
+Skills are your agent's "powers" like searching the web or querying a database. You define them in a simple configuration file to tell your agent exactly what to do.
+
+---
+
+## Agent Discovery & Identity
+
+### How does agent discovery work?
+
+Every Bindu agent has a unique digital ID (DID). It makes your agent easy to find, verify, and allows systems to "discover" and communicate for tasks.
+
+### How do I integrate with enterprise identity providers?
+
+Bindu uses Decentralized Identifiers to keep identities secure. This makes it easy to link your agent's enterprise identity.
+
+---
+
+## Payments & Security
+
+### What is the AP2 payment protocol?
+
+It allows your agent to bill other agents for its services autonomously, handling transactions without you needing to send manual invoices.
+
+### How do I secure my agent with trust levels?
+
+Security is built-in through DID authentication. You can specify which agents are allowed to talk to your other agents.
+
+---
+
+## Deployment & Architecture
+
+### Can I deploy agents to production?
+
+Absolutely. Bindu provides the professional routing, error handling, and monitoring you need to scale your agent from a local script to a real-world service.
+
+### What's the difference between agents, teams, and workflows?
+
+- **Agents** - Solo intelligence focused on one job
+- **Workflows** - A set, step-by-step path for agents to follow
+- **Teams** - A group of agents working together to solve complex problems
+
+---
+
+## Need More Help?
+
+- **[Documentation](https://docs.getbindu.com)** - Complete guides and references
+- **[Discord](https://discord.gg/3w5zuYUuwt)** - Community discussions and support
+- **[GitHub](https://github.com/getbindu/Bindu)** - Source code and issues
