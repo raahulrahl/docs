@@ -1,380 +1,218 @@
 ---
-title: 'X402 Payment Protocol'
-description: 'Enable agents to monetize services through on-chain payments'
+title: "Payment Integration (X402)"
+description: "Monetize AI agents with cryptocurrency payments"
 ---
 
-# X402 Payment Protocol
-
-Bindu implements the [x402 payment protocol](https://github.com/google-agentic-commerce/a2a-x402) following the official A2A specification, enabling agents to monetize their services through secure on-chain payments.
-
-## Overview
-
-The x402 protocol allows agents to:
-
-- **Monetize services** through cryptocurrency payments
-- **Accept payments** on multiple blockchain networks
-- **Verify transactions** using payment facilitators
-- **Settle payments** automatically after task completion
-
-<Note>
-  X402 is implemented as HTTP middleware, providing a clean and standard way to handle payments without modifying your agent logic.
-</Note>
-
----
+Bindu supports the **X402 payment protocol**, enabling you to monetize your AI agents by requiring cryptocurrency payments before executing specific methods.
 
 ## How It Works
 
-### Payment Flow
-
-The x402 payment flow consists of two requests:
-
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant X402Middleware
+    participant User
     participant Agent
-    participant Facilitator
     participant Blockchain
+    participant Wallet
 
-    Note over Client,Blockchain: Request 1: Payment Discovery
-    Client->>X402Middleware: POST /message/send (No Payment)
-    X402Middleware->>X402Middleware: Check payment config
-    X402Middleware-->>Client: 402 Payment Required<br/>{accepts: [...payment details]}
-    
-    Note over Client,Blockchain: Request 2: Payment Submission
-    Client->>Client: Sign payment with wallet
-    Client->>X402Middleware: POST /message/send<br/>X-PAYMENT: {signature, amount, ...}
-    X402Middleware->>X402Middleware: Decode & parse payment
-    X402Middleware->>Facilitator: Verify payment signature
-    Facilitator-->>X402Middleware: ✅ Valid
-    X402Middleware->>Agent: Execute task
-    Agent-->>X402Middleware: Task result
-    X402Middleware->>Facilitator: Settle payment
-    Facilitator->>Blockchain: Submit transaction
-    Blockchain-->>Facilitator: Transaction hash
-    Facilitator-->>X402Middleware: ✅ Settled
-    X402Middleware-->>Client: 200 OK + Result<br/>X-PAYMENT-RESPONSE: {success, txHash}
+    Note over User,Agent: 1. Start Payment Session
+    User->>Agent: POST /api/start-payment-session
+    Agent->>Agent: Create session (15 min expiry)
+    Agent-->>User: {session_id, browser_url}
+
+    Note over User,Wallet: 2. Complete Payment in Browser
+    User->>Agent: Open browser_url
+    Agent-->>User: Show paywall UI
+    User->>Wallet: Connect wallet (MetaMask/Coinbase)
+    Wallet-->>User: Wallet connected
+    User->>Wallet: Approve transaction
+    Wallet->>Blockchain: Submit USDC transfer
+    Blockchain-->>Wallet: Transaction confirmed
+    Wallet->>Agent: Send X-PAYMENT header<br/>(signed transaction)
+    Agent->>Agent: Store payment in session
+
+    Note over User,Agent: 3. Verify Payment
+    User->>Agent: GET /api/payment-status/{session_id}
+    Agent->>Agent: Check session status
+    Agent-->>User: {status: completed, payment_token}
+
+    Note over User,Agent: 4. Use Protected Method
+    User->>Agent: POST / (JSON-RPC)<br/>X-Payment-Token: {token}
+    Agent->>Agent: Validate payment token
+    Agent->>Blockchain: Verify transaction on-chain<br/>(balance, signature)
+    Blockchain-->>Agent: Valid
+    Agent->>Agent: Execute protected method
+    Agent-->>User: Response
 ```
-
-<Steps>
-  <Step title="First Request - Payment Discovery">
-    Client sends a request without payment. Agent responds with `402 Payment Required` and payment details.
-
-    ```json
-    {
-      "x402Version": 1,
-      "accepts": [{
-        "scheme": "exact",
-        "network": "base-sepolia",
-        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        "max_amount_required": "10000",
-        "resource": "did:bindu:user:agent:uuid",
-        "description": "Payment required to use my_agent",
-        "pay_to": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
-        "max_timeout_seconds": 600
-      }]
-    }
-    ```
-  </Step>
-
-  <Step title="Second Request - Payment Submission">
-    Client includes payment proof in `X-PAYMENT` header. Middleware verifies, executes task, and settles payment.
-
-    ```http
-    POST / HTTP/1.1
-    Content-Type: application/json
-    X-PAYMENT: eyJ4NDAyVmVyc2lvbiI6MSwic2NoZW1lIjoi...
-
-    {
-      "jsonrpc": "2.0",
-      "method": "message/send",
-      "params": {...}
-    }
-    ```
-  </Step>
-</Steps>
-
-### Middleware Actions
-
-When a payment is submitted, the middleware automatically:
-
-1. ✅ Decodes the `X-PAYMENT` header
-2. ✅ Parses the payment payload
-3. ✅ Matches against payment requirements
-4. ✅ Verifies with payment facilitator
-5. ✅ Allows request to proceed
-6. ✅ Executes agent task
-7. ✅ Settles payment on-chain
-8. ✅ Returns `X-PAYMENT-RESPONSE` header
-
----
 
 ## Configuration
 
-### Enable Payments for Your Agent
-
-Configure payment requirements in your agent manifest:
+Add `execution_cost` to your agent config:
 
 ```python
-from bindu.core.manifest import Manifest, PaymentConfig
-
-manifest = Manifest(
-    name="my_paid_agent",
-    payment_config=PaymentConfig(
-        enabled=True,
-        network="base-sepolia",
-        asset="0x036CbD53842c5426634e7929541eC2318f3dCF7e",  # USDC
-        amount="10000",  # 0.01 USDC (6 decimals)
-        pay_to="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
-        facilitator_url="https://facilitator.example.com",
-        timeout_seconds=600
-    )
-)
+config = {
+    "author": "your.email@example.com",
+    "name": "paid_agent",
+    "description": "An agent that requires payment",
+    "deployment": {"url": "http://localhost:3773", "expose": True},
+    "execution_cost": {
+        "amount": "$0.0001",           # Amount in USD (converted to USDC)
+        "token": "USDC",                # Token type
+        "network": "base-sepolia",      # Network (base-sepolia for testing)
+        "pay_to_address": "0x265<your-wallet-address>",
+        "protected_methods": [
+            "message/send"              # Methods requiring payment
+        ]
+    }
+}
 ```
 
-### Configuration Options
+## Setup for Testing
 
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `enabled` | Enable payment requirement | Yes |
-| `network` | Blockchain network (e.g., `base-sepolia`) | Yes |
-| `asset` | Token contract address | Yes |
-| `amount` | Payment amount in smallest unit | Yes |
-| `pay_to` | Recipient wallet address | Yes |
-| `facilitator_url` | Payment verification service URL | Yes |
-| `timeout_seconds` | Payment validity timeout | No (default: 600) |
+### 1. Create a Crypto Wallet
 
----
+**MetaMask (Recommended):**
+1. Install [MetaMask browser extension](https://metamask.io/)
+2. Create a new wallet
+3. Copy your wallet address (starts with `0x...`)
 
-## Supported Networks
+**Coinbase Wallet:**
+1. Install [Coinbase Wallet extension](https://www.coinbase.com/wallet)
+2. Set up your wallet
+3. Copy your wallet address
 
-Bindu supports payments on multiple blockchain networks:
+### 2. Get Test USDC
 
-- **Base Sepolia** (Testnet) - `base-sepolia`
-- **Base Mainnet** - `base`
-- **Ethereum Mainnet** - `ethereum`
-- **Polygon** - `polygon`
+For Base Sepolia testnet:
 
-<Note>
-  For testing, we recommend using Base Sepolia testnet with test USDC tokens.
-</Note>
+1. **Get Base Sepolia ETH** (for gas fees):
+   - Visit [Chainlink Faucet](https://faucets.chain.link/base-sepolia)
+   - Connect your wallet
+   - Request test ETH
 
----
+2. **Get Base Sepolia USDC**:
+   - The payment system will guide you through obtaining test USDC
 
-## Testing Payments
-
-### Quick Start
-
-<Steps>
-  <Step title="Generate Test Wallet">
-    ```bash
-    python examples/generate_test_wallet.py
-    ```
-
-    Save the generated address and private key for testing.
-  </Step>
-
-  <Step title="Send First Request">
-    ```bash
-    curl --location 'http://localhost:3773/' \
-    --header 'Content-Type: application/json' \
-    --data '{
-        "jsonrpc": "2.0",
-        "method": "message/send",
-        "params": {
-            "message": {
-                "role": "user",
-                "parts": [{"kind": "text", "text": "Hello"}],
-                "kind": "message",
-                "messageId": "msg-1",
-                "contextId": "ctx-1",
-                "taskId": "task-1"
-            }
-        },
-        "id": "1"
-    }'
-    ```
-
-    Response will include payment requirements in metadata.
-  </Step>
-
-  <Step title="Generate Signed Payment">
-    ```bash
-    python examples/sign_payment.py \
-      --private-key "0xYOUR_PRIVATE_KEY" \
-      --network "base-sepolia" \
-      --asset "0x036CbD53842c5426634e7929541eC2318f3dCF7e" \
-      --amount "10000" \
-      --pay-to "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
-    ```
-  </Step>
-
-  <Step title="Send Payment Request">
-    Include the signed payment in the `X-PAYMENT` header and retry the request.
-  </Step>
-</Steps>
-
-### Testing Scenarios
-
-Test different payment scenarios:
-
-- ✅ **Successful payment flow** - Valid payment with correct signature
-- ❌ **Invalid signature** - Payment with incorrect signature
-- ❌ **Settlement failure** - Payment verification succeeds but settlement fails
-- ✅ **Agent without payment** - Request to agent that doesn't require payment
-
----
-
-## Client Integration
-
-### JavaScript/TypeScript
-
-```typescript
-import { X402Client } from '@bindu/x402-client';
-
-const client = new X402Client({
-  agentUrl: 'http://localhost:3773',
-  wallet: {
-    privateKey: process.env.WALLET_PRIVATE_KEY,
-    network: 'base-sepolia'
-  }
-});
-
-// Automatically handles payment flow
-const response = await client.sendMessage({
-  role: 'user',
-  parts: [{ kind: 'text', text: 'Hello' }]
-});
-```
-
-### Python
+### 3. Update Agent Configuration
 
 ```python
-from bindu.client import X402Client
-
-client = X402Client(
-    agent_url="http://localhost:3773",
-    private_key="0xYOUR_PRIVATE_KEY",
-    network="base-sepolia"
-)
-
-# Automatically handles payment flow
-response = client.send_message(
-    role="user",
-    parts=[{"kind": "text", "text": "Hello"}]
-)
+"pay_to_address": "0xYourWalletAddressHere"
 ```
 
----
+## Payment Flow
 
-## Architecture
+### Step 1: Start a Payment Session
 
-### Middleware Design
-
-X402 is implemented as HTTP middleware, providing clean separation of concerns:
-
-```
-Request → X402Middleware → MessageHandler → Agent → Response
-            ↓                                          ↓
-      Verify Payment                            Settle Payment
+```bash
+curl --location --request POST 'http://localhost:3773/api/start-payment-session' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer <your-access-token>'
 ```
 
-**Benefits:**
+**Response:**
+```json
+{
+    "session_id": "<session-id>",
+    "browser_url": "http://localhost:3773/payment-capture?session_id=<session-id>",
+    "expires_at": "<expires-at>",
+    "status": "pending"
+}
+```
 
-- ✅ **Clean separation** - Payment logic separate from agent logic
-- ✅ **Standard protocol** - Follows official x402 specification
-- ✅ **Easy integration** - No changes to existing agent code
-- ✅ **Secure** - Cryptographic verification of all payments
+### Step 2: Complete Payment in Browser
 
----
+1. Open the `browser_url` in your browser
+2. Connect your wallet (MetaMask or Coinbase Wallet)
+3. Review payment details:
+   - Amount in USDC
+   - Recipient address
+   - Network (Base Sepolia)
+4. Approve and sign the transaction
+5. Wait for blockchain confirmation
 
-## Implementation Phases
+### Step 3: Verify Payment Status
 
-The x402 implementation was completed in three phases:
+```bash
+curl --location 'http://localhost:3773/api/payment-status/<session_id>' \
+--header 'Authorization: Bearer <your-access-token>'
+```
 
-### Phase 1: Payment Detection ✅
-- Return `402 Payment Required` with payment details
-- Include payment requirements in task metadata
-- Support payment configuration in agent manifest
+**Response:**
+```json
+{
+    "session_id": "<session-id>",
+    "status": "completed",
+    "payment_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
 
-### Phase 2: Payment Verification & Settlement ✅
-- Verify payment signatures and amounts
-- Integrate with payment facilitators
-- Settle payments on-chain after task completion
-- Handle payment errors gracefully
+### Step 4: Use the Agent with Payment Token
 
-### Phase 3: Optimization & Polish ✅
-- Performance optimization
-- Enhanced error messages
-- Comprehensive testing
-- Documentation and examples
+```bash
+curl --location 'http://localhost:3773/' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer <your-access-token>' \
+--header 'X-Payment-Token: <payment-token>' \
+--data '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+        "message": {
+            "role": "user",
+            "content": "Hello, paid agent!"
+        }
+    },
+    "id": 1
+}'
+```
 
----
+## Example Implementation
+
+See the complete example:
+```
+examples/beginner/echo_agent_behind_paywall.py
+```
+
+## Payment Behavior
+
+- Each new task requires payment when the agent is behind a paywall
+- If a task returns `input_required` status, no payment is needed for that interaction
+- Once a task completes successfully, a new payment is required for the next task
+- Payment tokens are task-specific and cannot be reused
 
 ## Security Considerations
 
-<Warning>
-  **Never expose private keys in your code or version control.** Always use environment variables or secure key management systems.
-</Warning>
+- **Wallet Security**: Never share private keys or seed phrases
+- **Test Networks**: Always test on Base Sepolia before mainnet
+- **Payment Verification**: Payments are verified on-chain via blockchain signatures
+- **Session Expiration**: Payment sessions expire after 60 seconds by default
+- **Token Storage**: Payment tokens are JWTs with expiration times
 
-### Best Practices
+## Production Deployment
 
-- **Use testnet first** - Test thoroughly on Base Sepolia before mainnet
-- **Secure private keys** - Use environment variables or key management services
-- **Validate amounts** - Always verify payment amounts match requirements
-- **Monitor transactions** - Track payment settlements on-chain
-- **Handle errors** - Implement proper error handling for payment failures
+When ready for production:
 
----
+1. **Switch to Base Mainnet**:
+   ```python
+   "network": "base"  # Change from "base-sepolia"
+   ```
 
-## Troubleshooting
+2. **Use Real USDC**: Ensure users have actual USDC on Base mainnet
 
-### Common Issues
+3. **Update Wallet Address**: Use your production wallet address
 
-<AccordionGroup>
-  <Accordion title="Payment verification failed">
-    **Cause:** Invalid signature or payment parameters don't match requirements.
-    
-    **Solution:** Verify that the payment signature is correct and all parameters (network, asset, amount) match the agent's requirements.
-  </Accordion>
+4. **Monitor Payments**: Track incoming payments to your wallet
 
-  <Accordion title="Payment settlement failed">
-    **Cause:** On-chain transaction failed or facilitator error.
-    
-    **Solution:** Check facilitator logs, verify wallet has sufficient gas, and ensure the payment hasn't already been settled.
-  </Accordion>
+5. **Set Appropriate Pricing**: Adjust `amount` based on service value
 
-  <Accordion title="Payment required error persists">
-    **Cause:** Missing or invalid `X-PAYMENT` header.
-    
-    **Solution:** Ensure the `X-PAYMENT` header is included in the second request with a valid signed payment payload.
-  </Accordion>
-</AccordionGroup>
+## Tips
 
----
+- **Start Small**: Use low amounts for testing (e.g., `$0.0001`)
+- **Clear Communication**: Inform users about payment requirements upfront
+- **Handle Failures**: Implement proper error handling for failed payments
+- **Session Management**: Clean up expired payment sessions regularly
+- **User Experience**: Provide clear instructions in your UI
 
-## Resources
+## Related
 
-- **[X402 Specification](https://github.com/google-agentic-commerce/a2a-x402)** - Official protocol documentation
-- **[Implementation Guide](https://github.com/getbindu/Bindu/blob/main/docs/x402-middleware-implementation.md)** - Detailed implementation details
-- **[Testing Guide](https://github.com/getbindu/Bindu/blob/main/docs/x402-testing-guide.md)** - Complete testing instructions
-- **[Phase Documentation](https://github.com/getbindu/Bindu/blob/main/docs/x402-implementation-phases.md)** - Implementation phases and progress
-
----
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Configure Your Agent" icon="gear" href="/bindu/create-bindu-agent/configuration">
-    Add payment configuration to your agent manifest
-  </Card>
-  <Card title="Test Payments" icon="flask" href="https://github.com/getbindu/Bindu/blob/main/docs/x402-testing-guide.md">
-    Follow the testing guide to verify your setup
-  </Card>
-  <Card title="Client Integration" icon="code" href="https://github.com/getbindu/Bindu">
-    Integrate x402 client in your application
-  </Card>
-  <Card title="Join Discord" icon="discord" href="https://discord.gg/3w5zuYUuwt">
-    Get help from the community
-  </Card>
-</CardGroup>
+- [X402 Protocol Specification](https://github.com/coinbase/x402)
+- [Base Sepolia Testnet](https://docs.base.org/network-information)

@@ -1,399 +1,233 @@
 ---
-title: 'Observability Overview'
-description: 'Monitor and observe your Bindu agents with comprehensive observability tools'
+title: "Observability & Monitoring"
+description: "Monitor and debug agents with OpenTelemetry and Sentry"
 ---
 
-# Observability Overview
-
-Bindu provides comprehensive observability through OpenTelemetry, enabling you to monitor, trace, and analyze your agent's performance and behavior in real-time.
-
-## What is Observability?
-
-Observability gives you deep insights into your agent's internal state through:
-
-- **Traces** - Follow requests through the entire system
-- **Metrics** - Track performance and resource usage
-- **Logs** - Capture detailed execution information
-- **Events** - Monitor state transitions and key moments
-
----
-
-## Why Observability Matters
-
-<CardGroup cols={2}>
-  <Card title="Performance Analysis" icon="chart-line">
-    Identify bottlenecks and optimize agent response times
-  </Card>
-  <Card title="Error Debugging" icon="bug">
-    Quickly diagnose and fix issues with detailed traces
-  </Card>
-  <Card title="State Visibility" icon="eye">
-    Track task state transitions and agent behavior
-  </Card>
-  <Card title="Production Monitoring" icon="server">
-    Monitor agent health and performance in production
-  </Card>
-</CardGroup>
-
----
+Bindu integrates with **OpenTelemetry (OTEL)** and **Sentry** to provide comprehensive observability and error tracking for your agents. Monitor performance, trace execution flows, and debug issues using industry-standard platforms.
 
 ## Architecture
 
-Bindu implements distributed tracing across the entire task execution lifecycle:
-
 ```mermaid
-graph LR
-    A[Client Request] --> B[TaskManager]
-    B --> C[Scheduler]
-    C --> D[Worker]
-    D --> E[Agent Execution]
-    
-    B -.->|Trace Context| F[OpenTelemetry]
-    C -.->|Span Propagation| F
-    D -.->|Worker Spans| F
-    E -.->|Agent Metrics| F
-    
-    F --> G[Jaeger/Tempo/etc]
-    
-    style F fill:#f9f,stroke:#333,stroke-width:2px
-    style G fill:#bbf,stroke:#333,stroke-width:2px
+sequenceDiagram
+    participant Agent
+    participant OTEL
+    participant Sentry
+    participant ObservabilityPlatform (Langfuse/Arize)
+
+    Note over Agent: Agent Startup (bindufy)
+
+    rect rgb(240, 248, 255)
+        Note over Agent,OTEL: OpenTelemetry Setup
+        Agent->>Agent: Check TELEMETRY_ENABLED
+        Agent->>OTEL: Initialize TracerProvider<br/>(service name, version, env)
+        Agent->>OTEL: Configure OTLP Exporter<br/>(endpoint, headers)
+        Agent->>OTEL: Add BatchSpanProcessor
+        OTEL-->>Agent: Tracer ready
+    end
+
+    rect rgb(255, 248, 240)
+        Note over Agent,Sentry: Sentry Setup
+        Agent->>Agent: Check SENTRY_ENABLED
+        Agent->>Sentry: Initialize SDK<br/>(DSN, environment, release)
+        Agent->>Sentry: Add integrations<br/>(Starlette, SQLAlchemy, Redis)
+        Sentry-->>Agent: Error tracking ready
+    end
+
+    Note over Agent: Agent Running
+
+    rect rgb(240, 255, 240)
+        Note over Agent,ObservabilityPlatform: Runtime Telemetry
+        Agent->>OTEL: Create spans (traces)
+        OTEL->>ObservabilityPlatform: Export to Langfuse/Arize<br/>(batched, async)
+        Agent->>Sentry: Capture errors/performance
+        Sentry->>ObservabilityPlatform: Send to Sentry.io
+    end
 ```
 
-### Trace Flow
+## OpenTelemetry Setup
 
-1. **TaskManager** - Creates root span for operations
-2. **Scheduler** - Propagates trace context to workers
-3. **Worker** - Restores context and creates child spans
-4. **Agent** - Tracks execution time and state changes
+### Supported Platforms
 
----
+- **[Arize](https://arize.com/)** - AI observability platform for monitoring and debugging ML models
+- **[Langfuse](https://langfuse.com/)** - Open-source LLM engineering platform with tracing and analytics
+- **Any OTEL-compatible platform** - Supports standard OTLP protocol
 
-## Key Features
+### Configuration
 
-### Distributed Tracing
-
-Track requests across the entire system:
-
-- ✅ **End-to-end visibility** - From API request to agent response
-- ✅ **Span propagation** - Maintains context across async boundaries
-- ✅ **Parent-child relationships** - Clear hierarchy of operations
-- ✅ **Timing information** - Precise duration of each operation
-
-### Rich Attributes
-
-Comprehensive metadata on every span:
-
-- `bindu.operation` - Operation name (e.g., "send_message")
-- `bindu.task_id` - Task UUID
-- `bindu.context_id` - Conversation context
-- `bindu.agent.name` - Agent identifier
-- `bindu.agent.did` - Agent DID
-- `bindu.agent.execution_time` - Agent processing time
-
-### State Transition Events
-
-Timeline markers for key moments:
-
-- Task state changes (working → completed)
-- Error occurrences with stack traces
-- Input/auth requirements
-- Custom agent events
-
-### Performance Metrics
-
-Automatic metric collection:
-
-- `bindu_tasks_total` - Counter of tasks processed
-- `bindu_task_duration_seconds` - Histogram of durations
-- `bindu_active_tasks` - Current active tasks
-- `bindu_contexts_total` - Contexts managed
-
----
-
-## Supported Backends
-
-Bindu works with any OpenTelemetry-compatible backend:
-
-### Open Source
-
-- **[Jaeger](/bindu/learn/observability/jaeger)** - Distributed tracing platform
-- **Grafana Tempo** - High-scale distributed tracing
-- **Zipkin** - Distributed tracing system
-- **SigNoz** - Full-stack observability platform
-
-### Commercial
-
-- **Honeycomb** - Observability for production systems
-- **New Relic** - Full-stack observability
-- **Datadog** - Monitoring and analytics
-- **Lightstep** - Observability for microservices
-
----
-
-## Quick Start
-
-<Steps>
-  <Step title="Start Jaeger">
-    ```bash
-    docker run -d --name jaeger \
-      -e COLLECTOR_OTLP_ENABLED=true \
-      -p 16686:16686 \
-      -p 4317:4317 \
-      -p 4318:4318 \
-      jaegertracing/all-in-one:latest
-    ```
-  </Step>
-
-  <Step title="Configure Agent">
-    Add to your agent config:
-    
-    ```json
-    {
-      "name": "my-agent",
-      "telemetry": true,
-      "oltp": {
-        "endpoint": "http://localhost:4318/v1/traces",
-        "service_name": "bindu-agent"
-      }
-    }
-    ```
-  </Step>
-
-  <Step title="Run Agent">
-    ```bash
-    python your_agent.py
-    ```
-  </Step>
-
-  <Step title="View Traces">
-    Open http://localhost:16686 and select your service
-  </Step>
-</Steps>
-
----
-
-## Configuration Options
-
-### Agent Config (Recommended)
-
-```json
-{
-  "telemetry": true,
-  "oltp": {
-    "endpoint": "http://localhost:4318/v1/traces",
-    "service_name": "bindu-agent",
-    "service_version": "1.0.0",
-    "deployment_environment": "production"
-  }
-}
-```
-
-### Environment Variables
+Enable OpenTelemetry tracing via environment variables (see `.env.example`):
 
 ```bash
-# OTLP endpoint
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318/v1/traces"
+# Enable telemetry
+TELEMETRY_ENABLED=true
 
-# Service identification
-export OTEL_SERVICE_NAME="bindu-agent"
-export OTEL_SERVICE_VERSION="1.0.0"
-export DEPLOYMENT_ENV="production"
+# OTEL endpoint (platform-specific)
+OLTP_ENDPOINT=https://cloud.langfuse.com/api/public/otel/v1/traces
 
-# Batch processing (recommended)
-export OTEL_USE_BATCH_PROCESSOR="true"
-export OTEL_BSP_SCHEDULE_DELAY="5000"
-export OTEL_BSP_MAX_EXPORT_BATCH_SIZE="512"
+# Service name for your agent
+OLTP_SERVICE_NAME=research-agent
+
+# Authentication headers (platform-specific)
+OLTP_HEADERS={"Authorization":"Basic <base64-encoded-credentials>"}
+
+# Optional: Enable verbose logging
+OLTP_VERBOSE_LOGGING=true
+
+# Optional: Additional configuration
+OLTP_SERVICE_VERSION=1.0.0
+OLTP_DEPLOYMENT_ENVIRONMENT=production
+OLTP_BATCH_MAX_QUEUE_SIZE=2048
+OLTP_BATCH_SCHEDULE_DELAY_MILLIS=5000
 ```
 
-<Note>
-  Agent config takes precedence over environment variables.
-</Note>
+### Platform-Specific Setup
 
----
+#### Langfuse
 
-## Example Trace
+1. **Create Account**: Sign up at [cloud.langfuse.com](https://cloud.langfuse.com)
 
-Here's what a complete trace looks like:
+2. **Generate API Keys**:
+   - Navigate to Settings → API Keys
+   - Create new key pair (public and secret)
 
+3. **Encode Credentials**:
+   ```bash
+   # Base64 encode "public-key:secret-key"
+   echo -n "pk-xxx:sk-xxx" | base64
+   ```
+
+4. **Configure Environment**:
+   ```bash
+   TELEMETRY_ENABLED=true
+   OLTP_ENDPOINT=https://cloud.langfuse.com/api/public/otel/v1/traces
+   OLTP_SERVICE_NAME=your-agent-name
+   OLTP_HEADERS={"Authorization":"Basic <base64-encoded-credentials>"}
+   OLTP_VERBOSE_LOGGING=true
+   ```
+
+#### Arize
+
+1. **Create Account**: Sign up at [arize.com](https://arize.com)
+
+2. **Get Credentials**:
+   - Navigate to Settings → API Keys
+   - Copy Space ID and API Key
+
+3. **Configure Environment**:
+   ```bash
+   TELEMETRY_ENABLED=true
+   OLTP_ENDPOINT=https://otlp.arize.com/v1
+   OLTP_SERVICE_NAME=your-agent-name
+   OLTP_HEADERS={"space_id":"<your-space-id>","api_key":"<your-api-key>"}
+   OLTP_VERBOSE_LOGGING=true
+   ```
+
+## Sentry Error Tracking
+
+### Configuration
+
+Enable Sentry via environment variables (see `.env.example`):
+
+```bash
+# Enable Sentry
+SENTRY_ENABLED=true
+
+# Sentry DSN (from your Sentry project)
+SENTRY_DSN=https://<key>@<org-id>.ingest.sentry.io/<project-id>
+
+# Optional: Environment name
+SENTRY_ENVIRONMENT=production
+
+# Optional: Release version
+SENTRY_RELEASE=1.0.0
+
+# Optional: Performance monitoring
+SENTRY_TRACES_SAMPLE_RATE=1.0
+SENTRY_PROFILES_SAMPLE_RATE=1.0
+SENTRY_ENABLE_TRACING=true
+
+# Optional: Privacy settings
+SENTRY_SEND_DEFAULT_PII=false
+SENTRY_DEBUG=false
 ```
-task_manager.send_message (250ms)
-├─ bindu.operation: "send_message"
-├─ bindu.request_id: "req-123"
-├─ bindu.task_id: "task-456"
-└─ run task (220ms)
-   └─ agent.execute (200ms)
-      ├─ bindu.agent.name: "my-agent"
-      ├─ bindu.agent.did: "did:bindu:user:agent:uuid"
-      ├─ bindu.agent.execution_time: 0.200
-      └─ Events:
-         └─ task.state_changed
-            ├─ from_state: "working"
-            └─ to_state: "completed"
-```
 
-### Trace Attributes
+### Setting Up Sentry
 
-| Attribute | Description | Example |
-|-----------|-------------|---------|
-| `bindu.operation` | Operation type | `send_message` |
-| `bindu.task_id` | Task identifier | `task-456` |
-| `bindu.agent.name` | Agent name | `my-agent` |
-| `bindu.agent.execution_time` | Processing time | `0.200` |
-| `bindu.success` | Success flag | `true` |
+1. **Create Account**: Sign up at [sentry.io](https://sentry.io)
 
----
+2. **Create Project**:
+   - Select Python as platform
+   - Copy the DSN from project settings
 
-## Observability Best Practices
+3. **Configure Environment**:
+   ```bash
+   SENTRY_ENABLED=true
+   SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+   SENTRY_ENVIRONMENT=production
+   SENTRY_RELEASE=1.0.0
+   ```
 
-### 1. Consistent Naming
+4. **Restart Agent**: Sentry initializes on startup
 
-Use clear, consistent span names:
+## Agent Configuration
+
+No code changes needed - observability is configured via environment variables:
 
 ```python
-# Good
-"task_manager.send_message"
-"agent.execute"
-"scheduler.enqueue"
+config = {
+    "author": "your.email@example.com",
+    "name": "research_agent",
+    "description": "A research assistant agent",
+    "deployment": {"url": "http://localhost:3773", "expose": True},
+    "skills": ["skills/question-answering"],
+}
 
-# Avoid
-"send_msg"
-"exec"
-"queue"
+bindufy(config, handler)
 ```
 
-### 2. Rich Attributes
+## Best Practices
 
-Add meaningful context to spans:
+### Sampling
 
-```python
-span.set_attribute("bindu.agent.name", agent_name)
-span.set_attribute("bindu.task_id", task_id)
-span.set_attribute("bindu.message_count", len(messages))
-```
-
-### 3. Span Events
-
-Use events for timeline markers:
-
-```python
-span.add_event("task.state_changed", {
-    "from_state": "working",
-    "to_state": "completed"
-})
-```
-
-### 4. Error Handling
-
-Always record errors with context:
-
-```python
-try:
-    result = await agent.execute()
-except Exception as e:
-    span.record_exception(e)
-    span.set_status(Status(StatusCode.ERROR))
-    raise
-```
-
-### 5. Sampling Strategy
-
-Configure sampling for high-volume production:
+For high-traffic agents, use sampling to reduce costs:
 
 ```bash
 # Sample 10% of traces
-export OTEL_TRACES_SAMPLER="parentbased_traceidratio"
-export OTEL_TRACES_SAMPLER_ARG="0.1"
+SENTRY_TRACES_SAMPLE_RATE=0.1
+
+# Sample 10% of profiles
+SENTRY_PROFILES_SAMPLE_RATE=0.1
 ```
 
----
+### Environment Separation
 
-## Performance Tuning
-
-### Batch Processor
-
-Optimize for production workloads:
+Use different environments for development/production:
 
 ```bash
-# High-volume production
-export OTEL_BSP_MAX_QUEUE_SIZE="4096"
-export OTEL_BSP_SCHEDULE_DELAY="10000"
-export OTEL_BSP_MAX_EXPORT_BATCH_SIZE="1024"
-export OTEL_BSP_EXPORT_TIMEOUT="60000"
+# Development
+SENTRY_ENVIRONMENT=development
+OLTP_SERVICE_NAME=agent-dev
+
+# Production
+SENTRY_ENVIRONMENT=production
+OLTP_SERVICE_NAME=agent-prod
 ```
 
-### Development vs Production
+### Custom Sentry Context
 
-**Development:**
-```bash
-# Immediate export for debugging
-export OTEL_USE_BATCH_PROCESSOR="false"
+```python
+import sentry_sdk
+
+sentry_sdk.set_context("business", {
+    "plan": "premium",
+    "credits": 100
+})
+
+sentry_sdk.set_tag("feature", "pdf-processing")
 ```
 
-**Production:**
-```bash
-# Batched export for efficiency
-export OTEL_USE_BATCH_PROCESSOR="true"
-export OTEL_BSP_SCHEDULE_DELAY="5000"
-```
+## Related
 
----
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="No traces appearing">
-    **Check:**
-    - Jaeger is running: `docker ps | grep jaeger`
-    - Endpoint is correct: `echo $OTEL_EXPORTER_OTLP_ENDPOINT`
-    - Agent logs show observability initialization
-    - Test endpoint: `curl http://localhost:4318/v1/traces`
-  </Accordion>
-
-  <Accordion title="Traces delayed">
-    **Cause:** BatchSpanProcessor batches spans before sending (default: 5s)
-    
-    **Solution:** Set `OTEL_USE_BATCH_PROCESSOR="false"` for development
-  </Accordion>
-
-  <Accordion title="Wrong service name">
-    **Solution:** Set `OTEL_SERVICE_NAME` or configure in agent config
-  </Accordion>
-
-  <Accordion title="High memory usage">
-    **Cause:** Queue size too large or export delays
-    
-    **Solution:** Tune batch processor parameters:
-    ```bash
-    export OTEL_BSP_MAX_QUEUE_SIZE="2048"
-    export OTEL_BSP_SCHEDULE_DELAY="5000"
-    ```
-  </Accordion>
-</AccordionGroup>
-
----
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Tracing Guide" icon="route" href="/bindu/learn/observability/tracing">
-    Learn about distributed tracing in detail
-  </Card>
-  <Card title="Jaeger Setup" icon="server" href="/bindu/learn/observability/jaeger">
-    Set up Jaeger for trace visualization
-  </Card>
-  <Card title="Metrics" icon="chart-bar" href="/bindu/learn/observability/metrics">
-    Understand metrics and performance monitoring
-  </Card>
-  <Card title="Phoenix Dashboard" icon="gauge" href="/bindu/learn/observability/phoenix">
-    Use the monitoring dashboard
-  </Card>
-</CardGroup>
-
----
-
-## Resources
-
-- **[OpenTelemetry Docs](https://opentelemetry.io/docs/)** - Official OpenTelemetry documentation
-- **[Jaeger Documentation](https://www.jaegertracing.io/docs/)** - Jaeger tracing platform
-- **[GitHub Examples](https://github.com/getbindu/Bindu/tree/main/examples)** - Code examples
-- **[Discord Community](https://discord.gg/3w5zuYUuwt)** - Get help and share insights
+- [OpenTelemetry Python](https://opentelemetry.io/docs/instrumentation/python/)
+- [Langfuse Documentation](https://langfuse.com/docs)
+- [Arize Documentation](https://docs.arize.com/)
+- [Sentry Python SDK](https://docs.sentry.io/platforms/python/)

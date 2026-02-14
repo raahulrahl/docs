@@ -1,0 +1,127 @@
+---
+title: "Decentralized Identifiers (DIDs)"
+description: "Secure, verifiable identity for AI agents"
+---
+
+Bindu uses **Decentralized Identifiers (DIDs)** to provide secure, verifiable, and self-sovereign identity for AI agents. Each agent gets a unique DID that serves as its cryptographic identity across the network.
+
+## What is a DID?
+
+A **DID (Decentralized Identifier)** is a globally unique identifier that:
+- **Doesn't require a central authority** - No single entity controls it
+- **Is cryptographically verifiable** - Backed by public/private key pairs
+- **Is persistent** - Remains valid across platforms and time
+- **Enables trust** - Verify agent authenticity without intermediaries
+
+### DID Format
+
+Bindu DIDs follow the W3C standard structure:
+
+```
+did:bindu:<email>:<agent_name>:<unique_hash>
+```
+
+**Example:**
+```
+did:bindu:gaurikasethi88_at_gmail_com:echo_agent:352c17d030fb4bf1ab33d04b102aef3d
+```
+
+## DID Resolution
+
+Retrieve a DID document for an agent:
+
+```bash
+curl -X POST http://localhost:3773/did/resolve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "did": "did:bindu:gaurikasethi88_at_gmail_com:echo_agent:352c17d030fb4bf1ab33d04b102aef3d"
+  }'
+```
+
+### DID Document Structure
+
+```json
+{
+    "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://getbindu.com/ns/v1"
+    ],
+    "id": "did:bindu:gaurikasethi88_at_gmail_com:echo_agent:352c17d030fb4bf1ab33d04b102aef3d",
+    "created": "2026-02-11T05:33:56.969079+00:00",
+    "authentication": [
+        {
+            "id": "did:bindu:...#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:bindu:...",
+            "publicKeyBase58": "<base58-encoded-public-key>"
+        }
+    ]
+}
+```
+
+## DID Generation
+
+When you create a Bindu agent, a DID is automatically generated:
+
+```python
+config = {
+    "author": "your.email@example.com",
+    "name": "my_agent",
+    "description": "My AI agent"
+}
+
+bindufy(config, handler)
+# DID generated: did:bindu:your_email_at_example_com:my_agent:<hash>
+```
+
+## Message Signing
+
+Agents sign responses with their private key. The signature is included in task response metadata:
+
+```json
+{
+    "artifacts": [
+        {
+            "parts": [
+                {
+                    "kind": "text",
+                    "text": "The capital of India is **New Delhi**.",
+                    "metadata": {
+                        "did.message.signature": "<base58-signature>"
+                    }
+                }
+            ]
+        }
+    ]
+}
+```
+
+This signature proves:
+- **Authenticity** - Message came from the agent with this DID
+- **Integrity** - Message hasn't been tampered with
+- **Non-repudiation** - Agent cannot deny sending the message
+
+## Security Best Practices
+
+**Private Key Protection:**
+- Never hardcode keys in code
+- Don't commit keys to version control
+- Use secure key storage solutions
+- Back up keys securely
+
+**Key Rotation:**
+- Rotate keys every 90-180 days
+- Update after team changes
+- Follow compliance requirements
+
+## Standards
+
+Bindu DIDs follow W3C standards:
+- [W3C DID Core Specification](https://www.w3.org/TR/did-core/)
+- [DID Method Registry](https://www.w3.org/TR/did-spec-registries/)
+- Ed25519 signature scheme (RFC 8032)
+
+## Related
+
+- [Bindu Directory](https://bindus.directory)
+- [Atproto DID Specification](https://atproto.com/specs/did)
