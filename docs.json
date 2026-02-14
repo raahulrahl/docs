@@ -118,23 +118,6 @@
             "group": "Learn",
             "pages": [
               {
-                "group": "Observability",
-                "pages": [
-                  "bindu/learn/observability/overview",
-                  "bindu/learn/observability/tracing",
-                  "bindu/learn/observability/jaeger",
-                  "bindu/learn/observability/metrics",
-                  "bindu/learn/observability/phoenix"
-                ]
-              },
-              {
-                "group": "Authentication",
-                "pages": [
-                  "bindu/learn/authentication/overview",
-                  "bindu/learn/authentication/auth0"
-                ]
-              },
-              {
                 "group": "DID",
                 "pages": [
                   "bindu/learn/did/overview"
@@ -159,21 +142,27 @@
                 ] 
               },
               {
-                "group": "Sentry",
+                "group": "Authentication",
                 "pages": [
-                  "bindu/learn/sentry/overview"
+                  "bindu/learn/authentication/overview"
+                ]
+              },
+              {
+                "group": "Observability",
+                "pages": [
+                  "bindu/learn/observability/overview"
+                ]
+              },
+              {
+                "group": "Health Metrics",
+                "pages": [
+                  "bindu/learn/health-metrics/overview"
                 ] 
               },
               {
-                "group": "Retry",
+                "group": "Negotiation",
                 "pages": [
-                  "bindu/learn/retry/overview"
-                ] 
-              },
-              {
-                "group": "Notification",
-                "pages": [
-                  "bindu/learn/notification/overview"
+                  "bindu/learn/negotiation/overview"
                 ] 
               }
             ]

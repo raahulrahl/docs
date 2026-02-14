@@ -42,9 +42,23 @@ curl http://localhost:3773/health
 
 **Response Fields:**
 - `status` - Overall health status (`ok` or `error`)
+- `ready` - Whether agent is ready to accept requests
 - `uptime_seconds` - Time since agent started
 - `version` - Bindu version number
-- `ready` - Whether agent is ready to accept requests
+- `health` - Health status (`healthy` or `unhealthy`)
+- `runtime` - Runtime information:
+  - `storage_backend` - Storage backend type (e.g., `PostgresStorage`)
+  - `scheduler_backend` - Scheduler backend type (e.g., `RedisScheduler`)
+  - `task_manager_running` - Whether task manager is running
+  - `strict_ready` - Strict readiness check status
+- `application` - Application information:
+  - `penguin_id` - Unique penguin identifier
+  - `agent_did` - Agent's DID (Decentralized Identifier)
+- `system` - System information:
+  - `python_version` - Python version
+  - `platform` - Operating system platform
+  - `platform_release` - OS release version
+  - `environment` - Deployment environment
 
 ## Metrics API
 
