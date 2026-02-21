@@ -1,0 +1,169 @@
+---
+title: 'v2026.8.7 - Bug Fixes and Community Contributions'
+description: 'Stability improvements, dependency updates, and new example agents'
+---
+
+## Overview
+
+This release includes important bug fixes for schema management, type checking improvements, dependency updates, and several community-contributed example agents. Focus on stability, code quality, and expanding the example library.
+
+**Version:** 2026.8.7  
+**Date:** February 21, 2026  
+**Contributors:** Raahul Dutta, rautsoham03, ssjgit08, Krushna, AseemPrasad, Sharda2004196, Krushna56
+
+---
+
+## Breaking Changes
+
+<Note>
+**No breaking changes in this release**
+
+All changes are backward compatible. If upgrading from versions with exact dependency pins, run `uv sync` to update dependencies.
+</Note>
+
+---
+
+## Bug Fixes
+
+### 🐛 Schema Management
+- Fixed schema name truncation logic for DID-based multi-tenancy
+- Schema names now correctly truncate to 63 characters (PostgreSQL limit)
+- Schema truncation test fixed and verified
+
+### 🔧 Type Checking
+- Fixed type checker error for `sys.stdout.reconfigure` call
+- Resolved type checking errors across codebase
+
+### 📝 Documentation
+- Fixed docstring formatting to comply with pydocstyle D209
+- Cleaned up whitespace and formatting across multiple files
+- Sanitized credentials in documentation
+
+### ⚙️ Stability
+- Stabilized `task_manager.py`
+- Enhanced error handling and edge cases
+
+---
+
+## Features & Enhancements
+
+### 🎯 New Example Agents
+- **Paywall Agent** - Demonstrates x402 payment integration
+- **News Summarizer** - Local Ollama and DuckDuckGo integration
+- **Cybersecurity Newsletter** - Security hardening and best practices
+
+### 📊 Observability
+- Added lightweight in-memory delivery metrics to `NotificationService`
+- Enhanced health endpoint observability
+- Added feedback header to `sentry.py`
+
+### ✅ Validation
+- Added early validation for required author field
+- Improved configuration validation
+
+### 🔄 Release Process
+- Updated release workflow to use week-based versioning (YYYY.W.D)
+- Enhanced PR template with comprehensive review checklist
+
+---
+
+## Dependency Updates
+
+### Core Dependencies
+- **pydantic:** 2.11.3 → 2.12.5 (resolves fastmcp compatibility)
+- **requests:** 2.32.3 → 2.32.5 (resolves langchain-community compatibility)
+- **sqlalchemy:** 2.0.44 → 2.0.46
+- **tenacity:** 8.5.0 → 9.1.4
+- **rich:** 13.9.4 → 14.3.2
+- **uvx requirement:** <2.0 → <4.0
+
+---
+
+## Code Quality
+
+### 🧹 Cleanup
+- Removed trailing whitespace across codebase
+- Updated secrets baseline with new line numbers
+- Improved code formatting consistency
+
+### 📚 Documentation
+- Enhanced PR template with comprehensive review checklist
+- Improved inline documentation
+- Better code examples
+
+---
+
+## Community
+
+### 🎉 Contributions
+- Added GitHub Sponsors funding page
+- Multiple community contributions merged:
+  - PR #172
+  - PR #195
+  - PR #210
+  - PR #211
+  - PR #212
+  - PR #215
+
+### 👥 Contributors
+Special thanks to all contributors who made this release possible:
+- rautsoham03
+- ssjgit08
+- Krushna
+- AseemPrasad
+- Sharda2004196
+- Krushna56
+
+---
+
+## Testing
+
+<Check>All tests passing</Check>
+<Check>Pre-commit hooks passing</Check>
+<Check>Schema truncation test fixed and verified</Check>
+<Check>Type checking errors resolved</Check>
+
+---
+
+## Migration Notes
+
+### For users upgrading from previous versions
+
+<Steps>
+  <Step title="Update dependencies">
+    If upgrading from versions with exact dependency pins:
+    ```bash
+    uv sync
+    ```
+  </Step>
+
+  <Step title="Schema name handling">
+    Schema names now correctly truncate to 63 characters (PostgreSQL limit). No action needed - this is handled automatically.
+  </Step>
+
+  <Step title="Verify configuration">
+    Ensure your agent configuration includes the required `author` field:
+    ```python
+    config = {
+        "author": "your.email@example.com",  # Required
+        "name": "my_agent",
+        # ... other config
+    }
+    ```
+  </Step>
+</Steps>
+
+---
+
+## What's Next
+
+Check out the new example agents:
+- **Paywall Agent** - Learn how to monetize your agents with x402
+- **News Summarizer** - Build agents with local LLMs using Ollama
+- **Cybersecurity Newsletter** - Security best practices for production agents
+
+---
+
+## Acknowledgments
+
+Thanks to all contributors who helped improve Bindu through bug reports, code contributions, and community engagement. Special appreciation to the community members who contributed new example agents and helped identify and fix issues.
