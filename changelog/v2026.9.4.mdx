@@ -1,0 +1,333 @@
+---
+title: 'v2026.9.4 - Vault Integration for Persistent Agent Identity'
+description: 'HashiCorp Vault integration for persistent DID keys and OAuth credentials'
+---
+
+## Overview
+
+Major feature release adding HashiCorp Vault integration for persistent storage of DID keys and Hydra OAuth2 credentials. This solves the critical issue where pod restarts in Kubernetes deployments resulted in new agent identities and orphaned Hydra OAuth clients.
+
+**Version:** 2026.9.4  
+**Date:** February 25, 2026  
+**Author:** Raahul Dutta
+
+---
+
+## Problem Solved
+
+### Before this release
+When a pod died and restarted:
+- ❌ New DID keys were generated → different agent identity
+- ❌ New Hydra OAuth client was registered → orphaned clients in Hydra
+- ❌ Authentication broke → clients couldn't authenticate with new credentials
+
+### After this release
+With Vault enabled:
+- ✅ DID keys are restored from Vault → same agent identity
+- ✅ Hydra credentials are reused → no duplicate clients
+- ✅ Authentication persists → seamless pod restarts
+
+---
+
+## Breaking Changes
+
+<Warning>
+**DID setup default changed**
+- `recreate_keys` default changed from `True` to `False`
+- **Impact:** Existing keys are preserved by default
+- **Migration:** No action needed, this is the desired behavior
+- **Override:** Set `recreate_keys=True` to force regeneration
+</Warning>
+
+---
+
+## Features
+
+### 🔐 Vault Client Module
+New `bindu/utils/vault_client.py` with:
+- Store and retrieve DID private/public keys
+- Store and retrieve Hydra OAuth2 credentials
+- Automatic backup and restore functionality
+- Graceful fallback when Vault is unavailable
+- Reuses existing AsyncHTTPClient for efficiency (no duplicate HTTP clients)
+- Proper async session cleanup to prevent memory leaks
+
+### 🆔 Deterministic Agent Identity
+- Agent ID generated deterministically from `SHA256(author:agent_name)`
+- Same author + name → same agent_id → same DID every time
+- No need to hardcode agent IDs in configuration
+- Automatic persistent identity without manual intervention
+
+### 🔑 DID Setup Integration
+- Changed default: `recreate_keys=False` (was `True`)
+- Checks Vault for existing keys before generating new ones
+- Automatically backs up newly generated keys to Vault
+- Restores keys from Vault on pod restart
+- Uses correct filenames from settings (`private.pem`, `public.pem`)
+
+### 🔒 Hydra Registration Integration
+Priority-based credential lookup:
+1. **Priority 1:** Check Vault for existing credentials
+2. **Priority 2:** Check local filesystem
+3. **Priority 3:** Generate new credentials
+
+Features:
+- Automatic backup of credentials to Vault
+- Reuses `client_secret` from Vault when recreating clients
+- Proper VaultClient session cleanup in all code paths
+
+### ⚙️ Configuration
+Environment variables:
+```bash
+# Enable Vault
+VAULT__ENABLED=true
+
+# Vault server URL
+VAULT__URL=http://vault:8200
+
+# Vault authentication token
+VAULT__TOKEN=hvs.CAESIJ...
+```
+
+Alternative names supported:
+- `VAULT_ADDR` (alternative to `VAULT__URL`)
+- `VAULT_TOKEN` (alternative to `VAULT__TOKEN`)
+
+### 📚 Documentation
+- Complete guide: `docs/VAULT_INTEGRATION.md`
+- Example configuration: `.env.vault.example`
+- Kubernetes deployment examples
+- Vault setup instructions
+- Troubleshooting guide
+
+### 🧪 Testing
+- Comprehensive unit tests: `tests/unit/test_vault_integration.py`
+- Tests for all Vault operations
+- Mock-based testing for CI/CD compatibility
+- Updated tests to use correct DID key filenames
+
+### 🔧 Type Safety & Code Quality
+- Proper UUID type handling throughout codebase
+- Type-safe agent_id conversion (UUID for internal, str for display)
+- No unclosed aiohttp client sessions
+- Removed unused dependencies (agno, openai, ddgs)
+
+---
+
+## Technical Details
+
+### Storage Hierarchy
+
+```
+vault/secret/bindu/
+├── agents/{agent_id}/did-keys
+│   ├── private_key (PEM)
+│   ├── public_key (PEM)
+│   └── did
+└── hydra/credentials/{did}/
+    ├── client_id
+    ├── client_secret
+    ├── agent_id
+    ├── created_at
+    └── scopes
+```
+
+### Agent ID Generation
+
+1. If no explicit ID in config: `SHA256(author:agent_name)[:32]` → UUID
+2. Same author + name = same deterministic agent_id every time
+3. Agent ID used in DID: `did:bindu:{author}:{agent_name}:{agent_id}`
+
+### Startup Flow
+
+1. Generate deterministic agent_id from `author:agent_name`
+2. Check Vault for DID keys → restore if found → generate if not found
+3. Check Vault for Hydra credentials → reuse if found → register if not found
+4. Backup all credentials to Vault
+5. Start agent with persistent identity
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Enable Vault
+VAULT__ENABLED=true
+
+# Vault server URL
+VAULT__URL=http://vault:8200
+
+# Vault authentication token
+VAULT__TOKEN=hvs.CAESIJ...
+```
+
+### Kubernetes Example
+
+```yaml
+env:
+- name: VAULT__ENABLED
+  value: "true"
+- name: VAULT__URL
+  value: "http://vault.vault.svc.cluster.local:8200"
+- name: VAULT__TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: bindu-vault-token
+      key: token
+```
+
+---
+
+## Migration Guide
+
+### For Existing Deployments
+
+<Steps>
+  <Step title="Enable Vault in configuration">
+    ```bash
+    VAULT__ENABLED=true
+    ```
+  </Step>
+
+  <Step title="Set Vault URL and token">
+    ```bash
+    VAULT__URL=http://vault:8200
+    VAULT__TOKEN=hvs.CAESIJ...
+    ```
+  </Step>
+
+  <Step title="Restart agents">
+    Agents will automatically backup existing keys to Vault
+  </Step>
+
+  <Step title="Verify keys are in Vault">
+    ```bash
+    vault kv get secret/bindu/agents/{agent_id}/did-keys
+    ```
+  </Step>
+
+  <Step title="Test by deleting and recreating pods">
+    Verify that agents maintain their identity across restarts
+  </Step>
+</Steps>
+
+### For New Deployments
+
+<Steps>
+  <Step title="Set up Vault">
+    See `docs/VAULT_INTEGRATION.md` for complete setup instructions
+  </Step>
+
+  <Step title="Configure environment variables">
+    ```bash
+    VAULT__ENABLED=true
+    VAULT__URL=http://vault:8200
+    VAULT__TOKEN=hvs.CAESIJ...
+    ```
+  </Step>
+
+  <Step title="Deploy agents">
+    Keys will be automatically stored in Vault
+  </Step>
+</Steps>
+
+### Vault Setup
+
+```bash
+# Enable KV v2 secrets engine
+vault secrets enable -path=secret kv-v2
+
+# Create policy
+vault policy write bindu bindu-policy.hcl
+
+# Generate token
+vault token create -policy=bindu -ttl=720h
+```
+
+---
+
+## Security Considerations
+
+<Warning>
+**Production Security Best Practices**
+- Use Kubernetes auth instead of static tokens in production
+- Rotate Vault tokens regularly
+- Enable Vault audit logging
+- Use TLS for Vault communication
+- Never commit Vault tokens to git
+</Warning>
+
+---
+
+## Performance Impact
+
+- **Startup time:** +100-200ms for Vault lookups
+- **Network:** Requires Vault connectivity
+- **Caching:** Local files cached after Vault restore
+- **Failover:** Falls back to local files if Vault unavailable
+
+---
+
+## Testing
+
+<Check>Unit tests for VaultClient operations</Check>
+<Check>DID key backup and restore</Check>
+<Check>Hydra credential backup and restore</Check>
+<Check>Graceful degradation when Vault disabled</Check>
+<Check>Error handling for network failures</Check>
+<Check>All existing tests passing</Check>
+
+---
+
+## Files Changed
+
+### New Files
+- `bindu/utils/vault_client.py` - VaultClient implementation
+- `docs/VAULT_INTEGRATION.md` - Comprehensive integration guide
+- `.env.vault.example` - Example Vault configuration
+- `tests/unit/test_vault_integration.py` - Unit tests
+
+### Modified Files
+- `bindu/penguin/did_setup.py` - Vault restore/backup integration
+- `bindu/penguin/bindufy.py` - Deterministic agent_id, Vault config loading
+- `bindu/auth/hydra/registration.py` - Vault credential restore/backup, session cleanup
+- `bindu/settings.py` - VaultSettings documentation
+- `bindu/penguin/config_validator.py` - recreate_keys default changed to False
+- `bindu/utils/config_loader.py` - Vault config loading from environment
+- `examples/beginner/.env` - DATABASE_URL SSL fix
+- `examples/beginner/.env.example` - Vault configuration example
+- `pyproject.toml` - Removed unused dependencies (agno, openai, ddgs)
+
+---
+
+## Benefits
+
+### 🎯 Persistent Identity
+- Agents maintain the same DID across pod restarts
+- No more orphaned OAuth clients in Hydra
+- Seamless authentication across deployments
+
+### 🔄 Simplified Operations
+- Automatic credential backup and restore
+- No manual key management required
+- Deterministic agent IDs from configuration
+
+### 🚀 Production Ready
+- Kubernetes-native integration
+- Graceful degradation when Vault unavailable
+- Proper error handling and logging
+
+### 🧹 Code Quality
+- Removed unused dependencies
+- Improved type safety
+- No resource leaks (proper session cleanup)
+
+---
+
+## References
+
+- [HashiCorp Vault Documentation](https://www.vaultproject.io/docs)
+- [Kubernetes Auth Method](https://www.vaultproject.io/docs/auth/kubernetes)
+- [KV Secrets Engine v2](https://www.vaultproject.io/docs/secrets/kv/kv-v2)
