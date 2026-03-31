@@ -32,7 +32,7 @@
       "MobileOptimized": "320",
       "theme-color": "#8B5CF6",
       "color-scheme": "light dark",
-      "apple-mobile-web-app-capable": "yes",
+      "mobile-web-app-capable": "yes",
       "apple-mobile-web-app-status-bar-style": "black-translucent",
       "apple-mobile-web-app-title": "Bindu Docs",
       "application-name": "Bindu Documentation",
