@@ -1,0 +1,394 @@
+---
+title: "Command-Line Interface (CLI)"
+description: "Your control panel for the Bindu framework - from your terminal"
+---
+
+<Note>
+This page assumes you have Bindu installed. If you don't, head to the [installation guide](/bindu/get-started/installation) first.
+
+The CLI is your primary way to:
+- Start the Bindu core server
+- Deploy agents to runtime environments
+- Monitor agent logs
+- Debug running agents interactively
+
+Everything you can do through the web interface, you can do faster through the CLI.
+</Note>
+
+We'll go step by step, with real examples. No prior CLI experience assumed.
+
+---
+
+## The restaurant kitchen metaphor
+
+Think of the Bindu CLI like the control panel in a restaurant kitchen.
+
+You have four main stations:
+
+| Station | CLI Command | What it does |
+|---|---|---|
+| **Head chef's station** | `bindu serve --grpc` | Starts the kitchen (core server) so other cooks (SDKs) can register |
+| **Prep station** | `bindu serve --script PATH` | Runs a recipe (agent script) right now, locally |
+| **Expediter's desk** | `bindu deploy <script>` | Sends a dish (agent) to the dining room (runtime environment) |
+| **Quality control** | `bindu logs <agent>` / `bindu shell <agent>` | Watch the cooks work or jump in to fix problems |
+
+Without the CLI, you'd have to manually configure servers, copy files around, and SSH into machines. The CLI wraps all that into single commands that Just Work.
+
+---
+
+## The two modes of `bindu serve`
+
+Before we deploy anything, we need to understand the two ways to run Bindu code.
+
+### Mode 1: The core server (gRPC)
+
+When you run `bindu serve --grpc`, you're starting the Bindu core server. This is the central hub that:
+
+- Accepts registrations from SDKs (Python, JavaScript, etc.)
+- Coordinates between agents
+- Handles authentication and DID verification
+
+Think of it as opening the restaurant. The kitchen is now ready to accept orders.
+
+```bash
+bindu serve --grpc --grpc-port 3774
+```
+
+The `--grpc-port` flag lets you choose which door the cooks use. Default is 3774, but you can change it if that port is busy.
+
+### Mode 2: Direct script execution
+
+When you run `bindu serve --script <path>`, you're running an agent script directly, right now, on your machine. No deployment. No runtime environment. Just the code, executing immediately.
+
+```bash
+bindu serve --script examples/agent.py
+```
+
+This is perfect for:
+- Quick testing during development
+- Running one-off tasks
+- Debugging before you deploy
+
+<Note>
+**When to use which?**
+
+- Use `--grpc` when you want other agents or SDKs to connect to this Bindu instance.
+- Use `--script` when you just want to run a single agent and see what happens.
+</Note>
+
+---
+
+## Deploying agents to runtime environments
+
+Once you have an agent script that works locally, you'll want to deploy it to a runtime environment where it can run continuously. That's what `bindu deploy` does.
+
+### What "runtime environment" means
+
+A runtime environment is like a dedicated kitchen for your agent. It has:
+
+- **CPU** (how many burners)
+- **Memory** (counter space)
+- **Disk** (storage for ingredients)
+- **Environment variables** (special instructions)
+
+Bindu supports different runtime providers. The most common is `boxd`, but you can add others.
+
+### The deploy command
+
+```bash
+bindu deploy <script> --runtime=<runtime> [options]
+```
+
+Let's break down a real example:
+
+```bash
+bindu deploy examples/agent.py \
+  --runtime=boxd \
+  --vcpu=4 \
+  --memory=8G \
+  --disk=40G \
+  --env API_KEY=secret123 \
+  --env DEBUG=true
+```
+
+This says:
+- Take the script at `examples/agent.py`
+- Deploy it to the `boxd` runtime
+- Give it 4 CPU cores
+- Give it 8GB of memory
+- Give it 40GB of disk space
+- Set two environment variables
+
+### All the deploy options
+
+| Option | What it does | Example |
+|---|---|---|
+| `--runtime` | Which runtime to use | `--runtime=boxd` |
+| `--name` | Override the agent name | `--name=my-custom-agent` |
+| `--vcpu` | CPU cores | `--vcpu=4` |
+| `--memory` | RAM | `--memory=8G` |
+| `--disk` | Storage | `--disk=40G` |
+| `--env KEY=VALUE` | Environment variable (repeatable) | `--env API_KEY=xxx` |
+| `--bindu-version` | Bindu version to use | `--bindu-version=local` |
+| `--image` | Use a prebuilt image | `--image=my-agent:latest` |
+
+<Warning>
+**Resource limits are real.** If you deploy an agent with 1GB of memory but it tries to use 2GB, it will crash. Monitor your logs and adjust as needed.
+</Warning>
+
+---
+
+## Watching your agent work: `bindu logs`
+
+Once your agent is deployed, how do you know it's actually running? That's where `bindu logs` comes in.
+
+```bash
+bindu logs <agent>
+```
+
+This streams logs from the agent's runtime environment to your terminal in real-time. It's like standing at the pass window watching plates come out of the kitchen.
+
+### Following logs
+
+By default, `bindu logs` follows new log entries as they appear (like `tail -f`). If you just want historical logs and don't want to wait for new ones, you can pipe it:
+
+```bash
+bindu logs my-agent | head -n 100
+```
+
+### What you'll see
+
+Logs include:
+- Agent startup messages
+- Skill execution traces
+- Errors and warnings
+- Performance metrics
+
+If something goes wrong, the logs are your first stop.
+
+---
+
+## Jumping into the kitchen: `bindu shell`
+
+Sometimes logs aren't enough. You need to poke around inside the runtime environment, check files, or run commands manually. That's what `bindu shell` is for.
+
+```bash
+bindu shell <agent>
+```
+
+This opens an interactive shell (usually `bash`) directly on the agent's runtime environment. You can:
+
+- Inspect the agent's working directory
+- Check environment variables with `env`
+- View log files that might not stream
+- Run diagnostic commands
+- Install additional tools if needed
+
+<Note>
+**Security note:** The shell runs with the same permissions as the agent. Be careful what you delete or modify.
+</Note>
+
+---
+
+## A complete workflow: from script to production
+
+Let's walk through a real scenario. You've written an agent and want to deploy it.
+
+<Steps>
+  <Step title="Test locally first">
+    Before deploying, make sure it works:
+
+    ```bash
+    bindu serve --script my_agent.py
+    ```
+
+    Watch the output. Fix any bugs. Repeat until it runs cleanly.
+  </Step>
+
+  <Step title="Deploy to runtime">
+    Send it to the runtime environment:
+
+    ```bash
+    bindu deploy my_agent.py \
+      --runtime=boxd \
+      --vcpu=2 \
+      --memory=4G \
+      --disk=20G \
+      --name=my-agent
+    ```
+
+    The CLI will package your script, upload it, and start the runtime.
+  </Step>
+
+  <Step title="Watch the logs">
+    Make sure it started correctly:
+
+    ```bash
+    bindu logs my-agent
+    ```
+
+    Look for errors in the first few seconds. If it crashes, you'll see why here.
+  </Step>
+
+  <Step title="Debug if needed">
+    If something's wrong, jump in:
+
+    ```bash
+    bindu shell my-agent
+    ```
+
+    Check files, run commands, figure out what's happening.
+  </Step>
+
+  <Step title="Monitor continuously">
+    Leave a log window open:
+
+    ```bash
+    bindu logs my-agent
+    ```
+
+    Keep an eye on it as it processes real work.
+  </Step>
+</Steps>
+
+---
+
+## What goes wrong in real life
+
+Every one of these has happened to someone deploying a Bindu agent. Learn from their pain.
+
+### "My agent won't start"
+
+Check the logs first:
+
+```bash
+bindu logs my-agent
+```
+
+Common causes:
+- **Missing dependencies** - your script imports a library not installed in the runtime
+- **Syntax error** - a typo in the script that only shows up at runtime
+- **Resource exhaustion** - not enough memory or CPU
+
+### "I can't connect to the gRPC server"
+
+If `bindu serve --grpc` starts but SDKs can't connect:
+
+- **Firewall** - is port 3774 open? Check with `netstat -an | grep 3774`
+- **Wrong port** - did you change `--grpc-port` but the SDK is still using 3774?
+- **Server not running** - is the `bindu serve` process actually still alive?
+
+### "Deploy hangs forever"
+
+The deploy command can stall if:
+- **Runtime is down** - the `boxd` (or other) runtime might be unreachable
+- **Network issues** - check your connection to the runtime
+- **Script too large** - some runtimes have size limits
+
+Try with `--bindu-version=local` to use a local Bindu instance for testing.
+
+### "Logs are empty"
+
+If `bindu logs` shows nothing:
+- **Agent crashed immediately** - check the runtime's crash logs, not the stream
+- **Wrong agent name** - did you deploy as `my-agent` but try to log `my_agent`?
+- **Log level too high** - your agent might only log at ERROR level
+
+### "Shell won't open"
+
+If `bindu shell` fails:
+- **Agent not running** - you can't shell into a stopped agent
+- **Runtime doesn't support shells** - some runtimes disable this for security
+- **Permission denied** - your user might not have shell access
+
+---
+
+## Advanced: using prebuilt images
+
+If your agent has complex dependencies, building from source every time is slow. You can use prebuilt images:
+
+```bash
+bindu deploy my_agent.py \
+  --runtime=boxd \
+  --image=my-agent:latest
+```
+
+The `--image` flag tells the runtime to use an existing container image instead of building from your script. This is faster and more reproducible.
+
+### When to use images
+
+- Large dependency trees (ML models, heavy libraries)
+- Production deployments where reproducibility matters
+- Multiple agents sharing the same base environment
+
+### Building images
+
+Image building is typically done separately (via Docker or your CI pipeline). The CLI just deploys what already exists.
+
+---
+
+## Environment variables best practices
+
+The `--env` flag is powerful, but use it wisely.
+
+### Do
+
+- Use it for configuration (API keys, feature flags)
+- Keep secrets out of your script
+- Document required env vars in your README
+
+### Don't
+
+- Put large blobs of data in env vars (there are size limits)
+- Hardcode secrets in your script instead
+- Use env vars for things that should be in config files
+
+---
+
+## Resource sizing guide
+
+How much CPU, memory, and disk do you actually need? Here's a starting point:
+
+| Agent type | vCPU | Memory | Disk |
+|---|---|---|---|
+| Simple echo agent | 1 | 1G | 5G |
+| Data processing | 2 | 4G | 20G |
+| ML inference | 4 | 8G | 40G |
+| Heavy computation | 8+ | 16G+ | 100G+ |
+
+Start small, monitor with `bindu logs`, and scale up if you see memory pressure or slow performance.
+
+---
+
+## Further reading
+
+**Related Bindu docs:**
+
+- [Authentication](/bindu/learn/authentication/overview) - how CLI commands authenticate
+- [Skills](/bindu/skills/overview) - what your agents actually do
+- [Runtime environments](/bindu/deploy/overview) - deeper dive on runtimes
+
+**External resources:**
+
+- [gRPC documentation](https://grpc.io/docs/) - if you're building SDKs
+- [Docker basics](https://docs.docker.com/get-started/) - for understanding container runtimes
+
+---
+
+## The whole thing in one paragraph
+
+The Bindu CLI is your terminal-based control panel for the entire framework. Use `bindu serve --grpc` to start the core server so SDKs can connect, or `bindu serve --script` to run agents directly for testing. When you're ready for production, `bindu deploy` sends your agent to a runtime environment with configurable CPU, memory, and disk resources. Once deployed, `bindu logs` lets you watch the agent's output in real-time, and `bindu shell` gives you interactive access for debugging. The entire workflow is designed to be fast, reproducible, and observable - from local development to production monitoring, all from your terminal.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    CLI gives you -{" "}
+    <span className="brand-quote-highlight">control from the terminal</span>.
+  </span>
+</span>

@@ -1,0 +1,458 @@
+---
+title: "Private Skills"
+description: "How to keep your agent's secret sauce secret - while still sharing it with trusted partners"
+---
+
+<Note>
+Read the [Authentication page](/bindu/learn/authentication/overview) and the [DIDs page](/bindu/learn/did/overview) first if you haven't. Private skills build on both:
+
+- **Authentication** (bearer tokens) answers: *are you allowed to make requests?*
+- **DIDs** answer: *are you really who you say you are?*
+- **Private skills** answer: *are you allowed to see my full capabilities?*
+
+You need all three. Lose any layer and your secret sauce leaks.
+</Note>
+
+This page is about the third layer. We'll go step by step, with real examples.
+
+---
+
+## The restaurant menu problem
+
+You run a high-end restaurant. Your menu has two sections:
+
+1. **The public menu** - what everyone sees. "Burger," "Salad," "Soup." Generic, safe, tells competitors nothing.
+2. **The chef's tasting menu** - your secret recipes. "Wagyu beef with 72-hour sous-vide and truffle reduction." This is your intellectual property. Show this to everyone and a competitor replicates it next week.
+
+Now imagine a food critic walks in. You want them to see the tasting menu - they'll write a review. But a random tourist? No. They get the public menu.
+
+Private skills are the tasting menu. They let you show your full capabilities to trusted partners while keeping the riff-raff out.
+
+For software agents, "showing the menu" means advertising skills. A compliance agent might publicly say "I do classification" (public menu) but privately tell partners "I classify HS codes for steel imports under CBAM transitional rules" (tasting menu). That second description is your product roadmap. Expose it publicly and it becomes your competitor's roadmap.
+
+---
+
+## The two-door system
+
+Bindu agents have two doors to their skill catalog:
+
+| Door | URL | Who gets in | What they see |
+|---|---|---|---|
+| **Front door** | `/.well-known/agent.json` | Anyone | Public skills only |
+| **Back door** | `/agent/private.json` | Authenticated + allowlisted DIDs | Public + private skills |
+
+Think of it like a nightclub:
+
+- **Front door** - anyone can walk in, see the main floor, hear the music. That's your public skills.
+- **VIP room** - bouncer checks your ID (authentication), then checks the guest list (allowlist). Pass both and you see the full experience. That's your private skills.
+
+The front door is always open. The back door has two locks.
+
+---
+
+## Lock 1: Authentication (the bouncer checks your ID)
+
+Before we even look at the guest list, we verify you are who you say you are. This is where the [Authentication](/bindu/learn/authentication/overview) and [DIDs](/bindu/learn/did/overview) pages come in.
+
+When someone requests `/agent/private.json`:
+
+1. They must send a valid bearer token (from Hydra)
+2. They must send DID signature headers (`X-DID`, `X-DID-Signature`, `X-DID-Timestamp`)
+3. The server verifies the token is active
+4. The server verifies the signature matches the DID
+
+If any of these fail → `401 Unauthorized`. You don't even get to the guest list.
+
+<Note>
+This is the same authentication flow used for all Bindu requests. Private skills don't add new auth - they just add an additional check on top of the existing one.
+</Note>
+
+---
+
+## Lock 2: The allowlist (the bouncer checks the guest list)
+
+Once we know who you are (your DID), we check if you're on the list. This is the `allowed_dids` configuration field.
+
+```python
+config = {
+    "author": "you@example.com",
+    "name": "acme_compliance_agent",
+    "deployment": {"url": "http://localhost:3773"},
+
+    "skills": [
+        "skills/public-greet",
+        "skills/public-status",
+    ],
+
+    "private_skills": [
+        "skills/cbam-line-classify",
+        "skills/eudr-due-diligence",
+    ],
+
+    "allowed_dids": [
+        "did:bindu:partner-bank:agent:abc123",
+        "did:bindu:partner-customs-broker:agent:def456",
+    ],
+}
+```
+
+Three fields matter here:
+
+| Field | What it does |
+|---|---|
+| `skills` | Public skills - visible to everyone at the front door |
+| `private_skills` | Private skills - only visible at the back door |
+| `allowed_dids` | The guest list - which DIDs can access the back door |
+
+If your DID is in `allowed_dids` → `200 OK`, here's the full menu.
+
+If your DID is not in `allowed_dids` → `403 Forbidden`, even though you authenticated successfully. You're real, but you're not invited.
+
+<Warning>
+**The allowlist is a manual list.** You add DIDs by editing the config and restarting the agent. There's no auto-approval, no request-flow, no "let me in" button. This is by design - private skills are for trusted partners you've vetted.
+</Warning>
+
+---
+
+## What actually gets returned
+
+When a request passes both locks, the agent returns a merged catalog:
+
+```json
+{
+  "id": "did:bindu:acme_compliance:agent:...",
+  "skills": [
+    {"id": "public-greet", "name": "Greet"},
+    {"id": "public-status", "name": "Status"},
+    {"id": "cbam-line-classify", "name": "CBAM Classification"},
+    {"id": "eudr-due-diligence", "name": "EUDR Due Diligence"}
+  ]
+}
+```
+
+Notice the order doesn't matter - public and private are merged into one list. The caller just sees "here are all the skills I can use." They don't know which are public and which are private. That's the point.
+
+---
+
+## Setting up private skills from scratch
+
+A complete walkthrough. This is what our internal debugging session does every time someone sets up a private skills agent.
+
+<Steps>
+  <Step title="Create your skill folders">
+    On disk, public and private skills are identical. Each is a folder with a `skill.yaml`:
+
+    ```
+    skills/
+      public-greet/
+        skill.yaml
+      public-status/
+        skill.yaml
+    private_skills/
+      cbam-line-classify/
+        skill.yaml
+      eudr-due-diligence/
+        skill.yaml
+    ```
+
+    The folder structure is what matters. The names `skills/` vs `private_skills/` is just convention - you could call them anything. What matters is which paths you put in the config.
+  </Step>
+
+  <Step title="Configure the agent">
+    Create your config with the three key fields:
+
+    ```python
+    config = {
+        "author": "you@example.com",
+        "name": "acme_compliance_agent",
+        "deployment": {"url": "http://localhost:3773"},
+
+        "skills": [
+            "skills/public-greet",
+            "skills/public-status",
+        ],
+
+        "private_skills": [
+            "private_skills/cbam-line-classify",
+            "private_skills/eudr-due-diligence",
+        ],
+
+        "allowed_dids": [
+            "did:bindu:partner-bank:agent:abc123",
+        ],
+    }
+    ```
+
+    Notice the paths in `private_skills` point to the actual folder locations.
+  </Step>
+
+  <Step title="Start the agent">
+    Run it locally to test:
+
+    ```bash
+    uv run python examples/private_skills_agent/acme_compliance_agent.py
+    ```
+
+    The agent starts on `http://localhost:3773`.
+  </Step>
+
+  <Step title="Test the public door">
+    Anyone can access public skills:
+
+    ```bash
+    curl -s http://localhost:3773/.well-known/agent.json | jq '.skills[].id'
+    ```
+
+    Output:
+    ```
+    "public-greet"
+    "public-status"
+    ```
+
+    No private skills. No authentication required.
+  </Step>
+
+  <Step title="Test the back door without auth">
+    Try to access private skills without credentials:
+
+    ```bash
+    curl -s -w "%{http_code}\n" http://localhost:3773/agent/private.json
+    ```
+
+    Output:
+    ```
+    {"error":"Authentication required for private agent card"}
+    401
+    ```
+
+    Lock 1 stops you.
+  </Step>
+
+  <Step title="Test the back door with auth but wrong DID">
+    Get a bearer token for a DID that's NOT in `allowed_dids`. Send the request with proper auth headers. You'll get:
+
+    ```
+    403 Forbidden
+    ```
+
+    Lock 2 stops you. You're authenticated, but you're not on the guest list.
+  </Step>
+
+  <Step title="Test the back door with correct DID">
+    Get a bearer token for a DID that IS in `allowed_dids`. Send the request with proper auth headers. You'll get:
+
+    ```json
+    {
+      "id": "...",
+      "skills": [
+        {"id": "public-greet", "name": "greet"},
+        {"id": "cbam-line-classify", "name": "CBAM classification"}
+      ]
+    }
+    ```
+
+    Both locks passed. Here's the full menu.
+  </Step>
+</Steps>
+
+---
+
+## Managing partners over time
+
+Once your agent is running, you'll need to add and remove partners as relationships change.
+
+### Adding a partner
+
+1. Get their DID from them (they should provide it)
+2. Add it to `allowed_dids` in your config
+3. Restart the agent
+
+That's it. No approval flow, no handshake. If their DID is on the list, they get access immediately.
+
+### Removing a partner
+
+1. Remove their DID from `allowed_dids`
+2. Restart the agent
+
+Their next request will fail with `403`. Existing sessions (if any) will expire naturally when their bearer token expires (typically 1 hour).
+
+<Note>
+**Restart is required.** The allowlist is loaded at startup. Changes don't take effect until the agent restarts. This is a deliberate design choice - it prevents accidental mid-flight changes and makes audit trails cleaner.
+</Note>
+
+### Audit trail
+
+Every request to `/agent/private.json` is logged with:
+
+- `caller=` - the DID that made the request
+- `ip=` - the IP address
+- `result=` - success or failure
+- `timestamp=` - when it happened
+
+Check your logs if you suspect unauthorized access attempts.
+
+---
+
+## What goes wrong in real life
+
+Every one of these has happened to someone setting up private skills. Learn from their pain.
+
+### "My partner can't see private skills but their DID is correct"
+
+Three things to check, in this order:
+
+1. **Are they authenticating correctly?** Check the logs for `401` errors. If you see them, the problem is with their bearer token or DID signature, not the allowlist.
+2. **Is the DID byte-identical?** Copy-paste errors happen. The DID in `allowed_dids` must match exactly what they send in `X-DID`. Check with:
+   ```bash
+   diff <(echo "$your_did") <(echo "$their_did")
+   ```
+3. **Did you restart the agent?** Changes to `allowed_dids` don't take effect until restart. This is the #1 mistake.
+
+### "I'm getting 401 even though I have a valid token"
+
+The authentication layer is failing. Check:
+
+- **Bearer token expired?** Get a fresh one from Hydra.
+- **DID signature headers missing?** You need `X-DID`, `X-DID-Signature`, and `X-DID-Timestamp`.
+- **Signature verification failing?** Check the [DIDs page](/bindu/learn/did/overview) troubleshooting section - most issues are with JSON serialization or timestamp windows.
+
+### "Public skills aren't showing up"
+
+If `/.well-known/agent.json` is missing skills:
+
+- **Did you configure `skills`?** The field might be empty or missing.
+- **Are the skill paths correct?** The paths in `skills` must point to actual folders with `skill.yaml` files.
+- **Is the agent actually running?** Check that the server started successfully.
+
+### "Private skills show up in the public endpoint"
+
+This shouldn't happen if configured correctly. If it does:
+
+- **Did you put private skills in `skills` instead of `private_skills`?** Check your config.
+- **Is there a caching layer?** Some proxies cache `/.well-known/agent.json`. Clear the cache.
+- **Are you testing against the right endpoint?** Make sure you're hitting `/.well-known/agent.json` (public) not `/agent/private.json` (private).
+
+---
+
+## When to use private skills
+
+### Use this feature if:
+
+- **Your skill descriptions are proprietary.** You've spent months developing domain-specific capabilities. Don't give them away for free.
+- **You sell under contracts.** Partners pay for access to your full capabilities. They should get what they paid for; random strangers shouldn't.
+- **You want tiered discovery.** Trial users see basic skills. Premium partners see advanced skills. This is a natural upsell path.
+
+### Skip this feature if:
+
+- **Your agent is open-source.** If your code is public, hiding skill descriptions is security theater.
+- **You're behind a corporate firewall.** If only internal teams can access your agent, authentication alone might be sufficient.
+- **You're early-stage.** Maximum visibility beats secrecy when you're trying to get adoption. Add locks later.
+
+---
+
+## What private skills DON'T protect
+
+Private skills are powerful, but they're not magic. Here's what they don't defend against:
+
+| Threat | Why private skills can't help |
+|---|---|
+| **Authorized partners re-sharing your skills** | Once a partner sees your private skills, they can tell anyone. Use NDAs and contracts for this. |
+| **Skill code itself being stolen** | Private skills hide the *description*, not the *implementation*. If someone can call your skill, they can reverse-engineer what it does by observing inputs and outputs. |
+| **Config file leaks** | Your `allowed_dids` list is in plaintext in your config. If someone steals your config, they know who your partners are. |
+| **Man-in-the-middle attacks** | Private skills rely on HTTPS for transport security. If someone can intercept traffic, they can see skill descriptions. Use proper TLS. |
+
+<Note>
+**Private skills are about discovery control, not execution control.** They stop people from *finding out* what you can do. They don't stop people from *using* what you've already told them about.
+</Note>
+
+---
+
+## Best practices
+
+### Keep the public menu useful
+
+Don't make `skills` empty. Even if your value is in private skills, give the public menu something useful:
+
+- Generic versions of your private skills ("classification" instead of "CBAM classification")
+- Metadata about your agent ("compliance-focused," "EU-regulation specialist")
+- Contact information for partnership inquiries
+
+The public menu is your marketing. Make it work for you.
+
+### Use descriptive private skill names
+
+Private skill names can be as specific as you want. This is where you differentiate:
+
+- Bad: `skill-1`, `skill-2`
+- Good: `cbam-line-classify`, `eudr-due-diligence`
+- Better: `cbam-steel-import-classification-2026`, `eudr-deforestation-risk-assessment`
+
+The more specific, the more valuable to partners who understand your domain.
+
+### Document your private skills
+
+Partners need to know how to use your private skills. Provide:
+
+- Input/output schemas
+- Example requests
+- Rate limits
+- Pricing (if applicable)
+
+This documentation doesn't need to be public - share it directly with partners via email, a shared drive, or a partner portal.
+
+### Rotate the allowlist periodically
+
+Every few months, audit your `allowed_dids` list:
+
+- Remove partners you no longer work with
+- Add new partners
+- Verify that existing DIDs are still active
+
+A stale allowlist is a security risk.
+
+---
+
+## Where to look in the code
+
+If you're debugging or extending private skills:
+
+- **Handler**: [`bindu/server/endpoints/private_agent_card.py`](../bindu/server/endpoints/private_agent_card.py) - the endpoint that serves `/agent/private.json`
+- **Config loader**: [`bindu/penguin/bindufy.py`](../bindu/penguin/bindufy.py) - loads `skills`, `private_skills`, and `allowed_dids` from config
+- **Manifest fields**: [`bindu/common/models.py`](../bindu/common/models.py) - the data structures for skill manifests
+- **Tests**: [`tests/unit/server/endpoints/test_private_agent_card.py`](../tests/unit/server/endpoints/test_private_agent_card.py) - unit tests for the private skills logic
+- **Example**: [`examples/private_skills_agent/`](../examples/private_skills_agent/) - a working example you can run locally
+
+---
+
+## Further reading
+
+**Related Bindu docs:**
+
+- [Authentication](/bindu/learn/authentication/overview) - how bearer tokens work
+- [DIDs](/bindu/learn/did/overview) - how DID signatures work
+- [Skills](/bindu/skills/overview) - the underlying skill system
+
+**External concepts:**
+
+- [OAuth 2.0](https://oauth.net/2/) - the authentication framework Bindu uses
+- [Capability-based security](https://en.wikipedia.org/wiki/Capability-based_security) - the broader security model private skills implement
+
+---
+
+## The whole thing in one paragraph
+
+Private skills let Bindu agents maintain two skill catalogs: a public one visible to everyone at `/.well-known/agent.json`, and a private one visible only to authenticated, allowlisted DIDs at `/agent/private.json`. The public catalog advertises generic capabilities, while the private catalog reveals your full, proprietary capabilities. Access to private skills requires two locks: first, authentication via bearer tokens and DID signatures (handled by Hydra and the DID system), and second, an allowlist check against the `allowed_dids` configuration field. Only requests that pass both locks receive the merged catalog of public and private skills. This lets you share your full capabilities with trusted partners under contract while keeping your product roadmap hidden from competitors and random web crawlers. The system is simple to configure, easy to audit, and provides a clean separation between public marketing and private partnership.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Private skills let you -{" "}
+    <span className="brand-quote-highlight">share selectively</span>.
+  </span>
+</span>
