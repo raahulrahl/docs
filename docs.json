@@ -103,6 +103,12 @@
                 ]
               },
               {
+                "group": "CLI",
+                "pages": [
+                  "bindu/cli/overview"
+                ]
+              },
+              {
                 "group": "Architecture",
                 "pages": [
                   "bindu/concepts/task-first-and-architecture",
@@ -142,7 +148,8 @@
                 "pages": [
                   "bindu/skills/introduction/overview",
                   "bindu/learn/storage/overview",
-                  "bindu/learn/scheduler/overview"
+                  "bindu/learn/scheduler/overview",
+                  "bindu/skills/private-skills"
                 ]
               },
               {
