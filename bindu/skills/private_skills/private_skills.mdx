@@ -1,0 +1,244 @@
+---
+title: "Private skills"
+description: "Serve a public skill catalog to the world and a full catalog to approved partners only."
+---
+
+## Think the moment
+
+Your agent advertises its skills the moment it boots. Anyone hitting
+`/.well-known/agent.json` sees the full list - name, description, everything.
+That's perfect for an open research agent that wants to be found. It's a
+disaster for a commercial agent where the skill descriptions ARE the product.
+
+Picture you've built a drug interaction agent for a hospital network.
+Its real value isn't "I do pharmacology lookups" - every med-tech vendor does that.
+
+It's "I flag contraindications across a patient's active prescriptions against our formulary, weighted by renal function markers from the last 90 days of lab results." 
+
+That sentence took your clinical team two years to refine. 
+Sitting plaintext on a public URL, it's your competitor's two-year shortcut.
+
+---
+
+## You should
+
+Serve two views of the same agent - without changing what the agent actually
+does:
+
+- **A public view** - generic. "We do compliance." Routing gateways can still
+  find you without learning what you actually do well.
+- **A partner view** - your real menu, but only to wallets you've
+  pre-approved.
+
+That's what `private_skills` + `allowed_dids` give you.
+
+---
+
+## Here's how to set it up
+
+### 1. Understand the split
+
+```
+Public web crawler                            Allowlisted partner agent
+       │                                              │
+       ▼                                              ▼
+ /.well-known/agent.json                       /agent/private.json
+       │                                              │
+       ▼                                              ▼
+  ┌────────┐                                  ┌───────────────────┐
+  │ skills │                                  │ skills            │
+  │  only  │   ← same agent, two surfaces →   │ + private_skills  │
+  └────────┘                                  └───────────────────┘
+```
+
+The split is **per-skill, in the agent's config**. Public skills go in
+`skills:`. Private skills go in `private_skills:`. The agent exposes only
+the public list on the well-known URL and stands the private list up at a
+second URL behind a two-layer gate.
+
+### 2. Add three things to your config
+
+```python
+config = {
+    "author": "you@example.com",
+    "name": "rx_interaction_agent",
+    "deployment": {"url": "http://localhost:3773"},
+    "skills": [
+        "skills/public-greet",
+        "skills/public-status",
+    ],
+    "private_skills": [
+        "skills/contraindication-check",
+        "skills/renal-adjusted-dosing",
+    ],
+    "allowed_dids": [
+        "did:bindu:partner-hospital-network:agent:abc123",
+        "did:bindu:partner-pharmacy-system:agent:def456",
+    ],
+}
+```
+
+On disk, public and private skills look identical - each is a folder under
+`skills/` with a `skill.yaml`. The split is purely a config-level decision.
+Move a skill from public to private (or back) by editing two lines.
+
+When neither `private_skills` nor `allowed_dids` is set, nothing changes.
+The private endpoint isn't even registered. This feature is fully opt-in.
+
+### 3. Understand the gate
+
+Two layers stand between an HTTP request and the private catalog:
+
+1. **Hydra middleware** - verifies the OAuth bearer token and confirms the
+   request was signed with the caller's DID private key. Rejects at 401 if
+   anything doesn't check out.
+2. **The allowlist** - even an authenticated DID isn't automatically trusted.
+   The handler compares the caller's DID against `manifest.allowed_dids`. If it is not
+   on the list: 403.
+
+Knowing who you are isn't enough - you also have to be on the list.
+
+### 4. Try every path
+
+Boot the runnable example:
+
+```bash
+uv run python examples/private_skills_agent/acme_compliance_agent.py
+```
+
+**Random web crawler:**
+
+```bash
+curl -s http://localhost:3773/.well-known/agent.json | jq '.skills[].id'
+```
+
+"public-greet"
+"public-status"
+
+Two skills. The contraindication-check and renal-adjusted-dosing skills don't appear.
+
+**Outsider trying to peek:**
+
+```bash
+curl -s -w "%{http_code}\n" http://localhost:3773/agent/private.json
+```
+
+```
+{"error":"Authentication required for private agent card"}
+401
+```
+
+The route exists but refuses without auth.
+
+**Valid DID, not your partner:**
+```
+{"error":"DID not authorized for this agent's private skills"}
+403
+```
+
+Server logs:
+
+```
+WARN  private_catalog_access caller=did:bindu:somebody-else:agent:xyz
+                              ip=10.0.0.7
+                              result=denied reason=not_in_allowlist
+```
+
+**Allowlisted partner:**
+
+```json
+{
+  "id": "...",
+  "name": "rx_interaction_agent",
+  "skills": [
+    {"id": "public-greet",       "name": "greet"},
+    {"id": "public-status",      "name": "status"},
+    {"id": "contraindication-check", "name": "contraindication-check"},
+    {"id": "renal-adjusted-dosing", "name": "renal-adjusted-dosing"}
+  ]
+}
+```
+
+Audit log:
+
+```
+INFO  private_catalog_access caller=did:bindu:partner-bank:agent:abc123
+                             ip=10.0.0.5
+                             result=granted
+```
+
+### 5. Manage partners over time
+
+**Onboarding a partner** - get their DID, add it to `allowed_dids`, restart.
+
+**Removing a partner** - delete their DID from the list, restart. Their next
+request fails at the allowlist check. No race window, no key to chase.
+
+**Audit trail** - every authenticated request to `/agent/private.json`
+produces a structured log entry with `caller=`, `ip=`, `result=`, `reason=`.
+Grep for `private_catalog_access` to see exactly who's been looking and when.
+
+---
+
+## Result
+
+The web crawler sees a generic public catalog. Your approved partners see the
+full menu. Nothing else changed - same agent, same skills, same code.
+
+### When to use this - and when it's overkill
+
+**Use it if:**
+- Your skill descriptions reveal your roadmap (compliance, financial signals,
+  security research, anything proprietary).
+- You're selling to partners under contracts that include "competitors can't
+  see our capabilities."
+- You want tier-based discovery - gold partners see the full menu; trial users
+  see only the public preview.
+
+**Skip it if:**
+- Your agent is meant to be discovered - open research, demo agents, community
+  tools.
+- You're behind a corporate firewall and only your own agents can reach the
+  URL anyway.
+- You're early-stage and any discovery is good discovery.
+
+### What this doesn't protect against
+
+| Threat | Protected? |
+|---|---|
+| Random web crawler indexing your menu | **Yes** |
+| Unauthenticated peer hitting the private URL | **Yes** |
+| Authenticated peer whose DID isn't on your list | **Yes** |
+| An authorized partner re-publishing your catalog | **No** - use NDAs |
+| Database backups containing skill descriptions | **No** - plaintext on disk by design |
+| Operator-untrusted environments (multi-tenant PaaS) | **No** - encryption at rest is a Phase 2 |
+
+For self-hosted Bindu deployments, the gate is enough. For enterprise
+deployments under strict SOC2 controls, talk to us before shipping.
+
+### Where to look in the code
+
+- Handler: [`bindu/server/endpoints/private_agent_card.py`](../bindu/server/endpoints/private_agent_card.py)
+- Config plumbing: [`bindu/penguin/bindufy.py`](../bindu/penguin/bindufy.py) (search `private_skills`)
+- Manifest fields: [`bindu/common/models.py`](../bindu/common/models.py) (`AgentManifest`)
+- Tests: [`tests/unit/server/endpoints/test_private_agent_card.py`](../tests/unit/server/endpoints/test_private_agent_card.py)
+- Runnable example: [`examples/private_skills_agent/`](../examples/private_skills_agent/)
+
+### Related
+
+- [SKILLS.md](./SKILLS.md) - the underlying skill system both public and private skills are built on.
+- [AUTHENTICATION.md](./AUTHENTICATION.md) - how the Hydra-based auth layer works.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Private skills lets you -{" "}
+    <span className="brand-quote-highlight">control what partners see</span>.
+  </span>
+</span>

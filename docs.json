@@ -150,6 +150,7 @@
                 "group": "Action & Memory",
                 "pages": [
                   "bindu/skills/introduction/overview",
+                  "bindu/skills/private_skills/private_skills",
                   "bindu/learn/storage/overview",
                   "bindu/learn/scheduler/overview"
                 ]
