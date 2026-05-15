@@ -1,0 +1,132 @@
+---
+title: "Overview"
+description: "Deploy your bindu agent from your computer to the internet."
+---
+
+## Let's say
+
+You've built an agent locally. It runs fine with `python my_agent.py` - but
+the moment you close the terminal, it's gone. Nobody else can reach it, it
+has no public URL, and keeping it alive means keeping your laptop open.
+
+Moving an agent to the internet normally means provisioning a server,
+configuring networking, managing TLS, and wiring up a process supervisor.
+That's a lot of infrastructure for something that should just run.
+
+---
+
+## You want to
+
+Run the **exact same script** you already have - no deploy concerns added to
+it - on a real public URL, with its own HTTPS domain, cryptographic identity,
+and persistent state. Without touching any infrastructure yourself.
+
+---
+
+## How it works
+
+### The runtime model
+
+A bindu agent's *runtime* is where its Python process actually executes. By
+default that's your own terminal (in-process). The `bindu deploy` CLI lets
+you run the same script *elsewhere* via a `RuntimeProvider`.
+
+The canonical provider is `BoxdRuntimeProvider`, which runs the agent inside
+a [boxd](https://boxd.sh) microVM - isolated from your laptop, with its own
+public URL, DID, and HTTPS domain.
+
+### Your script stays clean
+
+No deploy concerns leak into the agent script itself:
+
+```python
+from bindu.penguin.bindufy import bindufy
+
+def handler(messages):
+    return [{"role": "assistant", "content": messages[-1]["content"]}]
+
+config = {
+    "name": "my-agent",
+    "description": "echo agent",
+    "deployment": {"url": "http://localhost:3773"},
+}
+
+bindufy(config, handler)
+```
+
+### Two ways to run it - same script, different verb
+
+**Locally:**
+
+```bash
+python my_agent.py        # serves on localhost:3773
+```
+
+**On the internet:**
+
+```bash
+bindu deploy my_agent.py --runtime=boxd --auto-suspend=60
+```
+
+✓ my-agent serving at https://my-agent.boxd.sh<br />
+[my-agent] INFO: Started server process [12]<br />
+[my-agent] INFO: Application startup complete.
+
+Inside the VM, bindu runs `bindu serve --script my_agent.py` - which is
+`python my_agent.py` plus a few CLI niceties. `bindufy()` serves in-process,
+exactly as it does locally.
+
+### When to use each runtime
+
+| | In-process (default) | Boxd runtime |
+|---|---|---|
+| How to run | `python my_agent.py` | `bindu deploy --runtime=boxd` |
+| Best for | Local development | Production microservices |
+| Public URL | No | Yes, HTTPS |
+| Persistent state | No | Yes |
+| Multi-tenant | No | Yes |
+
+---
+
+## Result
+
+A2A clients can reach the agent at `https://my-agent.boxd.sh`. Ctrl-C
+detaches your terminal; the VM auto-suspends after 60 seconds of inactivity.
+Re-running `bindu deploy` resumes the same VM and pushes updated source.
+Your script never changed - only the launch verb did.
+
+### Current limitations (v1)
+
+- One runtime provider ships in-tree: `boxd`. The abstraction supports others
+  (e2b, modal, fly.io) but no additional providers are bundled yet.
+- No live source-watch or auto-redeploy. Editing your script requires
+  re-running `bindu deploy`.
+- No declarative manifest (`bindu.toml`) yet - all deploy config is via CLI
+  flags. Planned as a follow-up.
+
+---
+
+## Continue learning
+
+- **[Quickstart](/bindu/runtime/quickstart)** - friendly walkthrough for your
+  first deploy. Start here if you've never used `bindu deploy` before.
+- **[Boxd runtime reference](/bindu/runtime/boxd)** - full `bindu deploy` flag
+  reference for the boxd runtime.
+- **[Custom image (A1 mode)](/bindu/runtime/custom-image)** - deploy from a
+  user-built Docker image.
+- **[Design rationale](/bindu/superpowers/specs/2026-04-29-bindu-runtime-design)**
+  - the reasoning behind the runtime abstraction.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Runtime lets you -{" "}
+    <span className="brand-quote-highlight">deploy your agent to the internet</span>.
+  </span>
+</span>
