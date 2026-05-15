@@ -1,0 +1,157 @@
+---
+title: Boxd runtime
+description: Deploy your bindu agent to a boxd microVM
+---
+
+## Situation
+
+Your bindu agent runs fine locally, but `python my_agent.py` ties it to your
+machine. The moment you close the terminal it's gone — no public URL, no
+persistent identity, no way for other agents or users to reach it.
+
+Hosting it yourself means provisioning a server, managing TLS, keeping the
+process alive, and handling secrets safely. That's infrastructure work that
+has nothing to do with your agent's logic.
+
+---
+
+## Task
+
+Run your agent inside an isolated [boxd](https://boxd.sh) microVM — with its
+own public HTTPS URL, cryptographic DID identity, and persistent state —
+without changing a single line of your agent script.
+
+---
+
+## Action
+
+### 1. Meet the requirements
+
+- A boxd account and API key — set it in your shell:
+```bash
+  export BOXD_API_KEY="bxk_..."
+```
+- The boxd runtime extra for bindu:
+```bash
+  pip install 'bindu[runtime-boxd]'
+```
+
+### 2. Preview before you spend anything
+
+```bash
+bindu deploy agent.py --runtime=boxd --dry-run
+```
+
+Prints the target VM name, source root, entry script, resource config,
+env-var keys (values hidden), tarball file count and compressed size, and
+any sensitive files that would be silently dropped. No VM is touched.
+
+### 3. Deploy
+
+```bash
+bindu deploy agent.py --runtime=boxd
+```
+
+That's it. Same script you run locally, one flag, public URL.
+
+### 4. Tune the deploy with CLI flags
+
+| Flag | Type | Default | Meaning |
+|---|---|---|---|
+| `--runtime` | str | `boxd` | Runtime provider. |
+| `--name` | str | from `config["name"]` | Override the agent name (e.g. for preview envs). |
+| `--image` | str | unset | **A1 mode:** boot from this Docker image instead of shipping source. See [custom image](/bindu/runtime/custom-image). |
+| `--vcpu` | int | `2` | vCPUs for the VM. |
+| `--memory` | str | `4G` | RAM. Accepts boxd size strings (`512M`, `4G`, …). |
+| `--disk` | str | `20G` | Disk size. |
+| `--auto-suspend` | int | `0` (disabled) | Seconds of idle (no HTTP request) before boxd auto-suspends the VM. Off by default — bindu agents commonly run background work (scheduler ticks, streaming LLM calls, websockets) that would be frozen mid-flight. Pass `--auto-suspend=60` only if your agent is pure request/response. |
+| `--on-exit` | str | `suspend` | Behaviour on Ctrl-C: `suspend` (call `box.suspend()`), `destroy` (tear down VM), `detach` (leave running). |
+| `--bindu-version` | str | unset | Pin the bindu version installed in the VM. `local` ships the host's source instead of pulling from PyPI — useful for testing a patched bindu. |
+| `--env` | KEY=VALUE | — | Extra env var injected into the VM (repeatable). |
+
+### 5. Understand the lifecycle
+
+1. **First run** — bindu packages your project source, ships it to a fresh
+   VM, runs `pip install bindu` plus your deps, starts your agent, and polls
+   `/health` until ready. Cold path: ~10–30 seconds depending on dep weight.
+2. **Subsequent runs (same agent name)** — the CLI reuses the existing VM,
+   updates source, restarts the agent. ~1–3 seconds.
+3. **Ctrl-C with `--on-exit=suspend` (default)** — the CLI calls
+   `box.suspend()`, freezing the VM's memory. DID keys, vector store,
+   conversation history all survive. Re-running `bindu deploy` resumes in
+   1–3 seconds with state intact.
+4. **`--auto-suspend=N`** — while the agent is running, suspend after N
+   seconds without an HTTP request. Avoid if the agent has scheduled tasks,
+   streaming LLM calls, or websocket connections — those will be frozen
+   mid-execution and most upstreams don't tolerate resuming mid-RPC.
+
+### 6. Pass secrets safely
+
+The agent's DID keys, x402 wallet, and OAuth tokens are generated and
+persisted **inside the VM**. `BOXD_API_KEY` stays on your host and is
+never shipped. User secrets go in via `--env`:
+
+```bash
+bindu deploy agent.py --runtime=boxd \
+  --env OPENAI_API_KEY=sk-... \
+  --env ANTHROPIC_API_KEY=sk-ant-...
+```
+
+The deploy CLI **never ships `.env`-style files**. It silently drops
+`.env*`, `*.pem`, `*.key`, `id_rsa*`, `credentials*.json`, and anything
+under `.aws/`, `.ssh/`, `.gnupg/`, `.bindu/`, and prints a warning listing
+what was dropped. Run `--dry-run` to see the full list before deploying.
+
+### 7. Source packaging rules
+
+Your project root is auto-discovered by walking up from the entry script
+looking for `pyproject.toml`, `setup.py`, `requirements.txt`, or `.git`.
+
+**Always shipped:** `*.py`, `*.toml`, `*.txt`, `*.md`, `*.json`, `*.yaml`  
+**Always excluded:** `__pycache__/`, `.git/`, `.venv/`, `node_modules/`,
+`*.pyc`, `*.log`, `*.sqlite`, `*.db`, plus everything in `.gitignore` and
+`.binduignore`  
+**Hard cap:** 50 MB compressed. Bigger sources fail fast with a pointer to
+`.binduignore`.
+
+### 8. Dev tools while it's running
+
+| Command | What it does |
+|---|---|
+| `bindu logs <agent>` | Stream the agent's stdout/stderr to your terminal. Pass `--no-follow` to print current logs and exit. |
+| `bindu shell <agent>` | Open an interactive shell inside the VM (`/app` is the working directory). |
+
+---
+
+## Result
+
+Your agent is live at `https://<name>.boxd.sh` — isolated, HTTPS, with a
+cryptographic identity and persistent state across suspends. You didn't touch
+a server, write a Dockerfile, or manage TLS.
+
+### Troubleshooting
+
+| Problem | Likely cause | Fix |
+|---|---|---|
+| `BOXD_API_KEY or BOXD_TOKEN must be set` | No credentials in host env | `export BOXD_API_KEY=bxk_...` |
+| `script did not call bindufy()` | Entry script raised before reaching `bindufy()` | Run `python agent.py` directly to see the underlying error |
+| `agent at <url> did not become healthy within 60s` | VM up but agent failed to start | `bindu logs <agent>` — common causes: missing dep, syntax error, port 3773 already in use |
+| `pip install` failure | Dep not on PyPI or native build fails | Switch to [A1 mode](/bindu/runtime/custom-image) and install the dep at image-build time |
+| Source &gt;50 MB | Large data files included | Add them to `.binduignore` |
+| Old bindu in VM rejects new features | Published bindu lags the host's | Pass `--bindu-version=local` to ship host source instead |
+| `upload to /tmp/... corrupted after 3 attempts` | boxd write_file truncation ([boxd#45](https://github.com/azin-tech/boxd/issues/45)) | Re-run `bindu deploy` — the corruption is intermittent and almost always clears on retry |
+| Wrong code running after redeploy | boxd 0.1.x sometimes ships truncated tarballs | The deploy now sha256-verifies every upload and retries on mismatch. If it persists, run `bindu shell <agent>` and check `cat /tmp/bindu-agent.pid` against `pgrep python3` |
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Runtime with boxd -{" "}
+    <span className="brand-quote-highlight">turn your agent into a web discoverable service</span>.
+  </span>
+</span>

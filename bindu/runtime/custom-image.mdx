@@ -1,0 +1,96 @@
+---
+title: Custom image (A1 mode)
+description: Deploy your bindu agent with a custom Docker image
+---
+
+## Mess might happen when
+
+Some agents can't rely on a plain `pip install` at deploy time:
+
+- Native deps that require a Rust toolchain or system libraries.
+- CI/CD pipelines that already produce container images.
+- Teams that need pinned, auditable, reproducible deploys.
+
+If any of these apply, the default A2 source-mount mode isn't enough.
+You need full control over the environment your agent runs in.
+
+## What to do then?
+
+Get bindu to boot your agent from a Docker image you built and pushed,
+instead of packaging your source folder and running `pip install` inside
+the VM.
+
+## How to do it
+
+### 1. Write a Dockerfile
+
+```dockerfile
+FROM python:3.12-slim
+
+# Install bindu + your deps
+WORKDIR /app
+COPY pyproject.toml requirements*.txt ./
+RUN pip install bindu
+RUN pip install -r requirements.txt    # or: pip install -e .
+
+# Copy your agent code
+COPY . /app
+
+# Entrypoint: invoke the agent script via the bindu CLI
+CMD ["bindu", "serve", "--script", "/app/my_agent.py"]
+```
+
+### 2. Build and push to a registry
+
+Push to any public registry, or a private one with credentials
+configured on your boxd account (e.g. `ghcr.io`, Docker Hub, ECR).
+
+### 3. Deploy with `--image`
+
+```bash
+bindu deploy my_agent.py \
+    --runtime=boxd \
+    --image=ghcr.io/me/my-agent:v1.2.0
+```
+
+When `--image` is set, bindu changes its behaviour in three ways:
+
+- **No source upload** - your folder stays on your machine.
+- **No `pip install` step** - deps are already baked into the image.
+- **Image `CMD` is the entrypoint** - whatever you put in `CMD` starts
+  the agent.
+
+Everything else - health checks, log streaming, on-exit lifecycle -
+is identical to A2.
+
+## You see that
+
+Your agent boots from a pinned, reproducible image with full control
+over every system dependency. Here's how that compares to the default
+A2 mode:
+
+| | A2 (source mount) | A1 (custom image) |
+|---|---|---|
+| Setup | None - just run | Build + push image |
+| Iteration speed | Fast (1–3s warm) | Slow (build + push + redeploy) |
+| Reproducibility | Depends on `pip install` resolving the same deps | Pinned by image hash |
+| Native deps | Limited to what `pip install` can build in the VM | Anything that builds at image time |
+| Image registry needed | No | Yes |
+
+Use A1 when correctness and reproducibility matter more than iteration
+speed - typically once you move from local development into a real
+CI/CD pipeline.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Custom image lets you -{" "}
+    <span className="brand-quote-highlight">deploy your agent with custom dependencies</span>.
+  </span>
+</span>
