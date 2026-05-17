@@ -1,0 +1,266 @@
+---
+title: "Security and authentication"
+description: "Authentication schemes, security definitions, and how agents prove they're allowed to do what they're doing."
+---
+
+
+Security schemes define how agents authenticate requests and establish trust. Bindu supports multiple authentication methods following the [A2A Protocol specification](https://a2a-protocol.org/latest/specification/).
+
+### HTTPAuthSecurityScheme
+
+**Schema:**
+```python
+class HTTPAuthSecurityScheme(TypedDict):
+    """HTTP security scheme supporting various authentication methods.
+    
+    Supports standard HTTP authentication schemes including Basic, Bearer,
+    Digest, and custom schemes. Commonly used for token-based authentication
+    with JWTs or other bearer token formats.
+    """
+    
+    type: Required[Literal["http"]]
+    """The type of the security scheme. Always "http"."""
+    
+    scheme: Required[str]
+    """The HTTP authentication scheme (e.g., "basic", "bearer", "digest")."""
+    
+    bearer_format: NotRequired[str]
+    """Format hint for bearer tokens (e.g., "JWT")."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Bearer Token with JWT**
+```json
+{
+  "type": "http",
+  "scheme": "bearer",
+  "bearerFormat": "JWT",
+  "description": "JWT bearer token authentication for API access"
+}
+```
+
+**Use Case 2: Basic Authentication**
+```json
+{
+  "type": "http",
+  "scheme": "basic",
+  "description": "HTTP Basic authentication with username and password"
+}
+```
+
+**What it's for:** Token-based authentication using standard HTTP authentication schemes. Most commonly used with Bearer tokens (JWT) for stateless API authentication, but also supports Basic auth for simple username/password scenarios.
+
+---
+
+### APIKeySecurityScheme
+
+**Schema:**
+```python
+class APIKeySecurityScheme(TypedDict):
+    """API Key security scheme for key-based authentication.
+    
+    Supports passing API keys through query parameters, HTTP headers, or
+    cookies. Commonly used for simple service-to-service authentication
+    or public API access control.
+    """
+    
+    type: Required[Literal["apiKey"]]
+    """The type of the security scheme. Always "apiKey"."""
+    
+    name: Required[str]
+    """The name of the header, query parameter, or cookie."""
+    
+    in_: Required[Literal["query", "header", "cookie"]]
+    """Location of the API key: "query", "header", or "cookie"."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Header-based API Key**
+```json
+{
+  "type": "apiKey",
+  "name": "X-API-Key",
+  "in": "header",
+  "description": "API key passed in custom X-API-Key header"
+}
+```
+
+**What it's for:** Simple key-based authentication where a static or rotating API key is passed in requests. Ideal for service-to-service communication, webhook authentication, or public API rate limiting and access control.
+
+---
+
+### OAuth2SecurityScheme
+
+**Schema:**
+```python
+class OAuth2SecurityScheme(TypedDict):
+    """OAuth2 security scheme for delegated authorization.
+    
+    Supports multiple OAuth 2.0 flows including authorization code, implicit,
+    password credentials, and client credentials. Used for secure delegated
+    access where users authorize agents to act on their behalf.
+    """
+    
+    type: Required[Literal["oauth2"]]
+    """The type of the security scheme. Always "oauth2"."""
+    
+    flows: Required[dict[str, Any]]
+    """OAuth2 flow configurations. Supported flows:
+    - authorizationCode: Authorization code flow (most secure)
+    - implicit: Implicit flow (browser-based)
+    - password: Resource owner password credentials flow
+    - clientCredentials: Client credentials flow (service-to-service)
+    """
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case 1: Authorization Code Flow (User Authorization)**
+```json
+{
+  "type": "oauth2",
+  "flows": {
+    "authorizationCode": {
+      "authorizationUrl": "https://auth.example.com/oauth/authorize",
+      "tokenUrl": "https://auth.example.com/oauth/token",
+      "scopes": {
+        "read": "Read access to user data",
+        "write": "Write access to user data",
+        "admin": "Administrative access"
+      }
+    }
+  },
+  "description": "OAuth2 authorization code flow for user-delegated access"
+}
+```
+
+**What it's for:** Delegated authorization where agents need to access resources on behalf of users or other services. Authorization code flow is used when users need to grant permission, while client credentials flow is used for direct service-to-service authentication without user involvement.
+
+---
+
+### OpenIdConnectSecurityScheme
+
+**Schema:**
+```python
+class OpenIdConnectSecurityScheme(TypedDict):
+    """OpenID Connect security scheme for identity authentication.
+    
+    Built on top of OAuth 2.0, OpenID Connect adds an identity layer for
+    user authentication. Uses discovery documents for automatic configuration
+    of endpoints and supported features.
+    """
+    
+    type: Required[Literal["openIdConnect"]]
+    """The type of the security scheme. Always "openIdConnect"."""
+    
+    open_id_connect_url: Required[str]
+    """URL to the OpenID Connect discovery document.
+    Typically: https://auth.example.com/.well-known/openid-configuration
+    """
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case: Enterprise SSO with OpenID Connect**
+```json
+{
+  "type": "openIdConnect",
+  "openIdConnectUrl": "https://auth.example.com/.well-known/openid-configuration",
+  "description": "OpenID Connect authentication with automatic discovery for enterprise SSO"
+}
+```
+
+**What it's for:** Identity authentication using OpenID Connect, typically for enterprise single sign-on (SSO) scenarios. The discovery URL automatically configures authentication endpoints, supported scopes, and token formats, making it easier to integrate with identity providers like Keycloak, Azure AD, or Okta.
+
+---
+
+### MutualTLSSecurityScheme
+
+**Schema:**
+```python
+class MutualTLSSecurityScheme(TypedDict):
+    """Mutual TLS security scheme for certificate-based authentication.
+    
+    Uses client certificates for mutual authentication where both client
+    and server verify each other's identity. Provides strong cryptographic
+    authentication for high-security service-to-service communication.
+    """
+    
+    type: Required[Literal["mutualTLS"]]
+    """The type of the security scheme. Always "mutualTLS"."""
+    
+    description: NotRequired[str]
+    """Human-readable description of the security scheme."""
+```
+
+**Use Case: High-Security Service Communication**
+```json
+{
+  "type": "mutualTLS",
+  "description": "Client certificate authentication for secure service-to-service communication"
+}
+```
+
+**What it's for:** High-security authentication using client certificates where both parties verify each other's identity through TLS. Commonly used in zero-trust architectures, financial services, healthcare systems, or any scenario requiring strong cryptographic authentication without relying on passwords or tokens.
+
+---
+
+### SecurityScheme: Union Type
+
+The `SecurityScheme` type is a discriminated union of all security scheme types:
+
+```python
+SecurityScheme = Annotated[
+    Union[
+        HTTPAuthSecurityScheme,
+        APIKeySecurityScheme,
+        OAuth2SecurityScheme,
+        OpenIdConnectSecurityScheme,
+        MutualTLSSecurityScheme,
+    ],
+    Discriminator("type"),
+]
+```
+
+The `type` field acts as a discriminator to determine which security scheme is being used. All security schemes use camelCase for field names (e.g., `bearerFormat`, `openIdConnectUrl`) following the A2A Protocol specification.
+
+### Choosing the Right Security Scheme
+
+**Quick Reference:**
+
+| Scheme | Best For | Complexity | Security Level |
+|--------|----------|------------|----------------|
+| **HTTP Auth (Bearer)** | API tokens, JWTs | Low | Medium-High |
+| **HTTP Auth (Basic)** | Simple username/password | Very Low | Low-Medium |
+| **API Key** | Service-to-service, webhooks | Very Low | Low-Medium |
+| **OAuth2** | User authorization, delegated access | High | High |
+| **OpenID Connect** | Enterprise SSO, identity verification | Medium | High |
+| **Mutual TLS** | Zero-trust, high-security services | High | Very High |
+
+**Decision Guide:**
+
+- **Need simple token authentication?** → Use HTTP Auth with Bearer tokens (JWT)
+- **Building a public API?** → Use API Key for rate limiting and access control
+- **Users need to authorize agents?** → Use OAuth2 Authorization Code flow
+- **Service-to-service without users?** → Use OAuth2 Client Credentials or API Key
+- **Enterprise SSO integration?** → Use OpenID Connect
+- **Maximum security required?** → Use Mutual TLS with client certificates
+- **Legacy system with Basic auth?** → Use HTTP Auth with Basic scheme
+
+**Security Best Practices:**
+
+- Always use HTTPS/TLS for all authentication schemes except Mutual TLS (which provides its own transport security)
+- Rotate API keys regularly and never commit them to version control
+- Use short-lived tokens (15-60 minutes) with refresh token rotation for OAuth2
+- Implement rate limiting regardless of authentication method
+- Log authentication attempts and monitor for suspicious patterns
+- Use the principle of least privilege - grant only necessary scopes/permissions
+
+---
+

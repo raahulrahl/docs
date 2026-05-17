@@ -115,8 +115,24 @@
               {
                 "group": "Architecture",
                 "pages": [
-                  "bindu/concepts/task-first-and-architecture",
-                  "bindu/concepts/protocol"
+                  "bindu/concepts/task-first-and-architecture"
+                ]
+              },
+              {
+                "group": "Protocol Reference",
+                "pages": [
+                  "bindu/protocol/overview",
+                  "bindu/protocol/types-and-enums",
+                  "bindu/protocol/messages-and-parts",
+                  "bindu/protocol/tasks",
+                  "bindu/protocol/context",
+                  "bindu/protocol/agent-card",
+                  "bindu/protocol/security",
+                  "bindu/protocol/trust",
+                  "bindu/protocol/notifications",
+                  "bindu/protocol/negotiation",
+                  "bindu/protocol/payment",
+                  "bindu/protocol/credit"
                 ]
               },
               {
@@ -424,6 +440,10 @@
     {
       "source": "/bindu/concepts/task-first-pattern",
       "destination": "/bindu/concepts/task-first-and-architecture"
+    },
+    {
+      "source": "/bindu/concepts/protocol",
+      "destination": "/bindu/protocol/overview"
     }
   ]
 }

@@ -1,0 +1,190 @@
+---
+title: "Credit system"
+description: "Bindu-specific credit accounting that sits next to x402. Not part of A2A."
+---
+
+
+The credit system enables centralized management of agent execution costs and resource allocation. This is a Bindu-specific extension for managing agent marketplace economics.
+
+### AgentExecutionCost
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class AgentExecutionCost(TypedDict):
+    """Defines the credit cost for executing an agent.
+    
+    Sets pricing and access control for agent services.
+    """
+    
+    agent_id: Required[str]
+    """The unique identifier of the agent."""
+    
+    agent_name: Required[str]
+    """The name of the agent."""
+    
+    credits_per_request: Required[int]
+    """The number of credits required to execute the agent."""
+    
+    creator_did: Required[str]
+    """The DID of the creator of the agent."""
+    
+    minimum_trust_level: Required[TrustLevel]
+    """The minimum trust level required to execute the agent."""
+```
+
+**Use Case: Premium Agent Pricing**
+```json
+{
+  "agentId": "agent-analytics-pro",
+  "agentName": "Advanced Analytics Agent",
+  "creditsPerRequest": 100,
+  "creatorDid": "did:example:creator123",
+  "minimumTrustLevel": "analyst"
+}
+```
+
+**What it's for:** Defining the cost and access requirements for running an agent. Creators set credit prices for their agents, and specify minimum trust levels to ensure only qualified users can execute sensitive operations.
+
+---
+
+### ExecutionRequest
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class ExecutionRequest(TypedDict):
+    """Represents a request to execute an agent with credit verification.
+    
+    Initiates agent execution with credit pre-authorization.
+    """
+    
+    request_id: Required[UUID]
+    """The unique identifier of the request."""
+    
+    executor_did: Required[str]
+    """The DID of the executor."""
+    
+    agent_id: Required[str]
+    """The unique identifier of the agent."""
+    
+    input_data: Required[str]
+    """The input data for the agent execution."""
+    
+    estimated_credits: Required[int]
+    """The estimated number of credits required for the execution."""
+    
+    trust_level: Required[TrustLevel]
+    """The trust level of the executor."""
+```
+
+**Use Case: Agent Execution Request**
+```json
+{
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "executorDid": "did:example:user456",
+  "agentId": "agent-analytics-pro",
+  "inputData": "Analyze Q4 sales data for trends and anomalies",
+  "estimatedCredits": 100,
+  "trustLevel": "analyst"
+}
+```
+
+**What it's for:** Requesting agent execution with credit verification. The system checks if the executor has sufficient credits and meets the minimum trust level before allowing execution.
+
+---
+
+### ExecutionResponse
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class ExecutionResponse(TypedDict):
+    """Represents the response from an agent execution with credit deduction.
+    
+    Returns execution results and credit transaction details.
+    """
+    
+    request_id: Required[UUID]
+    """The unique identifier of the request."""
+    
+    execution_id: Required[UUID]
+    """The unique identifier of the execution."""
+    
+    success: Required[bool]
+    """Indicates whether the execution was successful."""
+    
+    credits_charged: Required[int]
+    """The number of credits charged for the execution."""
+    
+    transaction_id: NotRequired[UUID]
+    """The unique identifier of the transaction."""
+    
+    output_data: NotRequired[str]
+    """The output data from the agent execution."""
+    
+    error_message: NotRequired[str]
+    """The error message if the execution failed."""
+    
+    execution_time: Required[str]
+    """The time the execution was completed."""
+```
+
+**Use Case: Successful Execution**
+```json
+{
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "executionId": "660e8400-e29b-41d4-a716-446655440001",
+  "success": true,
+  "creditsCharged": 95,
+  "transactionId": "770e8400-e29b-41d4-a716-446655440002",
+  "outputData": "Analysis complete: Q4 sales increased 23% with peak in December...",
+  "executionTime": "2025-10-31T23:45:00Z"
+}
+```
+
+**What it's for:** Returning execution results with credit transaction details. Shows actual credits charged (may differ from estimate), execution status, and output data. Failed executions may charge reduced or no credits depending on policy.
+
+### Credit System Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Platform as Bindu
+    participant Agent
+    participant Creator
+
+    User->>Platform: ExecutionRequest<br/>(agent_id, input_data, estimated_credits)
+    
+    Platform->>Platform: Check user credits<br/>Verify trust level
+    
+    alt Insufficient credits or trust level
+        Platform-->>User: Execution denied<br/>(error message)
+    else Credits available & authorized
+        Platform->>Agent: Execute task
+        Note over Agent: Processing...
+        Agent->>Platform: Return results
+        
+        Platform->>Platform: Deduct credits from user<br/>Credit creator account
+        Platform->>User: ExecutionResponse<br/>(success, credits_charged, output)
+        
+        Note over Platform,Creator: Credits transferred to creator
+    end
+```
+
+**Key Features:**
+- **Pay-per-use model** - Users pay credits only for agent executions
+- **Creator monetization** - Agent creators earn credits when their agents are used
+- **Trust-based access** - Minimum trust levels prevent unauthorized or malicious usage
+- **Transparent pricing** - Credit costs are known upfront via `AgentExecutionCost`
+- **Transaction tracking** - Every execution generates a transaction record for auditing
+
+**Use Cases:**
+- Premium AI agents with specialized capabilities
+- Resource-intensive data processing agents
+- Enterprise agents requiring elevated permissions
+- Marketplace for third-party agent services
+- Usage-based billing for agent platforms
+
+---
+
