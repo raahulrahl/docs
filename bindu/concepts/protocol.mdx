@@ -4661,9 +4661,9 @@ Agent ID: 6616c5797f434a9a8cdb35a043507ee1
 Agent DID: did:bindu:alice@example.com:research_agent:6616c5797f434a9a8cdb35a043507ee1
 
 Protocol Endpoints:
-  - A2A: http://localhost:3773/a2a
+  - Agent Endpoint: http://localhost:3773/
+  - Agent Card: http://localhost:3773/.well-known/agent.json
   - DID Resolution: http://localhost:3773/did/resolve
-  - Agent Info: http://localhost:3773/agent/info
 
 ⭐️⭐️⭐️ Support Open Source ⭐️⭐️⭐️
 ⭐️⭐️⭐️ Star on GitHub! ⭐️⭐️⭐️
@@ -4685,8 +4685,8 @@ INFO:     Uvicorn running on http://localhost:3773 (Press CTRL+C to quit)
 
 Your agent is now running with:
 - **Decentralized Identity (DID)** - Verifiable agent identity
-- **A2A Protocol Endpoints** - Standard agent-to-agent communication
+- **A2A Protocol Endpoint** - Standard agent-to-agent communication at `POST /`
 - **DID Resolution** - Discover and verify agent identities
-- **Agent Info** - Query agent capabilities and metadata
+- **Agent Card** - Capability and metadata discovery at `/.well-known/agent.json`
 
-Visit `http://localhost:3773/agent/info` to see your agent's complete AgentCard.
+Visit `http://localhost:3773/.well-known/agent.json` to see your agent's complete AgentCard.

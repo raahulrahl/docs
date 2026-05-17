@@ -7,7 +7,7 @@ Minimal echo bot that repeats your input.
 ## Code
 
 ```python
-from bindu.bindufy import bindufy
+from bindu.penguin.bindufy import bindufy
 
 def handler(messages):
     return [{"role": "assistant", "content": messages[-1]["content"]}]
