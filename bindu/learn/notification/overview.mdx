@@ -1,23 +1,13 @@
 ---
-title: "Long-Running Task Notification System"
-description: "Real-time webhook notifications for long-running tasks in Bindu"
+title: "Push notifications"
+description: "Stop polling. Your agent webhooks the caller when a task changes state, so they only ask once."
 ---
 
-Polling works when a task finishes quickly. It gets clumsy when a task runs for minutes, hours, or days and the client still needs to know what happened without keeping a connection open.
+Your agent kicks off a job that takes 8 minutes. The caller has two bad options: hold the HTTP connection open for 8 minutes (and watch it die to a proxy timeout at minute 6), or poll `tasks/get` every few seconds (and discover that 95% of those calls return "still working").
 
-## Why Notifications Matter
+Webhooks fix it. The caller registers a URL once, then goes about their day. When the task's state changes — `working`, `input-required`, `completed`, `failed` — Bindu POSTs an update to that URL. One notification per real event. Zero wasted requests.
 
-The Long-Running Task Notification System gives clients a way to receive webhook notifications for task state changes and artifact generation while the task keeps running in the background. It follows the [A2A Protocol specification](https://a2a-protocol.org/latest/specification/) for push notifications.
-
-| Polling long-running tasks | Bindu push notifications |
-| --- | --- |
-| Client must keep asking for task status | Server pushes updates as task state changes |
-| Long-running jobs waste time waiting between polls | Notifications arrive when work actually changes |
-| Artifact delivery depends on another fetch cycle | Artifact events can be sent as soon as they are generated |
-| Server restarts can break the client's tracking flow | Persisted webhook configs let notifications resume |
-| Every client implements its own workaround | One notification model works across tasks and agents |
-
-That is the shift: instead of asking the server over and over whether something changed, the client registers a webhook once and gets updates as the task moves forward.
+This follows the [A2A Protocol push notification spec](https://a2a-protocol.org/latest/specification/), so any A2A-compliant client can talk to it without custom code.
 
 <Note>
   This is for tasks that outlive normal request timeouts. If a task may run for minutes,

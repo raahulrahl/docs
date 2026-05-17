@@ -1,30 +1,17 @@
 ---
 title: "Storage"
-description: "Persist tasks, context, and artifacts across agent sessions"
+description: "Where Bindu keeps your tasks, messages, and artifacts so a restart doesn't eat your work."
 ---
 
-An agent that forgets everything the moment a request ends is not very useful in production. Tasks need to survive restarts. Conversation history needs to be retrievable. Artifacts need to be stored and served back to callers.
+Picture this. Your agent is mid-task — a user asked it to summarize a 200-page document, it's been thinking for 90 seconds — and the process restarts. Maybe a deploy, maybe an OOM, doesn't matter. With in-memory storage, that task is gone. The user sees an error. The agent doesn't even know it was working on something.
 
-Without a storage layer, every agent interaction is stateless and ephemeral. That is fine for a quick local test. It breaks the moment you need reliability, resumability, or multi-turn conversations.
+That's the trap: an agent that holds state in process memory is a demo, not a service. The moment uptime matters, you need persistence.
 
-## Why Storage Matters
-
-Bindu's task-first architecture depends on persistent state. Tasks move through states — `submitted`, `working`, `input-required`, `completed` — and that state needs to live somewhere durable.
-
-| Without storage | With Bindu storage |
-| --- | --- |
-| Tasks are lost on restart | Tasks persist across restarts |
-| No conversation history | Full message history per task |
-| Artifacts disappear after response | Artifacts stored and retrievable |
-| Multi-turn conversations break | Context preserved across turns |
-| Fine for local scripts | Required for production agents |
-
-That is the shift: storage turns a stateless agent into a reliable, resumable service.
+Bindu defaults to in-memory because local laptops don't have a Postgres handy. For production you switch to Postgres and the same code keeps running — tasks, contexts, and artifacts all land in a durable store you can query, replay, and audit.
 
 <Note>
-  Bindu defaults to in-memory storage for local development. Switch to PostgreSQL for
-  production. The storage backend is configured in `agent_config.json` — your agent
-  code does not change.
+  In-memory is the default. Switch to Postgres by setting two environment variables —
+  no code change in your handler. Details below.
 </Note>
 
 ## How Bindu Storage Works
@@ -79,44 +66,30 @@ graph LR
 
 ## Configuration
 
-Storage is configured in `agent_config.json`. No changes to your agent code are needed when switching backends.
+Storage backends are picked via environment variables. No code change, no `config` dict key — credentials don't belong in a Python dict that ends up in git.
 
-### Memory (Development)
-
-```json
-{
-  "storage": {
-    "type": "memory"
-  }
-}
-```
-
-Memory storage is the default. Tasks, contexts, and artifacts live in process memory and are gone when the agent stops. Use this for local development and testing.
-
-### PostgreSQL (Production)
-
-```json
-{
-  "storage": {
-    "type": "postgres",
-    "url": "postgresql://user:password@localhost:5432/bindu"
-  }
-}
-```
-
-Or via environment variable:
+### Memory (development)
 
 ```bash
-STORAGE__TYPE=postgres
-STORAGE__URL=postgresql://user:password@localhost:5432/bindu
+# Default — no env vars needed. Just run your agent.
+STORAGE_TYPE=memory
 ```
 
-Bindu creates the required tables automatically on first run. No manual schema setup needed.
+Tasks, contexts, and artifacts live in process memory. Gone when the agent stops. Fine for `uv run agent.py` while you're building.
+
+### PostgreSQL (production)
+
+```bash
+STORAGE_TYPE=postgres
+DATABASE_URL=postgresql://user:password@localhost:5432/bindu
+```
+
+Bindu creates the required tables automatically on first run. No manual schema setup, no migration step.
 
 <Note>
-  The `STORAGE__URL` environment variable takes precedence over the value in
-  `agent_config.json`. Use environment variables in production to keep credentials out
-  of your config files.
+  Put these in `.env` for local development, or wire them in through your container
+  orchestrator's secret manager in production. The `config` dict your agent code uses
+  stays clean.
 </Note>
 
 ---
@@ -254,11 +227,11 @@ docker run -d \
   postgres:16
 ```
 
-### Environment Variables
+### Environment variables
 
 ```bash
-STORAGE__TYPE=postgres
-STORAGE__URL=postgresql://bindu:secret@localhost:5432/bindu
+STORAGE_TYPE=postgres
+DATABASE_URL=postgresql://bindu:secret@localhost:5432/bindu
 ```
 
 ### Schema
@@ -308,9 +281,9 @@ No manual migration steps are needed for initial setup.
 ## Security Best Practices
 
 <CardGroup cols={2}>
-  <Card title="Use Environment Variables" icon="lock">
-    Never put database credentials in `agent_config.json`. Use `STORAGE__URL` as an
-    environment variable and keep it out of version control.
+  <Card title="Use environment variables" icon="lock">
+    Database credentials don't belong in a Python dict that ends up in git. Use
+    `DATABASE_URL` and keep it in `.env` or your orchestrator's secret manager.
   </Card>
   <Card title="Restrict Database Access" icon="shield-check">
     The Bindu agent only needs read/write access to its own tables. Use a dedicated
@@ -322,7 +295,7 @@ No manual migration steps are needed for initial setup.
 
 ## Related
 
-- [Architecture](/bindu/concepts/architecture)
+- [Architecture](/bindu/concepts/task-first-and-architecture)
 - [Scheduler](/bindu/learn/scheduler/overview)
 - [Observability](/bindu/learn/observability/overview)
 

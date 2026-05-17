@@ -1,30 +1,13 @@
 ---
-title: "Observability & Monitoring"
-description: "Monitor and debug agents with OpenTelemetry and Sentry"
+title: "Observability"
+description: "OpenTelemetry traces and Sentry errors. The boring stuff that saves you at 2am."
 ---
 
-When agents become part of real systems, failures stop being isolated events. A slow dependency can distort latency. A missing trace can hide the real bottleneck. An uncaught error can surface long after the original cause has moved on.
+Production is silent until it screams. At 2am you get the page: "agents/research is slow." You log in. Which call is slow? Which downstream API? Was the LLM itself the bottleneck, or was it the vector DB? You scroll through unstructured logs hoping to spot the timestamp that explains everything.
 
-Without observability, debugging turns into archaeology. You piece together what happened from symptoms, logs, and guesses. That is manageable in a toy system. It becomes expensive in production.
+You shouldn't have to do that. Bindu emits OpenTelemetry spans across the whole request path — HTTP in, queue, worker, handler, LLM call, tool calls, response out — with timing on every leg. Send them to Jaeger, Phoenix, Langfuse, Honeycomb, or any OTel-compatible backend and you find the slow span in 30 seconds instead of 30 minutes.
 
-## Why Observability Matters
-
-An agent should not just do work. It should leave a clear trail of how that work moved through the system and what broke when it failed.
-
-| Minimal runtime visibility | Bindu observability |
-| --- | --- |
-| Hard to trace execution across components | Spans show how work moves through the system |
-| Errors appear without enough context | Sentry captures failures with environment and release data |
-| Difficult to compare environments | Service name, version, and deployment labels stay explicit |
-| Debugging depends on manual reconstruction | Telemetry platforms make traces and failures searchable |
-| Problems are easier to notice than explain | Observability helps teams understand cause, not just effect |
-
-That is the shift: Bindu integrates OpenTelemetry and Sentry so performance, flow, and failure can be observed directly instead of inferred after the fact.
-
-<Note>
-  If an agent handles important work, it should not fail silently or perform opaquely.
-  Teams need a way to see the path of execution, not just the final outcome.
-</Note>
+Errors get the same treatment. Sentry integration means failed tasks land in your issue tracker with full stack trace, release tag, and environment label. No more "I think someone said it broke yesterday."
 
 ## How Bindu Observability Works
 

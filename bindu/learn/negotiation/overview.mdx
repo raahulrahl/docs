@@ -1,30 +1,13 @@
 ---
-title: "Agent Negotiation"
-description: "Capability-based agent selection for intelligent orchestration"
+title: "Agent negotiation"
+description: "Three agents can do this job. Which one should the orchestrator pick? Ask them — they know."
 ---
 
-When one agent can do the work, routing is easy. When ten agents can do the work differently, routing becomes a judgment problem. Some are faster. Some are cheaper. Some are overloaded. Some should decline the task entirely.
+You have three research agents on the network. Two are good, one is overloaded, and one charges 5x more than the others. The orchestrator needs to pick one. Static routing — "always send research tasks to Agent A" — works until Agent A goes down or starts dropping quality on a topic outside its training.
 
-Without a negotiation layer, orchestration becomes brittle. Tasks get sent to the wrong specialist, quality becomes inconsistent, and cost or latency starts to drift in ways that are hard to control.
+Negotiation flips the question. Instead of the orchestrator guessing who's best, it asks. Each candidate agent receives the task, looks at its own load, skills, cost, and confidence, and replies with a bid: "I can do this for X USDC, in Y seconds, with Z% confidence." The orchestrator picks the best fit or declines them all.
 
-## Why Negotiation Matters
-
-In a network of agents, selection should not depend on guesswork or static routing rules alone. An orchestrator needs a way to ask multiple agents, compare their fit, and choose the one most likely to succeed under the current constraints.
-
-| Static routing | Bindu negotiation |
-| --- | --- |
-| Predefined destination for each task type | Dynamic agent selection based on real conditions |
-| Limited awareness of load or cost | Considers skill, performance, load, and cost |
-| Hard to adapt when agent quality changes | Agents continuously self-assess for each request |
-| Good for simple fixed systems | Better for evolving multi-agent networks |
-| Failures often appear late | Weak fits can reject or score themselves lower early |
-
-That is the shift: Bindu lets orchestrators ask agents to evaluate themselves before assigning work, so selection becomes a transparent decision instead of a hidden assumption.
-
-<Note>
-  If multiple agents might complete the same task, the system should not rely on
-  whichever one is listed first. It should ask who is actually best suited right now.
-</Note>
+The protocol is Bindu-specific (marked `<NotPartOfA2A>` in the type system) but rides on the same A2A transport. No special infrastructure. Just a few extra message kinds.
 
 ## How Bindu Negotiation Works
 

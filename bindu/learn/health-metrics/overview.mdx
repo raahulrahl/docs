@@ -1,31 +1,13 @@
 ---
-title: "Health Check & Metrics"
-description: "Monitor agent health and performance"
+title: "Health & metrics"
+description: "/health says yes. /metrics says how. Both are running before you write a line of monitoring code."
 ---
 
-When an agent is live, silence is not the same as health. A process may still be running while its dependencies are failing, its task manager is stalled, or its readiness has quietly degraded.
+A process can be "running" and still broken. Postgres is down, Redis dropped the connection, the worker pool deadlocked — the agent's still binding port `:3773` and responding to `GET /health`, but the next real request fails.
 
-Without health and metrics endpoints, you are left inferring the state of the system from symptoms. Requests time out. Alerts arrive late. Small issues stay hidden until they become production incidents.
+That's why `/health` returns more than `200 OK` in Bindu. It exposes readiness state (can it actually take a task right now?), dependency status (storage, scheduler, LLM provider reachable?), and the boring stuff your load balancer wants — uptime, version, agent ID. `/metrics` exposes Prometheus-formatted numbers for traffic, latency, task state counts, and worker pool load.
 
-## Why Health And Metrics Matter
-
-An agent does not just need to be online. It needs to be ready, observable, and measurable while it works.
-
-| No health instrumentation | Bindu health and metrics |
-| --- | --- |
-| Hard to tell if the process is actually ready | Explicit readiness and runtime state |
-| Failures surface only through user-facing symptoms | Health endpoint exposes system condition early |
-| Limited insight into request behavior | Metrics reveal traffic, latency, and task load |
-| Harder to automate monitoring | Prometheus-friendly output fits existing tooling |
-| Debugging starts too late | Visibility begins from the first request |
-
-That is the shift: Bindu exposes simple operational signals so developers and platforms can understand whether an agent is alive, ready, and performing as expected.
-
-<Note>
-  If an agent is accepting requests but cannot actually process them safely, a plain
-  process heartbeat is not enough. You need visibility into readiness, runtime
-  dependencies, and traffic behavior.
-</Note>
+You don't configure either. They're up the moment `bindufy()` starts the server. Point your monitoring at them and you have visibility from request one.
 
 ## How Health And Metrics Work
 
