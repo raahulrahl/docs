@@ -1,7 +1,6 @@
 ---
-
-## title: "Retry Mechanism" description: "Automatic retry logic with exponential backoff for resilient Bindu agents"
-
+title: "Retry Mechanism"
+description: "Automatic retry logic with exponential backoff for resilient Bindu agents"
 ---
 
 Things fail in production for ordinary reasons. A database connection drops. Redis goes away for a moment. An API times out. Most of those failures are temporary, but if the system treats every one of them as final, tasks fail for no good reason.
