@@ -1,0 +1,66 @@
+---
+title: "What's next"
+description: "You have a live agent. Here's the order to read the rest of the docs in, depending on what you're trying to do."
+---
+
+Your agent is online. You sent it a message. It came back with a DID-signed response. Now what?
+
+The honest answer is "depends what you're building." Here are the four paths the docs are organized around.
+
+## I want to ship this to other humans
+
+Real users, real domain, real uptime. Read in this order:
+
+1. **[Install](/bindu/how-to/install)** — `uv add bindu` was for your laptop. Production wants `uv sync`, a venv, and a `.env` file.
+2. **[Storage](/bindu/learn/storage/overview)** — switch from in-memory to Postgres so a restart doesn't eat your tasks.
+3. **[Scheduler](/bindu/learn/scheduler/overview)** — switch from in-memory to Redis when you want more than one process.
+4. **[Authentication](/bindu/learn/authentication/overview)** — Hydra OAuth2. Stop running open to the internet.
+5. **[Observability](/bindu/learn/observability/overview)** — OpenTelemetry traces, Sentry errors. The boring stuff that saves you at 2am.
+
+If you only do two of these, do storage and auth. Everything else can wait until you have users.
+
+## I want this agent to talk to other agents
+
+That's the whole point of A2A. Read these:
+
+1. **[Skills](/bindu/skills/introduction/overview)** — declare what your agent can do so other agents can find it without guessing.
+2. **[DIDs](/bindu/learn/did/overview)** — how callers verify the response really came from you, and how you verify them back.
+3. **[Gateway](/bindu/gateway/overview)** — when you want a planner LLM to route a question across a fleet of agents.
+4. **[Negotiation](/bindu/learn/negotiation/overview)** — when two agents need to agree on price and SLA before doing the work.
+5. **[Notifications](/bindu/learn/notification/overview)** — webhook your caller when a long task finishes. Stop polling.
+
+## I want this agent to take money
+
+x402, USDC, EVM. Bindu was partly built for this.
+
+1. **[Payment](/bindu/learn/payment/introduction)** — the protocol, the chains supported, the wallet config.
+2. **[DIDs](/bindu/learn/did/overview)** if you skipped it — payment without identity is just a tip jar.
+
+The shortest path is `examples/premium-advisor` in the repo. Caller hits the agent, gets a `402 Payment Required` with an invoice, pays in USDC, hits again with the receipt, gets the answer. End to end in 90 lines.
+
+## I want to build this in TypeScript / Kotlin / something else
+
+You don't have to write Python. Bindu has a [polyglot gRPC core](/bindu/grpc/overview).
+
+1. **[gRPC overview](/bindu/grpc/overview)** — why the sidecar exists, how the two halves talk.
+2. **[gRPC quickstart](/bindu/grpc/quickstart)** — the TypeScript-side equivalent of `your-first-agent`.
+3. **[Building a custom SDK](/bindu/grpc/custom-sdks)** — for the language we don't ship yet. Usually a few hundred lines.
+
+Same DID, same A2A protocol, same payment rails. The language is your choice.
+
+## I'm stuck
+
+The errors you'll hit are almost always one of these:
+
+- **`address already in use` on `:3773`** — another Bindu agent is already running. `lsof -ti:3773 | xargs kill`.
+- **`OPENAI_API_KEY not set`** — `.env` file isn't being loaded. Add `from dotenv import load_dotenv; load_dotenv()` at the top.
+- **`ConfigError: 'author' is a required field`** — you typoed the key. Re-read [Config reference](/bindu/get-started/config-reference).
+- **Tunnel not working** — `expose: True` needs outbound 443 open. Behind a corporate firewall this won't fly. Use `expose: False` and a real domain.
+
+Beyond that:
+
+- [GitHub Issues](https://github.com/getbindu/Bindu/issues) for bugs and feature requests.
+- [Discord](https://discord.gg/3w5zuYUuwt) for "is this supposed to work like this" questions. Maintainers hang out there.
+- [Examples folder](https://github.com/getbindu/Bindu/tree/main/examples) — 30+ working agents covering most patterns. When in doubt, find the one closest to what you're building and steal the config.
+
+That's the whole map. Pick a row, read it, ship something. One sunflower at a time.

@@ -1,0 +1,126 @@
+---
+title: "Config reference"
+description: "Every key in the bindufy config dict, what it does, and the env var that overrides it."
+---
+
+The `config` dict you hand to `bindufy()` is the whole settings surface. Three keys are required. The rest have defaults that work for `localhost`, and env-var overrides for when you ship.
+
+## The three required keys
+
+```python
+config = {
+    "author": "you@example.com",
+    "name": "research_agent",
+    "deployment": {"url": "http://localhost:3773"},
+}
+```
+
+| Key | What it does |
+|---|---|
+| `author` | Goes into your agent's DID. Use the email you'd be okay seeing in another team's logs. |
+| `name` | The human-readable slug. Lowercase, hyphens or underscores. Also goes into the DID. |
+| `deployment.url` | Where the agent listens. Must be a valid http(s) URL. `http://localhost:3773` for local. |
+
+Miss any of these and `bindufy()` refuses to start with a real error message, not a stack trace.
+
+## The keys you'll actually touch
+
+Everything below has a sensible default. You override when you care.
+
+```python
+config = {
+    # ...required keys above...
+    "description": "Research assistant with web search.",
+    "version": "1.0.0",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,                              # FRP tunnel — laptop on the internet
+        "cors_origins": ["http://localhost:5173"],   # for the inbox UI or your frontend
+    },
+    "skills": ["skills/question-answering"],         # see /bindu/skills/introduction/overview
+    "capabilities": {"push_notifications": True},    # webhook on task state change
+}
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `description` | `"A Bindu agent"` | Shown on the agent card. Other agents see this when they discover you. |
+| `version` | package version | Your agent's version, not Bindu's. Bump it like you would any service. |
+| `deployment.expose` | `false` | Opens an FRP tunnel. Public URL is printed at startup. |
+| `deployment.cors_origins` | `[]` | Allowed origins. Add your frontend here. |
+| `skills` | `[]` | Folder paths to skill manifests. See [Skills](/bindu/skills/introduction/overview). |
+| `capabilities.push_notifications` | `false` | Lets callers register webhooks so they can stop polling. |
+| `capabilities.streaming` | `false` | Server-Sent Events on `message/stream`. |
+
+## Storage and scheduler — set these via env
+
+Putting database credentials in a Python dict is how secrets end up in git. The storage and scheduler backends both read from environment variables; you don't have to (and shouldn't) put them in `config`.
+
+```bash
+# Storage — pick one
+STORAGE_TYPE=memory                              # default; lost on restart
+STORAGE_TYPE=postgres
+DATABASE_URL=postgres://user:pass@host:5432/db   # required when STORAGE_TYPE=postgres
+
+# Scheduler — pick one
+SCHEDULER_TYPE=memory                            # default; single-process
+SCHEDULER_TYPE=redis
+REDIS_URL=redis://localhost:6379/0               # required when SCHEDULER_TYPE=redis
+```
+
+Local dev: leave both unset, you get in-memory. Production: set both, you get persistence and distributed task queues. Same `bindufy(config, handler)` either way.
+
+Deeper guides: [Storage](/bindu/learn/storage/overview), [Scheduler](/bindu/learn/scheduler/overview).
+
+## Auth, payments, and the rest
+
+These are off by default. Turn them on when you need them — each one has its own page that goes deeper than this reference should.
+
+| Feature | How you turn it on | Docs |
+|---|---|---|
+| **OAuth2 (Hydra)** | `"auth": {"provider": "hydra", "issuer_url": "..."}` | [Authentication](/bindu/learn/authentication/overview) |
+| **x402 payments** | Env: `X402__ENABLED=true` plus a chain config block | [Payment](/bindu/learn/payment/introduction) |
+| **OpenTelemetry** | Env: `OBSERVABILITY__ENABLED=true`, `OBSERVABILITY__OLTP_ENDPOINT=...` | [Observability](/bindu/learn/observability/overview) |
+| **Private skills** | `"private_skills": [...]`, `"allowed_dids": [...]` | (Skills page covers it) |
+| **Agent trust** | `"agent_trust": {...}` | [DIDs](/bindu/learn/did/overview) |
+
+The pattern is consistent: feature lives in `config` if it's about agent identity or behavior, in env vars if it's about infrastructure or secrets.
+
+## The "okay show me everything" example
+
+Most production agents look something like this:
+
+```python
+config = {
+    "author": "team@yourco.io",
+    "name": "research_agent",
+    "description": "Research assistant with web search and PDF Q&A.",
+    "version": "1.2.0",
+    "deployment": {
+        "url": "https://research.yourco.io",
+        "expose": False,                             # you have real DNS in prod
+        "cors_origins": ["https://app.yourco.io"],
+    },
+    "capabilities": {
+        "push_notifications": True,
+        "streaming": True,
+    },
+    "skills": [
+        "skills/question-answering",
+        "skills/pdf-processing",
+    ],
+    "telemetry": True,                               # OTel on; configure endpoint via env
+}
+```
+
+Everything else — storage, scheduler, auth, x402, OTel endpoint — comes from env vars at deploy time. The dict stays small and your secrets stay out of git. You did not write the validator; the validator wrote you a useful error message instead.
+
+## What you can't put in here
+
+`config` is for static settings. If you're trying to:
+
+- pass dynamic state per request → use the handler's `messages` arg
+- share data between handler invocations → use [Storage](/bindu/learn/storage/overview), not module-level globals
+- override behavior at runtime → you probably want a [skill](/bindu/skills/introduction/overview), not a config key
+
+If you find yourself wanting a config key that isn't here, [open an issue](https://github.com/getbindu/Bindu/issues) — half the time it's already in `bindu/penguin/config_validator.py` under a name we forgot to document. The other half it's a real feature gap and we want to know.
