@@ -68,8 +68,8 @@ If you're moving this past localhost:
   <Step title="Pin the planner model.">
     Add `model: openrouter/anthropic/claude-sonnet-4.6` (or whichever you want) to `gateway/agents/planner.md` frontmatter so upgrades are explicit, not implicit.
   </Step>
-  <Step title="Set max_steps on every /plan request.">
-    A runaway planner that loops 100 times at your expense is a real failure mode. Cap it.
+  <Step title="Set preferences.max_steps on every /plan request.">
+    A runaway planner that loops 100 times at your expense is a real failure mode. Cap it via `preferences.max_steps` in the request body (and pair with `preferences.timeout_ms` for a wall-clock budget — default 30 min, max 6 h). See the [Gateway API reference](/gateway-api/introduction).
   </Step>
   <Step title="Watch the usage field on the final SSE event.">
     That's where you see token counts per plan. Log them. Alert on outliers.

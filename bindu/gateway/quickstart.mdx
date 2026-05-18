@@ -107,18 +107,18 @@ You may notice old `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` lines in `.env.e
 
 ## Step 4 - Start one agent
 
-Open a terminal. Start the joke agent - it's one Python file that listens on port 3773 and answers with jokes:
+Open a terminal. Start the joke agent — one Python file that answers with jokes. We pin the port to 3773 with `BINDU_PORT` so it matches the next chapter's fleet layout (the file's own default is 5773):
 
 ```bash
-uv run python examples/gateway_test_fleet/joke_agent.py
+BINDU_PORT=3773 uv run python examples/gateway_test_fleet/joke_agent.py
 ```
 
-You'll see output like:
+The boot prints a block of `bindufy` setup logs. The last line you should see is:
 
 ```
-[joke_agent] starting on http://0.0.0.0:3773
-[joke_agent] DID: did:bindu:...
-[joke_agent] ready.
+INFO bindu.utils.server_runner: Starting uvicorn server at http://0.0.0.0:3773...
+INFO bindu.utils.server_runner: Press Ctrl+C to stop the server gracefully
+INFO:     Uvicorn running on http://0.0.0.0:3773 (Press CTRL+C to quit)
 ```
 
 Leave that terminal running.
@@ -179,7 +179,7 @@ curl -N http://localhost:3774/plan \
 The `-N` flag tells curl not to buffer - you'll see output appear one line at a time over about 5 seconds.
 </Tip>
 
-Expected stream:
+Expected stream (a few fields like `agent_did`, `agent_did_source`, and `signatures` are elided for readability — they're documented in the [Gateway API reference](/gateway-api/introduction)):
 
 ```
 event: session
@@ -192,10 +192,10 @@ event: task.started
 data: {"task_id":"call_01H...","agent":"joke","skill":"tell_joke","input":{"input":"Tell me a joke about databases."}}
 
 event: task.artifact
-data: {"task_id":"call_01H...","content":"<remote_content agent=\"joke\" verified=\"unknown\">Why did the database admin break up? Because they had too many relationships!</remote_content>"}
+data: {"task_id":"call_01H...","agent":"joke","content":"<remote_content agent=\"joke\" verified=\"unknown\">Why did the database admin break up? Because they had too many relationships!</remote_content>"}
 
 event: task.finished
-data: {"task_id":"call_01H...","state":"completed"}
+data: {"task_id":"call_01H...","agent":"joke","state":"completed"}
 
 event: text.delta
 data: {"session_id":"s_01H...","part_id":"p_01H...","delta":"Here"}
@@ -226,7 +226,7 @@ What each event means, in the order they arrived:
 | 1 | `session` | The gateway opened an in-memory session for this `/plan` call. `session_id` is a per-call handle; `external_session_id` echoes whatever the client sent (or `null`). Since the gateway is stateless, this id is *not* a resumption key — to give the planner context across requests, pass prior turns via the `history` field on each call. |
 | 2 | `plan` | The planner started its first turn. |
 | 3 | `task.started` | The planner decided to call the joke agent. `input: {input: "..."}` is what it's sending. |
-| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. The `verified` attribute is `unknown` here because we used `auth.type: "none"`; with `did_signed` it would be `yes` or `no`. |
+| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. The `verified` attribute takes one of four values — `yes`, `no`, `unsigned`, `unknown` — and is `unknown` here because we used `auth.type: "none"`. With `did_signed` it becomes `yes` (signed and verified), `no` (signature mismatch), or `unsigned` (the peer didn't sign). |
 | 5 | `task.finished` | That call is complete. |
 | 6 | `text.delta` (many) | The planner is now writing its own final answer, streamed a word or two at a time. Concatenate them in order (they all share a `part_id`). |
 | 7 | `final` | Done. `stop_reason: "stop"` means "natural end". `usage` reports token counts for billing. |

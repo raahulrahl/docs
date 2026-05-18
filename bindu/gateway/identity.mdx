@@ -171,7 +171,14 @@ On the receiving side, the agent:
 </Steps>
 
 <Tip>
-**Audit trail.** Each signed call's verification result is surfaced inline in the SSE stream — the `<remote_content>` envelope you saw in the quickstart carries a `verified="yes" | "no" | "unknown"` attribute. With `auth.type: "did_signed"` and a working Hydra, you'll see `verified="yes"` on successful calls; mismatches surface as `task.finished` with `state: failed`.
+**Audit trail.** Each signed call's verification result is surfaced inline in the SSE stream — the `<remote_content>` envelope you saw in the quickstart carries a `verified` attribute with four possible values:
+
+- `"yes"` — the peer signed and the signature checked out.
+- `"no"` — at least one signed artifact failed verification. The task is also marked `failed`.
+- `"unsigned"` — verification ran but the peer attached no signature. Treat the body as unverified hearsay.
+- `"unknown"` — verification didn't run (e.g., no pinned DID, or DID document resolution failed).
+
+With `auth.type: "did_signed"` against a properly-configured peer, you'll see `verified="yes"` on every successful call.
 </Tip>
 
 <Warning>
