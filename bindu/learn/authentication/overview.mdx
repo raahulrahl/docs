@@ -23,6 +23,21 @@ In Bindu we keep those two questions separate, because they need totally differe
 
 You almost always need both. This page handles the first one. After this, go read the DID page. Together they tell the whole story.
 
+<Note>
+When the OAuth `client_id` is a DID (the Bindu default — see [`register_agent_in_hydra`](https://github.com/getbindu/Bindu/blob/main/bindu/auth/hydra/registration.py)), the auth middleware enforces both halves. A valid bearer token alone is **not enough** — every request must also carry a fresh DID signature. The two layers are coupled by code, not convention.
+</Note>
+
+---
+
+## Before vs. with Bindu
+
+| Without Bindu | With Bindu |
+|---|---|
+| Roll your own bearer-token check, or copy-paste a JWT library | Set `AUTH__ENABLED=true` — the middleware wires up to Hydra automatically |
+| Token expiry, revocation, scopes all in your code | Hydra introspects every token; revocations honored within `cache_ttl` |
+| No identity layer — anyone with the token gets in | DID-bound tokens: the bearer must *also* sign the body with the right key |
+| Logging "who called?" requires custom plumbing | `scope.state.user` is populated with `sub`, `client_id`, `scope`, `is_m2m` |
+
 ---
 
 ## Bearer tokens — the movie ticket trick
@@ -35,29 +50,29 @@ The ticket is the *proof*. Whoever's holding it gets in. That's literally why it
 Your cat could walk in with your bearer token and the movie theatre wouldn't stop them. Your cat would not enjoy the movie.
 </Note>
 
-A bearer token in HTTP works the same way. It's a random-looking string. Your client staples it to every request. The server sees it, decides "yep, that's valid," and lets the request through. No further questions.
+A bearer token in HTTP works the same way. It's a random-looking string. Your client staples it to every request. The server sees it, decides "yep, that's valid," and lets the request through. No further questions — *until* the DID layer steps in.
 
 A real Bindu bearer token looks like this:
 
-```
+```text
 ory_at_hV2cm_iq55iipi8M53mwvQbpNwQNfTTxvJnDlOWFRYw.I8V_GL5s2afZTh_ZMpshauGpnItx7iItBc6pgVRAOVg
 ```
 
 You send it in an HTTP header:
 
-```
+```text
 Authorization: Bearer ory_at_hV2cm_iq55iipi...
 ```
 
-That's the whole "authentication" part of Bindu. Client attaches a token. Server checks it. Done.
+That's the whole "authentication" part of Bindu. Client attaches a token. Server introspects it against Hydra. Done — unless the `client_id` is a DID, in which case the middleware also demands a signature on the body. More on that below.
 
 Two things follow from "whoever holds it, gets in":
 
 <Warning>
-**Treat tokens like passwords.** A leaked token is an open door. Don't paste them in Slack. Don't commit them to git. Don't log them. Don't text them to your friend even as a joke.
+**Treat tokens like passwords.** A leaked token is an open door for up to ~1 hour. Don't paste them in Slack. Don't commit them to git. Don't log them. Don't text them to your friend even as a joke.
 </Warning>
 
-- **They expire.** Bindu tokens last about an hour. If one leaks, the damage window is small.
+- **They expire.** Hydra issues access tokens that last about an hour (`expires_in: 3599`). If one leaks, the damage window is small — and shrinks further if you revoke it via `/admin/oauth2/revoke`.
 
 ---
 
@@ -69,57 +84,54 @@ Bindu uses a separate service whose entire job is issuing and validating tokens:
 
 Hydra shows up as two URLs:
 
-| URL | Purpose | Who talks to it |
-|---|---|---|
-| `https://hydra.getbindu.com` | **Public** — hands out tokens. Endpoints like `/oauth2/token`. | Clients (your code, Postman, the gateway) |
-| `https://hydra-admin.getbindu.com` | **Admin** — registers clients, checks if a token is valid. Endpoints like `/admin/*`. | Agents, registration scripts |
+| URL | Default port | Purpose | Who talks to it |
+|---|---|---|---|
+| `https://hydra.getbindu.com` | `4444` | **Public** — hands out tokens. Endpoints like `/oauth2/token`, `/oauth2/revoke`. | Clients (your code, Postman, the gateway) |
+| `https://hydra-admin.getbindu.com` | `4445` | **Admin** — registers clients, introspects tokens, reads metadata. Endpoints like `/admin/*`. | Agents (introspection), registration scripts |
 
 Both URLs point at the same Hydra process with the same database behind it. Register a client on the admin side — the public side sees it immediately. No sync, no delay.
 
 <Warning>
-**The admin URL is powerful.** Anyone who can reach `/admin/clients` can register new clients or read secrets. In production, the admin URL lives on a private network. Never expose it to the open internet.
+**The admin URL is powerful.** Anyone who can reach `/admin/clients` can register new clients, read introspection results, or revoke tokens. In production, the admin URL lives on a private network. Never expose it to the open internet.
 </Warning>
 
 ---
 
 ## The whole flow, from zero to answered
 
-Here's what happens end to end when a client wants to talk to an agent. Three stages, different frequencies:
+Here's what happens end to end when a client wants to talk to an agent. Three stages, different frequencies.
 
-```
-┌─────────┐           ┌──────────────┐        ┌──────────────┐        ┌───────┐
-│ Client  │           │ Hydra admin  │        │ Hydra public │        │ Agent │
-└────┬────┘           └──────┬───────┘        └──────┬───────┘        └───┬───┘
-     │                       │                       │                    │
-     │ 1. Register (once)    │                       │                    │
-     ├──────────────────────▶│                       │                    │
-     │  got a client_secret  │                       │                    │
-     │◀──────────────────────┤                       │                    │
-     │                                                                    │
-     │ 2. Swap secret for token (once per hour)                          │
-     ├──────────────────────────────────────────────▶│                    │
-     │  access_token, valid ~1h                                          │
-     │◀──────────────────────────────────────────────┤                    │
-     │                                                                    │
-     │ 3. Call agent with Authorization: Bearer <token> (every request)  │
-     ├───────────────────────────────────────────────────────────────────▶│
-     │                       │                                            │
-     │                       │ 4. Is this token still valid?             │
-     │                       │◀───────────────────────────────────────────┤
-     │                       │   active=true, expires in X                │
-     │                       ├───────────────────────────────────────────▶│
-     │                                                                    │
-     │ 5. The response                                                    │
-     │◀───────────────────────────────────────────────────────────────────┤
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant HA as Hydra Admin (:4445)
+    participant HP as Hydra Public (:4444)
+    participant A as Agent
+
+    Note over C,HA: Once per client
+    C->>HA: POST /admin/clients (DID, public_key, secret)
+    HA-->>C: 201 Created
+
+    Note over C,HP: Once per ~hour
+    C->>HP: POST /oauth2/token (client_credentials)
+    HP-->>C: access_token (expires_in: 3599)
+
+    Note over C,A: Every request
+    C->>A: POST / + Authorization + X-DID-* headers
+    A->>HA: POST /admin/oauth2/introspect (cached up to cache_ttl)
+    HA-->>A: { active, sub, client_id, scope, exp }
+    A->>A: Verify body signature with public_key
+    A-->>C: 200 + result  (or 401/403 on failure)
 ```
 
 In plain English:
 
-- **Step 1 — once per client.** You introduce yourself to Hydra. It writes down who you are and gives you a secret. You probably do this once, when a new client is provisioned.
+- **Step 1 — once per client.** You introduce yourself to Hydra. It writes down who you are and gives you a secret. If you bring a DID, you also register your public key in `metadata.public_key`. This usually happens once, when a new client is provisioned. `bindufy` does this automatically (see `register_agent_in_hydra`).
 - **Step 2 — once per hour.** You trade the long-lived secret for a short-lived token. The secret is like a key to your apartment. The token is like a concert wristband — lasts one night.
-- **Steps 3–5 — every single request.** You attach the token. The agent asks Hydra "hey, is this thing still good?" — that question is called **token introspection**. If yes, request goes through.
+- **Steps 3+ — every single request.** You attach the token. The agent asks Hydra "is this thing still good?" — that question is called **token introspection**. By default the agent caches the answer for 5 minutes (`HYDRA__CACHE_TTL=300`); tokens carrying a *sensitive* scope (`admin`, `agent:execute`, `payment:capture`, `key:rotate`) skip the cache entirely.
 
-Why does the agent ask Hydra every time? Because the token is **opaque** — a handle, not a document. The agent can't read it directly. Only Hydra knows what it means.
+Why does the agent need to ask Hydra at all? Because the token is **opaque** — a handle, not a document. The agent can't read it directly. Only Hydra knows what it means.
 
 ---
 
@@ -143,13 +155,26 @@ When the agent introspects a token, Hydra sends back something like this:
 
 Quick read, top to bottom:
 
-- **`active: true`** — Hydra still thinks this token is good. Expired or revoked? This flips to `false` and the request is rejected.
-- **`client_id` / `sub`** — who the token belongs to. In Bindu this is almost always a **DID**. (The DID page explains why.)
-- **`scope`** — what rooms of the house this ticket opens. `agent:read` = read-only. `agent:write` = can change stuff.
+- **`active: true`** — Hydra still thinks this token is good. Expired or revoked? This flips to `false` and the agent raises `InvalidTokenError` (HTTP 401).
+- **`client_id` / `sub`** — who the token belongs to. In Bindu this is almost always a **DID** (see `register_agent_in_hydra`, line `client_id = did`). When it starts with `did:`, the middleware turns on DID signature verification automatically.
+- **`scope`** — what rooms of the house this ticket opens. `agent:read` = read-only methods (`tasks/get`, `tasks/list`). `agent:write` = mutating methods (`message/send`, `tasks/cancel`).
 - **`exp`** — when the token turns into a pumpkin. Unix timestamp.
 - **`iat`** — when it was issued.
 
-The agent reads this, decides if it likes what it sees, and passes the `client_id` along to the request handler so your code knows who just walked in.
+The middleware reads this, normalizes it into a `user_info` dict, and attaches it to the ASGI scope under `scope.state.user` so your handler knows who's calling.
+
+```python
+# What your handler sees on a successful request
+user_info = scope["state"]["user"]
+# {
+#   "sub":         "did:bindu:...",
+#   "client_id":   "did:bindu:...",
+#   "scope":       ["openid", "offline", "agent:read", "agent:write"],
+#   "is_m2m":      True,        # token came from client_credentials grant
+#   "exp":         1776622403,
+#   "signature_info": { "did_verified": True, "did": "did:bindu:...", "timestamp": "..." }
+# }
+```
 
 ---
 
@@ -158,24 +183,66 @@ The agent reads this, decides if it likes what it sees, and passes the `client_i
 Auth is **off by default** in development, because nobody wants to register a Hydra client just to say hello to localhost. To turn it on, set a handful of environment variables:
 
 ```bash
-# Master switch
+# Master switch (default: false)
 AUTH__ENABLED=true
 
-# Only Hydra today
+# Only Hydra today (default: hydra)
 AUTH__PROVIDER=hydra
 
-# Where your Hydra lives
+# Where your Hydra lives (defaults shown — getbindu.com prod URLs)
 HYDRA__ADMIN_URL=https://hydra-admin.getbindu.com
 HYDRA__PUBLIC_URL=https://hydra.getbindu.com
 ```
 
-The double underscore (`__`) is how Bindu flattens nested config into env vars. `AUTH__ENABLED` maps to `settings.auth.enabled`. You don't need to think about the mapping — just set the variables.
+The double underscore (`__`) is how Bindu flattens nested config into env vars. `AUTH__ENABLED` maps to `settings.auth.enabled`, `HYDRA__ADMIN_URL` maps to `settings.hydra.admin_url`. You don't need to think about the mapping — just set the variables.
 
 Once your agent starts with these, the middleware:
 
 1. Wires itself up to talk to Hydra admin for introspection.
-2. Rejects any incoming request without a valid `Authorization: Bearer ...` header.
-3. Attaches the introspection result to the request so your handler knows who's calling.
+2. Lets a small list of public endpoints through unauthenticated (agent card, health checks, metrics — see below).
+3. Rejects any other request without a valid `Authorization: Bearer ...` header (HTTP 401, JSON-RPC `-32009`).
+4. For DID clients, also verifies `X-DID`, `X-DID-Timestamp`, `X-DID-Signature` against the body (HTTP 403 on failure).
+5. Optionally enforces a DID allowlist via `AUTH__ALLOWED_DIDS`.
+6. Attaches the introspection result to `scope.state.user` so your handler knows who's calling.
+
+### Tunables you may actually touch
+
+| Env var | Default | What it does |
+|---|---|---|
+| `AUTH__ENABLED` | `false` | Master kill-switch. False = no auth checks at all. |
+| `AUTH__PROVIDER` | `hydra` | Only `hydra` is wired up today. |
+| `AUTH__ALLOWED_DIDS` | unset | When set, **only** these DIDs may call the agent. Otherwise every Hydra-issued DID passes. |
+| `AUTH__REQUIRE_PERMISSIONS` | `false` | Enforce per-method scope checks (`message/send` needs `agent:write`, etc.). |
+| `HYDRA__ADMIN_URL` | `https://hydra-admin.getbindu.com` | Where introspection happens. |
+| `HYDRA__PUBLIC_URL` | `https://hydra.getbindu.com` | Where clients mint tokens. |
+| `HYDRA__CACHE_TTL` | `300` | Seconds the introspection result is cached. Lower = faster revocation, more Hydra load. |
+| `HYDRA__MAX_CACHE_SIZE` | `1000` | Max entries in the in-process introspection cache. |
+| `HYDRA__SENSITIVE_SCOPES` | `[admin, agent:execute, payment:capture, key:rotate]` | Tokens with any of these scopes bypass the cache and are re-introspected on every call. |
+| `HYDRA__AUTO_REGISTER_AGENTS` | `true` | On `bindufy`, register the agent in Hydra automatically. Turn off if you manage clients out of band. |
+| `HYDRA__VERIFY_SSL` | `true` | Verify Hydra's TLS cert. Only flip to `false` for local dev. |
+| `HYDRA__TIMEOUT` | `10` | Seconds before a Hydra call gives up. |
+| `HYDRA__MAX_RETRIES` | `3` | How many times to retry a flaky Hydra call. |
+
+<Info>
+The agent never opens its **public** Hydra URL itself. Introspection happens on the admin URL. Clients use the public URL. That's the security boundary.
+</Info>
+
+### Endpoints that bypass auth entirely
+
+Some paths skip the middleware no matter what — discoverability and health probes shouldn't require a token. From `AuthSettings.public_endpoints`:
+
+```text
+/.well-known/agent.json     ← agent card (DID, skills, endpoints)
+/.well-known/*              ← anything else under .well-known
+/did/resolve                ← DID document lookup
+/agent/info, /agent/skills  ← marketing surface
+/agent/negotiation          ← capability handshake
+/health, /healthz, /metrics ← probes
+/payment-capture            ← x402 browser flow
+/api/start-payment-session, /api/payment-status/*
+```
+
+Override via `AUTH__PUBLIC_ENDPOINTS` (full list — it replaces, not appends).
 
 ---
 
@@ -185,30 +252,43 @@ Once your agent starts with these, the middleware:
   <Step title="Register your client with Hydra">
     Think of this like opening an account at a bank. You hand Hydra your ID, Hydra files the paperwork, gives you a password.
 
+    The Bindu `bindufy` flow does this for you (via `register_agent_in_hydra`). When you need to do it by hand — say, for a Postman client or a test fixture — POST to the admin API:
+
     ```bash
     curl -X POST 'https://hydra-admin.getbindu.com/admin/clients' \
       -H 'Content-Type: application/json' \
       -d '{
         "client_id":     "did:bindu:your_email_at_example_com:your_agent:<uuid>",
         "client_secret": "<pick a strong random value>",
-        "grant_types":   ["client_credentials"],
-        "response_types": ["token"],
+        "client_name":   "your_agent",
+        "grant_types":   ["client_credentials", "authorization_code", "refresh_token"],
+        "response_types": ["code", "token"],
         "scope":         "openid offline agent:read agent:write",
-        "token_endpoint_auth_method": "client_secret_post"
+        "token_endpoint_auth_method": "client_secret_post",
+        "metadata": {
+          "did":                 "did:bindu:your_email_at_example_com:your_agent:<uuid>",
+          "public_key":          "<base58 Ed25519 public key>",
+          "key_type":            "Ed25519",
+          "verification_method": "Ed25519VerificationKey2020",
+          "hybrid_auth":         true
+        }
       }'
     ```
 
     Quick notes on each field:
 
-    - **`client_id`** — your agent's name in Hydra. In Bindu this is always a DID (see the [DID page](/bindu/learn/did/overview) for why).
-    - **`client_secret`** — the password you'll use to get tokens. Generate something strong:
+    - **`client_id`** — your agent's name in Hydra. In Bindu this is **always a DID** — `bindufy` uses the agent's DID as the `client_id` verbatim. See the [DID page](/bindu/learn/did/overview) for why.
+    - **`client_secret`** — the password you'll use to mint tokens. Generate something strong:
       ```bash
       openssl rand -base64 32 | tr -d '=' | tr '+/' '-_'
       ```
-      Store it like a database password. You need it again in the next step.
-    - **`grant_types: client_credentials`** — "I'm a server, not a human in a browser." No login forms, no redirects. Swap secret → token.
-    - **`scope`** — the permissions you want your tokens to carry. Ask for the minimum.
-    - **`token_endpoint_auth_method: client_secret_post`** — you'll send the secret in the request body, not a header. Both work; we use `post` for compatibility.
+      Store it like a database password. The agent saves its own to `.bindu/oauth_credentials.json` (mode `0600`).
+    - **`grant_types`** — `client_credentials` is what M2M agent callers use. The full default set is `client_credentials, authorization_code, refresh_token` to leave room for human flows.
+    - **`response_types: ["code", "token"]`** — that's what `bindufy` writes. Hydra needs `code` because `authorization_code` is in `grant_types`.
+    - **`scope`** — the permissions the issued tokens may carry. Default set: `openid offline agent:read agent:write`.
+    - **`token_endpoint_auth_method: client_secret_post`** — you'll send the secret in the request body, not a Basic-auth header.
+    - **`metadata.public_key`** — *required* if your `client_id` is a DID. Without it, Gate 3 of DID verification fails (`public_key_unavailable`). Use the base58-encoded Ed25519 public key.
+    - **`metadata.hybrid_auth: true`** — informational flag the registration code sets to mark this client as DID-bound.
   </Step>
 
   <Step title="Swap the secret for a token">
@@ -234,10 +314,12 @@ Once your agent starts with these, the middleware:
     }
     ```
 
-    Copy that `access_token`. Keep it in memory. Refresh it before it expires.
+    Copy that `access_token`. Keep it in memory. Refresh it ~60s before it expires.
   </Step>
 
   <Step title="Use the token">
+    If your client isn't a DID, you just attach `Authorization: Bearer ...` and you're done:
+
     ```bash
     curl --location 'http://localhost:3773/' \
       --header 'Content-Type: application/json' \
@@ -245,12 +327,17 @@ Once your agent starts with these, the middleware:
       --data '{
           "jsonrpc": "2.0",
           "method":  "message/send",
-          "params":  { "message": { "role": "user", "content": "Hello!" } },
+          "params":  {
+            "message": { "role": "user", "parts": [{"kind":"text","text":"Hello!"}] },
+            "configuration": { "acceptedOutputModes": ["application/json"] }
+          },
           "id":      1
       }'
     ```
 
-    If the agent responds, you're authenticated. If it rejects you with a 401 or 403, the next section is for you.
+    <Warning>
+      If your `client_id` is a DID (the Bindu default), this request still fails with HTTP 403 — the middleware needs the body to be signed. Add three more headers: `X-DID`, `X-DID-Timestamp`, `X-DID-Signature`. The [Making Authenticated Requests](/bindu/learn/authentication/making-requests) page walks through the full four-header envelope with a canonical signing fixture.
+    </Warning>
   </Step>
 </Steps>
 
@@ -262,12 +349,17 @@ This is where most beginners lose an afternoon. Here's the cheat sheet — find 
 
 | You see | Most likely because | Fix |
 |---|---|---|
-| `401 Unauthorized`, no `Authorization` header | You forgot the token | Add `Authorization: Bearer <token>` |
-| `401 Unauthorized`, introspection says `active: false` | Token expired | Get a fresh one (step 2 above) |
-| `401 Unauthorized`, token doesn't exist | Token is from a different Hydra than the agent uses | Check `HYDRA__ADMIN_URL` — agent and client must agree |
-| `invalid_client` at the token endpoint | Wrong `client_secret`, wrong `client_id`, or the client doesn't exist yet | Register first, double-check the secret |
-| `invalid_scope` at the token endpoint | Asking for a scope you didn't register with | Register with more scopes, or ask for less |
-| Token works for one method, fails for another | That method needs a specific scope you didn't request | Request the right scope, get a new token |
+| `401`, JSON-RPC `-32009 "Authentication is required"` | No `Authorization` header at all | Add `Authorization: Bearer <token>` |
+| `401`, "Token is not active or has been revoked" | Token expired, or revoked via `/admin/oauth2/revoke` | Mint a fresh one (step 2) |
+| `401`, "Token validation failed: ... missing subject (sub) claim" | Token doesn't exist in this Hydra | Token came from a different Hydra than `HYDRA__ADMIN_URL` |
+| `403`, `details.reason: did_mismatch` | `X-DID` header doesn't match the token's `client_id` | Mint the token for the same DID you're sending |
+| `403`, `details.reason: public_key_unavailable` | The Hydra client's `metadata.public_key` is missing | Re-register with `metadata.public_key: <base58 Ed25519>` |
+| `403`, `details.reason: invalid_signature` | Bad signature, expired timestamp (>300s), or body bytes drifted between sign and send | Re-sign with fresh `time.time()` against the exact bytes you'll POST |
+| `403`, `details.reason: missing_signature_headers` | DID client sent no `X-DID-Signature` | Add the three DID headers — see Making Requests |
+| `403`, `"DID not admitted"` | `AUTH__ALLOWED_DIDS` is set and your DID isn't on the list | Add the DID, or unset the allowlist |
+| `503`, "Authentication service temporarily unavailable" | Agent can't reach Hydra admin (timeout / connection refused) | Check `HYDRA__ADMIN_URL` is reachable from the agent host |
+| `invalid_client` at `/oauth2/token` | Wrong `client_secret`, wrong `client_id`, or client doesn't exist | Register first, double-check the secret |
+| `invalid_scope` at `/oauth2/token` | Asking for a scope the client wasn't registered with | Either register with more scopes, or ask for less |
 
 There's one sneaky one worth calling out separately, because it sends people on long debugging wild-goose chases:
 
@@ -276,8 +368,81 @@ There's one sneaky one worth calling out separately, because it sends people on 
 
 **Cause:** the agent is talking to a *different* Hydra than the one that issued the token. Classic case: dev laptop is pointing at a local Hydra, but the token came from production.
 
-**Fix:** make sure `HYDRA__ADMIN_URL` on the agent matches the Hydra that issued the token. The agent prints this on startup — check the log.
+**Fix:** make sure `HYDRA__ADMIN_URL` on the agent matches the Hydra that issued the token. The agent prints this on startup — check the log line `Hydra middleware initialized. Admin URL: ...`.
 </Warning>
+
+---
+
+## Common operational patterns
+
+<AccordionGroup>
+  <Accordion title="My token cache is too eager — revocations don't take effect quickly enough">
+    The middleware caches introspection results for `HYDRA__CACHE_TTL` seconds (default 300). For most scopes this is fine — a 5-minute window between revoke and rejection is acceptable.
+
+    For high-stakes scopes you don't want any cache lag. Add them to `HYDRA__SENSITIVE_SCOPES`:
+
+    ```bash
+    HYDRA__SENSITIVE_SCOPES='["admin","agent:execute","payment:capture","key:rotate","my:critical:scope"]'
+    ```
+
+    Tokens carrying any sensitive scope re-introspect on every request. The default set already covers admin, execution, payment capture, and key rotation.
+
+    Need to nuke a single token *now* from inside the process? Call `HydraMiddleware.revoke_token(token)` — it revokes upstream and drops the local cache entry in one shot.
+  </Accordion>
+
+  <Accordion title="I want to lock the agent down to a known set of callers">
+    Set `AUTH__ALLOWED_DIDS` to an explicit list. Any caller whose DID isn't on the list gets `HTTP 403 "DID not admitted"`, even if Hydra would happily mint them a valid token.
+
+    ```bash
+    AUTH__ALLOWED_DIDS='["did:bindu:alice_at_acme_com:trader:abc...","did:bindu:bob_at_acme_com:trader:def..."]'
+    ```
+
+    Leave it unset and any Hydra-registered DID passes the admission check (the default, backwards-compatible behaviour).
+  </Accordion>
+
+  <Accordion title="I need fine-grained method permissions, not just one scope per agent">
+    Flip `AUTH__REQUIRE_PERMISSIONS=true`. The middleware then checks the token's scope against `AUTH__PERMISSIONS`. Defaults:
+
+    ```python
+    {
+      "message/send":     ["agent:write"],
+      "tasks/get":        ["agent:read"],
+      "tasks/cancel":     ["agent:write"],
+      "tasks/list":       ["agent:read"],
+      "contexts/list":    ["agent:read"],
+      "tasks/feedback":   ["agent:write"],
+    }
+    ```
+
+    A token with only `agent:read` can call `tasks/get` but is rejected from `message/send`. Mint two clients with different scopes if you want read-only callers.
+  </Accordion>
+
+  <Accordion title="I lost the client secret">
+    Two options:
+
+    1. **You still have a working credentials file.** Look in `.bindu/oauth_credentials.json` — secrets are keyed by DID. Find your DID, copy the `client_secret`.
+    2. **The file is gone too.** Rotate by `PUT`-ing the client with a fresh secret:
+       ```bash
+       curl -X PUT 'https://hydra-admin.getbindu.com/admin/clients/<urlencoded-did>' \
+         -H 'Content-Type: application/json' \
+         -d '{ ...full client record, with a new client_secret... }'
+       ```
+       `PUT` is a **full replace**, so include every field you want preserved (including `metadata.public_key`). All previously-issued tokens for this client continue to work until they expire — Hydra ties tokens to clients by `client_id`, not by the secret.
+  </Accordion>
+
+  <Accordion title="My CI keeps minting fresh tokens — is that fine?">
+    It's fine until it isn't. Each `/oauth2/token` call is cheap, but caching for the token's lifetime saves a lot of round-trips. Recommended pattern:
+
+    ```python
+    # pseudo-code
+    if not token or token.expires_at - now() < 60:
+        token = mint_new_token()
+    use(token)
+    ```
+
+    The 60-second skew gives you safety margin if the client and Hydra clocks drift.
+  </Accordion>
+</AccordionGroup>
 
 ---
 
@@ -291,9 +456,9 @@ Two things you'll need to look up at some point:
   ```
   Look for the `agent.did` field. That's also your `client_id` for Hydra.
 
-- **Your client secret from `bindufy`** — saved at `.bindu/oauth_credentials.json`. Treat that file like `.ssh/id_rsa`. User-readable only, never committed.
+- **Your client secret from `bindufy`** — saved at `.bindu/oauth_credentials.json`, keyed by DID (not agent_id — agent_ids change on reload, DIDs don't). Treat that file like `.ssh/id_rsa`. Mode `0600`, user-readable only, never committed.
 
-If you've lost the secret entirely, rotate it by `PUT`ing to `/admin/clients/<client_id>` with a new secret.
+If you've lost the secret entirely, rotate it by `PUT`ing to `/admin/clients/<urlencoded-client-id>` with a new secret. URL-encode the colons in the DID — `did:bindu:...` becomes `did%3Abindu%3A...`.
 
 ---
 
@@ -301,7 +466,7 @@ If you've lost the secret entirely, rotate it by `PUT`ing to `/admin/clients/<cl
 
 The Bindu frontend has a **Settings → Authentication** page that does step 2 for you. Paste your client secret, click a button, get a token. Handy when you're poking around in Postman.
 
-It's a convenience. Not a replacement for understanding what's happening underneath.
+It's a convenience. Not a replacement for understanding what's happening underneath — and it doesn't sign requests for you, so DID-bound clients still need a real caller.
 
 ---
 
@@ -309,11 +474,17 @@ It's a convenience. Not a replacement for understanding what's happening underne
 
 Authentication answers *"are you allowed in?"* — but in a world where agents talk to agents that talk to other agents, you need something stronger: *"are you really who you claim to be?"*
 
-That's where DIDs come in. Keep reading.
+That's where DIDs come in. And once you have both halves, you need to know how to actually compose them on the wire — four headers, four gates, one canonical signing payload.
 
 <CardGroup cols={2}>
   <Card title="DIDs (next up)" icon="id-card" href="/bindu/learn/did/overview">
     Cryptographic identity — how agents prove they're really them
+  </Card>
+  <Card title="Making Authenticated Requests" icon="key" href="/bindu/learn/authentication/making-requests">
+    The four headers, four gates, and a canonical signing fixture
+  </Card>
+  <Card title="Security Stack" icon="shield" href="/bindu/learn/authentication/security-stack">
+    How mTLS + Hydra + DID compose on a single request
   </Card>
   <Card title="API Reference" icon="book" href="/api/introduction">
     The full HTTP surface of a Bindu agent
@@ -324,7 +495,7 @@ That's where DIDs come in. Keep reading.
 
 ## Appendix: commands you'll reach for
 
-Register a client:
+Register a client (DID is the `client_id`, public key goes in `metadata`):
 
 ```bash
 curl -X POST 'https://hydra-admin.getbindu.com/admin/clients' \
@@ -335,21 +506,22 @@ curl -X POST 'https://hydra-admin.getbindu.com/admin/clients' \
 Look a client up (does it exist? what metadata does it have?):
 
 ```bash
-curl 'https://hydra-admin.getbindu.com/admin/clients/<client_id>'
+# URL-encode the colons in the DID
+curl 'https://hydra-admin.getbindu.com/admin/clients/did%3Abindu%3A...'
 ```
 
-Update a client (rotate secret, change metadata):
+Update a client (rotate secret, add `metadata.public_key`, etc. — full replace, not patch):
 
 ```bash
-curl -X PUT 'https://hydra-admin.getbindu.com/admin/clients/<client_id>' \
+curl -X PUT 'https://hydra-admin.getbindu.com/admin/clients/did%3Abindu%3A...' \
   -H 'Content-Type: application/json' \
   -d '{ ...full client record with changes... }'
 ```
 
-Delete a client (careful — this breaks existing tokens):
+Delete a client (careful — pre-issued tokens stay valid until they expire):
 
 ```bash
-curl -X DELETE 'https://hydra-admin.getbindu.com/admin/clients/<client_id>'
+curl -X DELETE 'https://hydra-admin.getbindu.com/admin/clients/did%3Abindu%3A...'
 ```
 
 Introspect a token (debug "is this thing valid?"):
@@ -360,10 +532,37 @@ curl -X POST 'https://hydra-admin.getbindu.com/admin/oauth2/introspect' \
   -d 'token=<your access token>'
 ```
 
+Revoke a token (kills it immediately upstream):
+
+```bash
+curl -X POST 'https://hydra-admin.getbindu.com/admin/oauth2/revoke' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'token=<your access token>'
+```
+
 Generate a strong secret:
 
 ```bash
 openssl rand -base64 32 | tr -d '=' | tr '+/' '-_'
+```
+
+Mint a token from Python (no SDK required):
+
+```python
+import requests
+
+resp = requests.post(
+    "https://hydra.getbindu.com/oauth2/token",
+    data={
+        "grant_type":    "client_credentials",
+        "client_id":     "did:bindu:you_at_example_com:my_agent:<uuid>",
+        "client_secret": "<your secret>",
+        "scope":         "openid offline agent:read agent:write",
+    },
+    timeout=10,
+)
+resp.raise_for_status()
+token = resp.json()["access_token"]   # opaque, e.g. ory_at_...
 ```
 
 <span className="brand-quote">
@@ -376,6 +575,6 @@ openssl rand -base64 32 | tr -d '=' | tr '+/' '-_'
 
   <span className="brand-quote-text">
     Authenticate -{" "}
-    <span className="brand-quote-highlight">your identity to agents</span>.
+    <span className="brand-quote-highlight">prove the ticket, then prove the bearer</span>.
   </span>
 </span>

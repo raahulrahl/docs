@@ -171,7 +171,9 @@
                 "group": "Identity & Trust",
                 "pages": [
                   "bindu/learn/did/overview",
-                  "bindu/learn/authentication/overview"
+                  "bindu/learn/authentication/overview",
+                  "bindu/learn/authentication/making-requests",
+                  "bindu/learn/authentication/security-stack"
                 ]
               },
               {

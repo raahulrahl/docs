@@ -1,0 +1,305 @@
+---
+title: "Making Authenticated Requests"
+description: "The four headers, the four gates, and exactly what to put on the wire"
+---
+
+When `AUTH__ENABLED=true`, every call to a Bindu agent has to do **two things at once**:
+
+1. **Prove you're allowed** — attach a short-lived bearer token from Hydra.
+2. **Prove you're really you** — sign the request body with your DID's private key and attach the signature.
+
+Either one missing and the agent rejects the call. Get both right and the request goes through.
+
+The [Authentication overview](/bindu/learn/authentication/overview) explains the bearer-token side conceptually. The [DID page](/bindu/learn/did/overview) explains the signing side. This page is the shortest path to a working request that satisfies both.
+
+---
+
+## The four headers
+
+Every call to an auth-on Bindu agent carries these four headers:
+
+```
+Authorization:    Bearer <access_token>           ← from Hydra, expires in ~1h
+X-DID:            did:bindu:<author>:<name>:<id>  ← your identity
+X-DID-Timestamp:  <unix-seconds>                  ← within 300s of server clock
+X-DID-Signature:  <base58 Ed25519 sig>            ← signs {body, did, timestamp}
+```
+
+The agent verifies them in four gates. The first failure stops the chain.
+
+| Gate | What's checked | On failure |
+|---|---|---|
+| 1 | Bearer token present and active in Hydra | **HTTP 401** + JSON-RPC `-32009 "Authentication is required..."` |
+| 2 | `X-DID` matches the token's `client_id` | **HTTP 403** + `details.reason: did_mismatch` |
+| 3 | Public key for that DID is registered in Hydra client metadata | **HTTP 403** + `details.reason: public_key_unavailable` |
+| 4 | Timestamp within 300s **and** signature verifies | **HTTP 403** + `details.reason: invalid_signature` |
+
+<Note>
+Gate 4 collapses two sub-causes (clock skew and bad signature) into one `invalid_signature` reason. If you get this error, re-signing with a fresh timestamp eliminates clock-skew and replay as the cause.
+</Note>
+
+---
+
+## I just want it to work — use a built-in caller
+
+Most teams should not hand-roll this. Three callers in the Bindu repo do the whole chain for you:
+
+| Caller | What you provide | What it does |
+|---|---|---|
+| **Inbox** (`POST /api/compose`) | Persona + OpenRouter key (via UI) | Spawns your personal agent, registers it with Hydra, signs every outbound message |
+| **Gateway** (`POST /plan`) | `BINDU_GATEWAY_DID_SEED` + Hydra URLs | Same identity for every peer call |
+| **Postman collection** | Seed + DID + secret in environment | Pre-request script signs each call automatically |
+
+Quick smoke test against an auth-on agent, using the inbox:
+
+```bash
+# poet_agent running on 5776 with AUTH on:
+curl -s -X POST http://127.0.0.1:3787/api/ecosystem \
+  -H 'content-type: application/json' \
+  -d '{"id":"poet_agent","url":"http://127.0.0.1:5776"}'
+
+curl -s -X POST http://127.0.0.1:3787/api/compose \
+  -H 'content-type: application/json' \
+  -d '{"agentId":"poet_agent","text":"write a 4-line poem"}'
+# → {"ok":true,"status":200,"contextId":"...","taskId":"...","response":{...}}
+```
+
+`ok:true, status:200` back means every gate above passed. You're done.
+
+The rest of this page is for people writing the caller from scratch in a new language.
+
+---
+
+## Hand-rolling it: one-time setup
+
+You need three durable artifacts:
+
+- **A seed** — your 32-byte secret. Generates the Ed25519 keypair.
+- **A DID** — your public name, deterministically derived from the seed.
+- **An OAuth client in Hydra** — registered against the DID, with the public key in metadata.
+
+<Steps>
+  <Step title="Generate seed, DID, public key">
+    ```bash
+    uv run python -c "
+    import hashlib, os, base64, base58
+    from nacl.signing import SigningKey
+
+    AUTHOR = 'you_at_example_com'   # your email, @ → _at_, . → _
+    NAME   = 'my_agent'              # short label, no colons
+
+    seed = os.urandom(32)
+    pk   = bytes(SigningKey(seed).verify_key)
+    sha  = hashlib.sha256(pk).hexdigest()
+    agent_id = f'{sha[0:8]}-{sha[8:12]}-{sha[12:16]}-{sha[16:20]}-{sha[20:32]}'
+    did = f'did:bindu:{AUTHOR}:{NAME}:{agent_id}'
+
+    print('SEED_B64       =', base64.b64encode(seed).decode())
+    print('DID            =', did)
+    print('PUBLIC_KEY_B58 =', base58.b58encode(pk).decode())
+    "
+    ```
+
+    Save all three.
+
+    <Warning>
+    The seed is your private key. Lose it and your DID is orphaned. Leak it and anyone can impersonate you.
+    </Warning>
+  </Step>
+
+  <Step title="Register the OAuth client in Hydra">
+    The DID **is** the `client_id`. The public key goes in `metadata.public_key` — that's how the agent finds your key during signature verification.
+
+    ```bash
+    CLIENT_SECRET=$(openssl rand -base64 32 | tr -d '=' | tr '+/' '-_')
+
+    curl -X POST https://hydra-admin.getbindu.com/admin/clients \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "client_id":     "'"$DID"'",
+        "client_secret": "'"$CLIENT_SECRET"'",
+        "grant_types":   ["client_credentials"],
+        "response_types":["token"],
+        "scope":         "openid offline agent:read agent:write",
+        "token_endpoint_auth_method": "client_secret_post",
+        "metadata": {
+          "did":                 "'"$DID"'",
+          "public_key":          "'"$PUBLIC_KEY_B58"'",
+          "key_type":            "Ed25519",
+          "verification_method": "Ed25519VerificationKey2020",
+          "hybrid_auth":         true
+        }
+      }'
+    ```
+
+    Save `CLIENT_SECRET`. You need it to mint tokens.
+  </Step>
+</Steps>
+
+---
+
+## Hand-rolling it: every request
+
+Four steps. The first runs once per hour (token cache). The other three run on every call.
+
+<Steps>
+  <Step title="Mint a bearer token">
+    ```bash
+    curl -s -X POST https://hydra.getbindu.com/oauth2/token \
+      -d grant_type=client_credentials \
+      -d "client_id=$DID" \
+      -d "client_secret=$CLIENT_SECRET" \
+      -d "scope=agent:read agent:write"
+    ```
+
+    Response:
+
+    ```json
+    { "access_token": "ory_at_...", "expires_in": 3599, "scope": "agent:read agent:write", "token_type": "bearer" }
+    ```
+
+    Cache the token in memory. Refresh ~60s before `expires_in` runs out.
+  </Step>
+
+  <Step title="Build the JSON-RPC body">
+    Serialize the body **once** and keep the exact bytes. The bytes you sign must equal the bytes you send.
+
+    ```python
+    body_bytes = json.dumps({
+      "jsonrpc": "2.0",
+      "id":      "<uuid>",
+      "method":  "message/send",
+      "params": {
+        "message": {
+          "role": "user", "kind": "message",
+          "parts": [{"kind": "text", "text": "your prompt"}],
+          "messageId": "<uuid>", "contextId": "<uuid>", "taskId": "<uuid>"
+        },
+        # Required. Drop it and the JSON-RPC validator 400s
+        # before auth middleware even sees the request.
+        "configuration": {"acceptedOutputModes": ["application/json"]}
+      }
+    }).encode("utf-8")
+    ```
+  </Step>
+
+  <Step title="Sign">
+    The signing payload is a **second** JSON object that wraps the body as a string. Sort keys and keep Python's default whitespace.
+
+    ```python
+    ts = int(time.time())
+    signing_str = json.dumps(
+        {"body": body_bytes.decode("utf-8"), "did": did, "timestamp": ts},
+        sort_keys=True,   # ← required
+    )
+    # default Python separators: ", " and ": " — note the spaces.
+    sig_b58 = base58.b58encode(
+        SigningKey(seed).sign(signing_str.encode("utf-8")).signature
+    ).decode()
+    ```
+
+    <Warning>
+    **The #1 cross-language gotcha.** JavaScript's `JSON.stringify` omits spaces after `:` and `,`. Python's `json.dumps` includes them. The signing payload above uses Python's defaults. Sign one shape, server reconstructs the other → HTTP 403 + `details.reason: invalid_signature`. Use the [canonical fixture](#canonical-fixture) to verify your implementation in any language.
+    </Warning>
+  </Step>
+
+  <Step title="Send with all four headers">
+    ```python
+    requests.post(
+        f"{agent_url}/",
+        data=body_bytes,                          # ← exactly the bytes you signed
+        headers={
+            "Content-Type":    "application/json",
+            "Authorization":   f"Bearer {access_token}",
+            "X-DID":           did,
+            "X-DID-Timestamp": str(ts),
+            "X-DID-Signature": sig_b58,
+        },
+    )
+    ```
+
+    All four gates pass → your handler runs.
+  </Step>
+</Steps>
+
+---
+
+## What can go wrong
+
+| Response | Most likely cause | Fix |
+|---|---|---|
+| HTTP 401, JSON-RPC `-32009 Authentication is required` | No `Authorization` header, or token is invalid/expired | Mint a fresh token, attach as `Authorization: Bearer …` |
+| HTTP 403, `details.reason = did_mismatch` | `X-DID` doesn't match the token's `client_id` | Mint the token with the same DID you send as `X-DID` |
+| HTTP 403, `details.reason = public_key_unavailable` | `metadata.public_key` missing on the Hydra client, or you registered against a different Hydra | `GET /admin/clients/<did>` and check `metadata.public_key` |
+| HTTP 403, `details.reason = invalid_signature` | Clock skew > 300s, replayed timestamp, body bytes drifted between sign and send, `sort_keys`/whitespace mismatch, or signed with the wrong seed | Sign fresh on every request, sign the exact bytes you'll send, verify against the canonical fixture |
+| HTTP 400, `-32700` JSON parse error (e.g. `params.configuration` field required) | Body shape wrong **before** auth runs — JSON-RPC validator rejects upfront | Body bug, not an auth bug. Include `params.configuration` and confirm against an unauthed peer first |
+| `invalid_client` from `/oauth2/token` | Wrong `client_secret` or client not registered on this Hydra | `GET /admin/clients/<did>` to confirm |
+| `invalid_scope` from `/oauth2/token` | Requesting a scope the client wasn't registered with | Re-register with the scope, or drop it |
+
+<Note>
+The middleware collapses four sub-causes of "signature didn't verify" into one `invalid_signature` reason. To narrow it down, re-sign with a fresh timestamp first — that eliminates clock skew and replay. If it still fails, you have a body-byte or key-mismatch issue.
+</Note>
+
+Debugging shortcut — introspect your own token:
+
+```bash
+curl -s -X POST https://hydra-admin.getbindu.com/admin/oauth2/introspect \
+  -d "token=$ACCESS_TOKEN" \
+  | python3 -m json.tool
+```
+
+Look for `active: true`, `client_id == your DID`, and `exp > now`. Anything off here is your bug.
+
+---
+
+## Canonical fixture
+
+Use this to verify your sign-and-encode implementation against every other Bindu caller, in any language.
+
+| Input | Value |
+|---|---|
+| Seed | 32 zero bytes |
+| DID | `did:bindu:test` |
+| Body | `{"test": "value"}` |
+| Timestamp | `1000` |
+
+Signing payload (note spaces after `:` and `,`):
+
+```
+{"body": "{\"test\": \"value\"}", "did": "did:bindu:test", "timestamp": 1000}
+```
+
+Expected base58 signature:
+
+```
+3SfU4VPTHLbzZzCn17ZqU6y2tnzHQbdo2nnXQr6XZXk34XgyzwSKRrCYEWRmmGXrV39mdkyhTsy5oasfTpNuqyM2
+```
+
+Your code matches → ship it. Doesn't match → you're missing the spaces, your keys aren't sorted, or your base58 alphabet is wrong (Bindu uses the Bitcoin alphabet — `nacl-base58` is the same).
+
+---
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Security Stack" icon="shield" href="/bindu/learn/authentication/security-stack">
+    How mTLS, Hydra, and DID signatures compose on a single request
+  </Card>
+  <Card title="DID Identity" icon="id-card" href="/bindu/learn/did/overview">
+    The signing side in depth — Ed25519, canonical JSON, key rotation
+  </Card>
+</CardGroup>
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Four headers,{" "}
+    <span className="brand-quote-highlight">four gates, one chain of trust</span>.
+  </span>
+</span>
