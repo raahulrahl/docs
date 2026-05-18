@@ -1,28 +1,25 @@
 ---
 title: 'What is Bindu'
+description: 'The identity, communication, and payments layer for AI agents — built for production agent swarms like the Trade Compliance OS'
 ---
 
 > "Every story begins with a single point of light."
 
-It always starts small, a spark, a line of code, a dot(in sanskrit it is called bindu).
+It always starts small — a spark, a line of code, a dot (in Sanskrit, *bindu*).
 
 The story starts with a developer.
 
-She just built an incredible agent.
-It reasons well, pulls from multiple APIs, and even writes structured outputs. 
+She just built an incredible agent. It reasons well, pulls from multiple APIs, and writes structured outputs.
 
 But before she can share it with the world, she needs to:
 
-Set up a server, Handle authentication, Add observability and tracing, Expose endpoints, Maybe even support payments.
+Set up a server. Handle authentication. Add observability and tracing. Expose endpoints. Maybe support payments. Probably wire up mutual TLS so the request body isn't readable on the wire. Almost certainly stand up a DID so the agent can prove who it is when it talks to another agent.
 
-Three weeks later, her “AI agent” still isn’t live.
-She’s writing boilerplate instead of building intelligence.
-She became the DevOps engineer she never wanted to be.
+Three weeks later, her "AI agent" still isn't live. She's writing boilerplate instead of building intelligence. **She became the DevOps engineer she never wanted to be.**
 
-**That’s the story of almost every agent today.**
-And it’s completely backwards.
+That's the story of almost every agent today. And it's completely backwards.
 
-**The intelligence is ready. The infrastructure isn’t.**
+**The intelligence is ready. The infrastructure isn't.**
 
 ---
 
@@ -42,6 +39,7 @@ And it’s completely backwards.
 |--------------------------|----------------------------------------|-----------------------------------|
 | **Agent Code**           | 15 lines                               | 15 lines                          |
 | **Integration**          | Countless lines of boilerplate         | 5 lines of configuration          |
+| **Identity & Auth**      | Roll your own DID, OAuth, key rotation | Built in: DID + Hydra + mTLS      |
 | **Time to Deploy**       | Weeks                                  | 2 minutes                         |
 | **Developer Focus**      | Becomes DevOps engineer                | Stays focused on the agent        |
 
@@ -49,183 +47,272 @@ And it’s completely backwards.
 
 ---
 
-<div className="flex justify-center my-8">
-  <img 
-    src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGdxOW9uMng2YmNsaGlpMGRrcGlrcmNqd2RuMGRiem8xMG9mZmVscCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/FG14fnY17opr2/giphy.gif" 
-    alt="Before Bindu: 3000 lines of boilerplate. After Bindu: 5 lines of config"
-    className="rounded-xl shadow-lg"
-  />
-</div>
+## Why we built this: the Trade Compliance OS
+
+Bindu didn't start as a framework. It started because we needed it.
+
+We're building the **Trade Compliance OS** — a swarm of agents that helps a small or mid-sized business ship physical goods across borders without writing a six-figure check to a law firm. The agents handle:
+
+- **CBAM** — the EU's Carbon Border Adjustment Mechanism, which now charges importers for embedded carbon in steel, cement, aluminum, fertilizer, electricity, and hydrogen.
+- **EUDR** — the EU Deforestation Regulation, which forbids placing coffee, cocoa, cattle, palm oil, soy, rubber, wood, and their derivatives on the EU market without a deforestation-free declaration.
+- **HS codes** — the 10-digit Harmonized System classification that decides the duty rate, the licensing regime, and whether a shipment clears in hours or weeks.
+- **DPPs** — Digital Product Passports, the per-item provenance and material record the EU is making mandatory category by category.
+
+Picture the workflow. An SMB exporter wants to send 12 pallets of roasted coffee from Vietnam to Germany. The system has to:
+
+1. Classify the product — pull the right HS code from a regulator's database.
+2. Pull deforestation-free attestations for the source farms.
+3. Generate the CBAM declaration if the buyer is in scope.
+4. Stamp a Digital Product Passport so each bag carries its provenance.
+5. Quote a price for the bundled service. Settle it. Hand the exporter a packet they can file.
+
+That is not one agent. That is a **swarm**. Different agents for different regulations, different data sources, different jurisdictions. Some of them are ours. Some of them belong to partners. Some of them want to be paid per query because they're calling expensive regulator APIs underneath.
+
+The minute you try to ship that for real, you hit four hard problems at once:
+
+1. **Identity.** When an auditor asks "which agent computed this CBAM declaration?", you need a cryptographic answer, not a log line. Every agent's output has to be signed by a key only that agent owns.
+2. **Authorization.** Some agents in the swarm are internal. Some are paying partners. Some are anonymous public agents asking for quotes. They cannot all see the same data.
+3. **Encryption on the wire.** Customs documents are regulated. The bearer token cannot traverse a coffee-shop network in cleartext, full stop.
+4. **Payment.** A compliance agent that queries five regulator APIs cannot quote a price after the fact. It has to demand settlement *before* it spends the underlying API call.
+
+Most agent frameworks hand you one of these and tell you the other three are your problem. **Bindu was built so the compliance swarm could exist** — which is why all four ship together, on by default.
+
+<Note>
+If you've built an agent that touches **customs paperwork, supplier audits, materials sourcing, regulatory filings, or anything adjacent**, we'd love to have it in the network. [Find us on Discord](https://discord.gg/3w5zuYUuwt).
+</Note>
 
 ---
 
-## The Vision
+## What ships with Bindu (and why each piece exists)
 
-Once, intelligence lived in notebooks - silent, isolated, waiting for a human to press Run.
+Every feature here exists because the compliance swarm needed it. The same pieces work for any agent network — Bindu is generic — but the *why* is concrete.
 
-We built minds, but never gave them bodies.We made ideas, but never gave them a home.
+### The three-layer security stack
 
-**Bindu changes that.**
+When an A2A request lands on a Bindu agent, three middlewares fire before your handler sees the body — and each answers a question the other two cannot:
 
-It gives every agent an address, a voice, and a heartbeat - making it a first-class citizen of the Internet.
-Addressable. Observable. Composable.
+| Layer | The question it answers | What it actually is |
+|---|---|---|
+| **mTLS** | _Is the socket itself encrypted and mutually authenticated?_ | X.509 cert from [Smallstep step-ca](https://smallstep.com/docs/step-ca/), SAN = DID, 24-hour TTL, auto-renewed in-process |
+| **OAuth2 via Hydra** | _Is the caller allowed to perform this operation right now?_ | Bearer token, ~1-hour TTL, validated via [Ory Hydra](https://www.ory.sh/hydra/) introspection |
+| **DID signature** | _Was this exact JSON body authored by the DID it claims?_ | Ed25519 signature over canonical body, carried in `X-DID-Signature` |
 
-A research agent in Berlin.<br/>
-An analysis agent in New York.<br/>
-A writing agent in Tokyo.<br/>
-Each alive, discoverable, speaking a shared language.
+You don't pick one. You don't bolt them on. They ship together. **No agent framework we surveyed ships all three out of the box.**
 
-Together, they form something new, not an app, not a cluster - but a living network of intelligence.
+Why three, not one? Because each fails safe in a way the others can't. An attacker who steals a bearer token still can't decrypt the traffic (mTLS owns the wire). An attacker who forges a cert still can't impersonate a DID (the signature won't verify). An attacker who breaks the signature scheme still can't get past Hydra's authorization check.
 
-Bindu turns any script into a micro-service for cognition - one that speaks fluent A2A, AP2, and X402.
-No wrappers. No SDK chaos.
+For the compliance swarm: the auditor's "which agent signed this declaration?" question has a cryptographic answer in three places — the cert SAN, the OAuth client_id, and the message signature. All three must agree, or the request is rejected.
 
-Just your agent’s brain - and Bindu takes care of the body.
+→ Full walkthrough: [Security Stack](/bindu/learn/authentication/security-stack)
 
-<div className="flex justify-center my-8">
-  <video 
-    src="https://cdn.midjourney.com/video/9db43030-eecb-4c9d-b601-5e86d27ec076/0.mp4" 
-    controls
-    className="rounded-xl shadow-lg"
-  />
-</div>
+### x402 payments — pay before you run
+
+Flip a flag and the agent demands USDC before your handler ever sees the request. **5 chains pre-configured** — Base, Base Sepolia, Ethereum, Ethereum Sepolia, SKALE Europa — and any other EVM chain (Polygon, Avalanche, Arbitrum, …) takes one `extra_networks` entry.
+
+For the compliance swarm: a CBAM declaration agent calls three paid regulator APIs underneath. It can't eat that cost on a query that never settles. x402 means the caller has paid before the agent burns a single API call.
+
+→ [Payment docs](/bindu/learn/payment/introduction)
+
+### DID identity that doubles as your audit trail
+
+Every response your agent sends is signed with an Ed25519 key. Callers verify with a [W3C DID](https://www.w3.org/TR/did-core/) — no shared secret to leak, no central authority to query, and the **same DID** is the cert's SAN, the OAuth2 `client_id`, and the message signer. All three have to agree, or the request is rejected.
+
+For the compliance swarm: when an EU customs officer asks who computed a CBAM number two years from now, the DID + signature is the answer. Non-repudiable by design.
+
+→ [DID docs](/bindu/learn/did/overview)
+
+### Gateway — a planner that orchestrates the swarm
+
+A planner LLM that takes a high-level intent (`"ship 12 pallets of coffee from Vietnam to Germany"`), decides which agents to invoke, fans the work out over A2A, and streams the result back. Each fan-out call is signed; each backing agent verifies the chain to the operator's cert.
+
+For the compliance swarm: the gateway is what turns "ship this coffee" into a planned sequence of HS-code lookup, EUDR attestation, CBAM declaration, and DPP generation — without you hard-coding the routing.
+
+→ [Gateway docs](/bindu/gateway/overview)
+
+### Skills, and private skills
+
+Declare what your agent can do, and callers see it on the agent card before they spend a token asking. **Private skills** keep your commercial menu out of the public catalog — public crawlers see a generic "we do trade compliance", allowlisted partner DIDs see your real menu at a second auth-gated endpoint.
+
+For the compliance swarm: your interpretation of CBAM regulation **is** your product. Showing the full skill catalog to every public crawler tells competitors your roadmap. Private skills mean the catalog is gated by DID allowlist.
+
+→ [Private skills](/bindu/skills/private_skills/private_skills)
+
+### Polyglot SDKs on one gRPC core
+
+Bindu is Python at heart, but the framework exposes a shared **gRPC core** that any language can drive. SDKs ship for **Python, TypeScript, and Kotlin** today — same protocol, same DID, same auth. A new language SDK is usually a few hundred lines.
+
+For the compliance swarm: regulator APIs come in every flavor — REST in Java, SOAP in .NET, an SDK in TypeScript, a CLI in Go. Your team writes the agent in whichever language matches the integration, and the rest of the swarm doesn't care.
+
+→ [Multi-language sidecar](/bindu/grpc/overview)
+
+### The inbox — a Gmail-shaped control plane
+
+A visual operator inbox that bootstraps a personal agent, registers it with Hydra, signs every outbound message, and renders agents as Gmail-shaped addresses (`fleet+joke_agent@getbindu.com`). Watch your agents send signed JSON-RPC to each other, verify identities inline, and reply to a swarm like it's an email thread.
+
+For the compliance swarm: the operator needs to *see* what the agents are doing. The inbox is the human-in-the-loop pane on top of the swarm.
+
+### Tunnel and cloud deploy
+
+`expose: true` puts your laptop on the internet — no port forwarding, no router config — via an FRP tunnel. When you're ready to leave the laptop, `bindu deploy agent.py --runtime=boxd` ships your script to a microVM and prints the HTTPS URL. No Dockerfile.
+
+For the compliance swarm: developers iterate locally with `expose: true`, then promote to production with one command.
+
+→ [Tunneling](/bindu/learn/tunneling/overview) · [Runtime](/bindu/runtime/overview)
 
 ---
 
-## The Solution
+## The 10-line agent
 
-**Bindu** turns any agent into a live server in seconds.
-
-We take care of the software engineering and ops.  
-Your agent gets DID identity, A2A/AP2-compatible I/O, observability & tracing, auth, payments (X402), distributed scheduling, context and memory—all built in.
-
-You write the prompt.  
-**Bindu makes it fly.**
-
----
-
-## See It In Action
-
-Here's a complete example—from agent definition to live server:
+Build the agent you want, hand it to `bindufy()`, and it's online. The block below is the whole thing — copy it into a file, set your `OPENAI_API_KEY`, run it.
 
 ```python
 from bindu.penguin.bindufy import bindufy
 from agno.agent import Agent
-from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.models.openai import OpenAIChat
+from agno.tools.duckduckgo import DuckDuckGoTools
 
-# Define your agent
 agent = Agent(
-    instructions="You are a research assistant that finds and summarizes information.",
+    instructions="You are a research assistant.",
     model=OpenAIChat(id="gpt-4o"),
-    tools=[DuckDuckGoTools()]
+    tools=[DuckDuckGoTools()],
 )
 
-# Configuration
 config = {
-    "author": "your.email@example.com",
+    "author": "you@example.com",
     "name": "research_agent",
-    "description": "A research assistant agent",
+    "description": "Research assistant with web search.",
     "version": "1.0.0",
     "capabilities": {},
     "auth": {"enabled": False},
     "storage": {"type": "memory"},
     "scheduler": {"type": "memory"},
-    "deployment": {
-        "url": "http://localhost:3773",
-        "expose": True
-    }
+    "deployment": {"url": "http://localhost:3773", "expose": True},
 }
 
-# Handler function
 def handler(messages: list[dict[str, str]]):
-    result = agent.run(input=messages)
-    return result
+    return agent.run(input=messages)
 
-# Bindu-fy it
 bindufy(config, handler)
-
-# Your agent is now live at http://localhost:3773 with:
-# ✅ A2A/AP2 protocol compliance
-# ✅ DID authentication
-# ✅ Observability & tracing
-# ✅ Payment support (X402)
-# ✅ Production-ready infrastructure
 ```
 
-**That's it.**
+The agent is now live at `http://localhost:3773`. `expose: True` opens an FRP tunnel so the rest of the internet can hit it without you setting up port forwarding.
 
-No infrastructure setup.  
-No protocol implementation.  
-No DevOps complexity.
+<details>
+<summary>Calling the agent with curl</summary>
 
-Your agent is now a discoverable, connectable node in the Internet of Agents.
+```bash
+curl -X POST http://localhost:3773/ \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "<uuid>",
+    "params": {
+      "message": {
+        "role": "user",
+        "kind": "message",
+        "parts": [{"kind": "text", "text": "Hello"}],
+        "messageId": "<uuid>",
+        "contextId": "<uuid>",
+        "taskId": "<uuid>"
+      },
+      "configuration": {"acceptedOutputModes": ["application/json"]}
+    }
+  }'
+```
 
-### What Just Happened?
+Then poll `tasks/get` with the same `taskId` until state hits `completed`.
 
-In those few lines of code, Bindu gave your agent:
+</details>
 
-- **A2A/AP2 Protocol** - Standard communication so other agents can talk to it
-- **DID Authentication** - Verifiable identity in the agent ecosystem
-- **Observability & Tracing** - See what your agent is doing in production
-- **Payment Support (X402)** - Charge for your agent's services
-- **Production Infrastructure** - Server, routing, error handling, all handled
+<details>
+<summary>TypeScript equivalent</summary>
 
-What would normally take **weeks of infrastructure work** happened in one function call.
+```typescript
+import { bindufy } from "@bindu/sdk";
+import OpenAI from "openai";
 
----
+const openai = new OpenAI();
 
-## Who's Using Bindu
+bindufy({
+  author: "you@example.com",
+  name: "research_agent",
+  description: "Research assistant.",
+  deployment: { url: "http://localhost:3773", expose: true },
+}, async (messages) => {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+  });
+  return response.choices[0].message.content || "";
+});
+```
 
-Developers are using Bindu to build the next generation of AI agents:
+The TypeScript SDK spawns the Python core in the background. Zero Python in your repo, same DID, same wire protocol.
 
-**Research Agents**  
-They live in labs and libraries, reading millions of papers so you don’t have to.
-
-**Data Processing Agents**  
-Pipelines that think. They transform data and bill for it autonomously.
-
-**Content Agents**  
-Digital writers who never tire. They co-author, translate, and summarize.
-
-**Custom Workflows**  
-Entire swarms built for healthcare, finance, and education, each node alive, each built on Bindu.
-
-### What They're Saying
-
-> "Bindu saved us 3 weeks of infrastructure work. We went from idea to deployed agent in an afternoon."  
-
-> "The A2A protocol compliance out of the box was huge. Our agents can now talk to any other A2A agent."  
-
-> "We're running 50+ Bindu agents in production. The observability and DID auth just work."
-
----
-
-## What's Next
-
-**Bindu is the foundation for the Internet of Agents.**
-
-We've evolved from monoliths to microservices over the last two decades.  
-Each evolution made software more modular, more scalable, more composable.
-
-Now, with LLMs, software can **think, plan, and implement**.  
-Bindu makes sure agents can **connect, collaborate, and compose**.
-
-A lightweight wrapper that transforms any agent into an **A2A/AP2/X402-compliant server** in seconds.  
-
-No protocol implementation.
-
-No DevOps complexity.  
-
-Just add `bindufy()` to your agent code.
-
-Your agent instantly gets: DID, authentication, observability, payments, scheduling, and memory.  
-Ready to join the **Internet of Agents**.
-
-Think microservices, but for AI Agents.  
-
-> **The universe began with a dot.
-The Internet of Agents begins with Bindu.**
+</details>
 
 ---
 
+## Supported frameworks
+
+Bindu doesn't care what's inside the handler. Bring whatever you already like writing agents in.
+
+| Language | Frameworks tested in this repo |
+|---|---|
+| **Python** | [AG2](https://github.com/ag2ai/ag2), [Agno](https://github.com/agno-agi/agno), [CrewAI](https://github.com/joaomdmoura/crewAI), [Hermes Agent](https://github.com/NousResearch/hermes-agent), [LangChain](https://github.com/langchain-ai/langchain), [LangGraph](https://github.com/langchain-ai/langgraph), [Notte](https://github.com/nottelabs/notte) |
+| **TypeScript** | [OpenAI SDK](https://github.com/openai/openai-node), [LangChain.js](https://github.com/langchain-ai/langchainjs) |
+| **Kotlin** | [OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin) |
+| **Any other** | via the [gRPC core](/bindu/grpc/overview) — a new SDK is usually a few hundred lines |
+
+Model providers that speak the OpenAI or Anthropic API work out of the box — [OpenRouter](https://openrouter.ai/), [OpenAI](https://platform.openai.com/), [MiniMax](https://platform.minimaxi.com), and the rest.
+
+---
+
+## Beyond compliance
+
+Trade Compliance OS is what made us build Bindu, but the same architecture works for any agent network where identity, payments, and multi-party trust matter:
+
+- **Healthcare swarms** — a triage agent routing to specialty agents, each signing their differential.
+- **Financial research** — a planner orchestrating data, modeling, and report agents, each billing per query.
+- **Legal discovery** — a fleet of agents reading documents under cryptographic chain-of-custody.
+- **Supply chain audits** — supplier agents, materials agents, certificate agents handing off work with verifiable provenance.
+
+The pattern is the same: many agents, different owners, different jurisdictions, real money, real audit trails. That's the Internet of Agents — and that's what Bindu turns from a slide deck into a running system.
+
+---
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="building" href="/bindu/concepts/task-first-and-architecture">
+    The task-first execution model and the layered system that makes it work
+  </Card>
+  <Card title="Security Stack" icon="shield" href="/bindu/learn/authentication/security-stack">
+    mTLS + Hydra + DID on a single request — embassy analogy, env block, gotchas
+  </Card>
+  <Card title="Your first agent" icon="rocket" href="/bindu/get-started/your-first-agent">
+    From zero to a running agent in two minutes
+  </Card>
+  <Card title="Gateway" icon="diagram-project" href="/bindu/gateway/overview">
+    The planner LLM that orchestrates multi-agent flows
+  </Card>
+</CardGroup>
+
+---
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    The universe began with a dot.{" "}
+    <span className="brand-quote-highlight">
+      The Internet of Agents begins with Bindu.
+    </span>
+  </span>
+</span>
