@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Claude Code local state (settings, worktrees, etc.)
+.claude/
+
+# Node (Mintlify CLI, etc.)
+node_modules/
+
+# Logs
+*.log
