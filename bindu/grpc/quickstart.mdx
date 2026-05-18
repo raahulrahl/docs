@@ -203,18 +203,30 @@ npx tsx index.ts
 You should see output like this:
 
 ```text
-[Bindu SDK] Starting Bindu core...
-[Bindu SDK] Bindu core is ready on :3774
-[Bindu SDK] AgentHandler gRPC server started on :XXXXX
-[Bindu SDK] Registering agent with Bindu core...
-[Bindu SDK]
-[Bindu SDK] Agent registered successfully!
-[Bindu SDK]   Agent ID:  91547067-c183-e0fd-c150-27a3ca4135ed
-[Bindu SDK]   DID:       did:bindu:dev_at_example_com:my-first-agent:91547067...
-[Bindu SDK]   A2A URL:   http://localhost:3773
-[Bindu SDK]
-[Bindu SDK] Waiting for messages...
+  Bindufy: my-first-agent
+  Author: dev@example.com
+
+Starting Bindu core: /usr/local/bin/bindu serve --grpc --grpc-port 3774
+Waiting for Bindu core gRPC on port 3774...
+[bindu-core] gRPC server started on grpc://0.0.0.0:3774
+[bindu-core] Waiting for SDK agent registrations...
+Bindu core is ready.
+  AgentHandler gRPC server on :54321
+  Registering with Bindu core at localhost:3774...
+
+  Agent registered successfully!
+  Agent ID: 91547067-c183-e0fd-c150-27a3ca4135ed
+  DID:      did:bindu:dev_at_example_com:my-first-agent:91547067...
+  A2A URL:  http://localhost:3773
+
+  Waiting for messages...
 ```
+
+<Info>
+  Lines prefixed `[bindu-core]` come from the spawned Python core's stdout. Lines without
+  a prefix come from the SDK itself. The exact port after `AgentHandler gRPC server on :`
+  is OS-assigned (`callbackPort: 0` in your config), so it will differ each run.
+</Info>
 
 <Check>Your agent is now running as a full microservice.</Check>
 
@@ -298,10 +310,10 @@ Your agent is running. Let's slow down and understand what `bindufy()` actually 
   </Step>
 
   <Step title="Core ran full bindufy logic">
-    - Generated deterministic agent ID from `SHA256(author:name)`
-    - Created Ed25519 DID keys
-    - Set up authentication (Hydra OAuth2)
-    - Created manifest with `GrpcAgentClient` as handler
+    - Generated deterministic agent ID: `SHA256("{author}:{name}")` → first 32 hex chars → UUID format ([`bindufy.py:74-76`](https://github.com/getbindu/Bindu/blob/main/bindu/penguin/bindufy.py#L74))
+    - Created Ed25519 DID keys and sanitized the DID identifiers (`@` → `_at_`, `.` → `_`, spaces → `_`, lowercased — see [`did_agent_extension.py:124`](https://github.com/getbindu/Bindu/blob/main/bindu/extensions/did/did_agent_extension.py#L124))
+    - Set up authentication via Hydra OAuth2 (when `AUTH_ENABLED=true`; the paywall example explicitly disables this for local dev)
+    - Created the manifest with `GrpcAgentClient` as `agent_function` (passed through `_bindufy_core(..., handler_callable=grpc_client)`)
     - Started HTTP/A2A server on `:3773`
   </Step>
 

@@ -8,37 +8,56 @@ Push notification configurations define how servers send real-time updates to cl
 
 ### PushNotificationConfig
 
-**Schema:**
+Defined in [`bindu/common/protocol/types.py:397`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py#L397).
+
+**Schema (exact):**
 ```python
-@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+@pydantic.with_config(A2A_MODEL_CONFIG)
 class PushNotificationConfig(TypedDict):
     """Configuration for push notifications.
-    
+
     When the server needs to notify the client of an update outside of a connected session.
     """
-    
-    id: NotRequired[str]
-    """A unique identifier (e.g. UUID) for the push notification configuration.
-    Set by the client to support multiple notification callbacks."""
-    
+
+    id: Required[UUID]
+    """The ID of the push notification configuration."""
+
     url: Required[str]
-    """The callback URL where the agent should send push notifications."""
-    
+    """The URL of the push notification configuration."""
+
     token: NotRequired[str]
-    """A unique token for this task or session to validate incoming push notifications."""
-    
-    authentication: NotRequired[PushNotificationAuthenticationInfo]
-    """Optional authentication details for the agent to use when calling the notification URL."""
+    """The token of the push notification configuration."""
+
+    authentication: NotRequired[SecurityScheme]
+    """The authentication of the push notification configuration."""
 ```
 
-**Use Case: Webhook-based Push Notifications**
+The `authentication` field is a [`SecurityScheme`](./security) — the same discriminated union used for inbound auth on the agent. This is a deliberate choice: the agent declares how *it* will authenticate to your webhook using the same vocabulary you'd use to declare how callers authenticate to it.
+
+**Use Case: Webhook with bearer-token auth (`SecurityScheme` form)**
 ```json
 {
+  "id": "8f0b6df8-1f1e-4b2d-9b0a-6c5e7e4d3a2b",
   "url": "https://client.example.com/webhook/notifications",
   "token": "secure-webhook-token",
   "authentication": {
-    "schemes": ["Bearer"],
-    "credentials": "optional-bearer-token"
+    "type": "http",
+    "scheme": "bearer",
+    "bearerFormat": "JWT",
+    "description": "Server-issued JWT for this webhook audience"
+  }
+}
+```
+
+**Use Case: Webhook with API-key auth**
+```json
+{
+  "id": "8f0b6df8-1f1e-4b2d-9b0a-6c5e7e4d3a2b",
+  "url": "https://client.example.com/webhook/notifications",
+  "authentication": {
+    "type": "apiKey",
+    "name": "X-Webhook-Key",
+    "in": "header"
   }
 }
 ```
@@ -49,67 +68,74 @@ class PushNotificationConfig(TypedDict):
 
 ### PushNotificationAuthenticationInfo
 
+Defined in [`bindu/common/protocol/types.py:417`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py#L417).
+
+<Note>
+  This type exists in the schema as an A2A-spec-compatibility shape, but `PushNotificationConfig.authentication` is typed as [`SecurityScheme`](./security), **not** `PushNotificationAuthenticationInfo`. Use `SecurityScheme` when sending a config; treat this type as informational.
+</Note>
+
 **Schema:**
 ```python
-@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+@pydantic.with_config(A2A_MODEL_CONFIG)
 class PushNotificationAuthenticationInfo(TypedDict):
-    """Authentication information for push notifications.
-    
-    Defines supported authentication schemes and credentials for push notification endpoints.
-    """
-    
+    """Authentication information for push notifications."""
+
     schemes: list[str]
     """A list of supported authentication schemes (e.g., 'Basic', 'Bearer')."""
-    
+
     credentials: NotRequired[str]
     """Optional credentials required by the push notification endpoint."""
 ```
-
-**Use Case: Multi-scheme Authentication Support**
-```json
-{
-  "schemes": ["Bearer", "Basic"],
-  "credentials": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-**What it's for:** Specifying authentication requirements for push notification endpoints. Allows clients to declare which authentication schemes they support and provide necessary credentials for the server to authenticate when sending notifications.
 
 ---
 
 ### TaskPushNotificationConfig
 
-**Schema:**
+Defined in [`bindu/common/protocol/types.py:428`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py#L428).
+
+**Schema (exact):**
 ```python
-@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+@pydantic.with_config(A2A_MODEL_CONFIG)
 class TaskPushNotificationConfig(TypedDict):
-    """Configuration for task push notifications.
-    
-    Links a specific task to a push notification configuration for receiving updates.
-    """
-    
-    task_id: Required[str]
-    """The unique identifier (e.g. UUID) of the task."""
-    
+    """Configuration for task push notifications."""
+
+    id: Required[UUID]
+    """The ID of the task push notification configuration."""
+
     push_notification_config: Required[PushNotificationConfig]
-    """The push notification configuration for this task."""
+    """The push notification configuration of the task push notification configuration."""
+
+    long_running: NotRequired[bool]
+    """Flag indicating task expects to run longer than typical request timeouts.
+
+    When True, the push_notification_config should be persisted for notifications
+    across server restarts. Defaults to False if not specified.
+    """
 ```
 
-**Use Case: Task-specific Notification Setup**
+<Warning>
+  The top-level `id` here is the **task ID** that this notification config is bound to — *not* a separate config identifier. The field is `id`, not `taskId`.
+</Warning>
+
+**Use Case: Long-running task with persistent webhook**
 ```json
 {
-  "taskId": "43667960-d455-4453-b0cf-1bae4955270d",
-  "push_notification_config": {
+  "id": "43667960-d455-4453-b0cf-1bae4955270d",
+  "longRunning": true,
+  "pushNotificationConfig": {
+    "id": "8f0b6df8-1f1e-4b2d-9b0a-6c5e7e4d3a2b",
     "url": "https://client.example.com/webhook/a2a-notifications",
     "token": "secure-client-token-for-task-aaa",
     "authentication": {
-      "schemes": ["Bearer"]
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "JWT"
     }
   }
 }
 ```
 
-**What it's for:** Associating specific tasks with push notification configurations. Enables task-level notification routing where different tasks can send updates to different endpoints or use different authentication methods.
+**What it's for:** Associating specific tasks with push notification configurations. Setting `longRunning: true` tells the server to persist the webhook configuration across restarts so notifications still fire when the task finally completes. Wired through the JSON-RPC methods `tasks/pushNotificationConfig/{set,get,list,delete}` ([`settings.py:445-448`](https://github.com/getbindu/Bindu/blob/main/bindu/settings.py)).
 
 ### How Push Notifications Work
 

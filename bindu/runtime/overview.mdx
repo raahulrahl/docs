@@ -46,13 +46,17 @@ def handler(messages):
     return [{"role": "assistant", "content": messages[-1]["content"]}]
 
 config = {
+    "author": "you@example.com",
     "name": "my-agent",
     "description": "echo agent",
-    "deployment": {"url": "http://localhost:3773"},
+    "deployment": {"url": "http://0.0.0.0:3773", "expose": True},
 }
 
 bindufy(config, handler)
 ```
+
+`author` is required ([bindufy.py:396-401](https://github.com/getbindu/Bindu/blob/main/bindu/penguin/bindufy.py));
+the agent's DID is derived from `author + name`.
 
 ### Two ways to run it - same script, different verb
 
@@ -72,9 +76,12 @@ bindu deploy my_agent.py --runtime=boxd --auto-suspend=60
 [my-agent] INFO: Started server process [12]<br />
 [my-agent] INFO: Application startup complete.
 
-Inside the VM, bindu runs `bindu serve --script my_agent.py` - which is
-`python my_agent.py` plus a few CLI niceties. `bindufy()` serves in-process,
-exactly as it does locally.
+Inside the VM, bindu invokes your script directly with
+`python3 /home/boxd/app/my_agent.py` (the script's `bindufy()` call
+serves in-process, exactly as it does locally). The process is
+started detached via `setsid nohup` and its PID is tracked in
+`/tmp/bindu-agent.pid` so redeploys can stop the old process cleanly.
+See [`_start_agent` in `bindu/runtime/boxd_provider.py`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py).
 
 ### When to use each runtime
 
@@ -91,9 +98,12 @@ exactly as it does locally.
 ## Result
 
 A2A clients can reach the agent at `https://my-agent.boxd.sh`. Ctrl-C
-detaches your terminal; the VM auto-suspends after 60 seconds of inactivity.
-Re-running `bindu deploy` resumes the same VM and pushes updated source.
-Your script never changed - only the launch verb did.
+applies the configured `--on-exit` policy (default `suspend`: calls
+`box.suspend()` so the VM freezes its memory + disk and stops billing
+CPU). With `--auto-suspend=60` passed, the VM also auto-suspends after
+60 seconds of HTTP idle. Re-running `bindu deploy` resumes the same VM
+and pushes updated source. Your script never changed — only the launch
+verb did.
 
 ### Current limitations (v1)
 
@@ -110,7 +120,7 @@ Your script never changed - only the launch verb did.
 
 - **[Quickstart](/bindu/runtime/quickstart)** - friendly walkthrough for your
   first deploy. Start here if you've never used `bindu deploy` before.
-- **[Boxd runtime reference](/bindu/runtime/boxd)** - full `bindu deploy` flag
+- **[Boxd runtime reference](/bindu/runtime/box)** - full `bindu deploy` flag
   reference for the boxd runtime.
 - **[Custom image (A1 mode)](/bindu/runtime/custom-image)** - deploy from a
   user-built Docker image.

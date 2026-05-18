@@ -66,23 +66,14 @@ Defines role-based trust levels for agent authorization (ordered by permission l
 
 ### IdentityProvider `<NotPartOfA2A>`
 
-Supported authentication identity providers:
+Defined in [`bindu/common/protocol/types.py`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py):
 
-- `keycloak` - Keycloak identity provider
-- `azure_ad` - Azure AD identity provider
-- `okta` - Okta identity provider
-- `auth0` - Auth0 identity provider
-- `custom` - Custom identity provider
+```python
+IdentityProvider: TypeAlias = Literal["hydra", "custom"]
+```
 
-### Data Key Constants `<NotPartOfA2A>`
+- `hydra` — [Ory Hydra](https://www.ory.sh/hydra/) OAuth2/OIDC server (default for Bindu deployments)
+- `custom` — operator-provided OIDC-compatible provider
 
-Standard keys for structured data in DataPart objects:
-
-- `CONTACT_ADDRESS_DATA_KEY` = `"contact_picker.ContactAddress"`
-- `PAYMENT_METHOD_DATA_DATA_KEY` = `"payment_request.PaymentMethodData"`
-- `CART_MANDATE_DATA_KEY` = `"ap2.mandates.CartMandate"`
-- `INTENT_MANDATE_DATA_KEY` = `"ap2.mandates.IntentMandate"`
-- `PAYMENT_MANDATE_DATA_KEY` = `"ap2.mandates.PaymentMandate"`
-
-These constants are used to identify specific data types within the protocol's DataPart structure.
+The values `keycloak`, `azure_ad`, `okta`, and `auth0` are **not currently accepted** at runtime — federation to those IdPs happens upstream of Hydra. If you need them as first-class values, open an issue.
 

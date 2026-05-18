@@ -1,0 +1,170 @@
+---
+title: "v2026.21.1"
+description: "mTLS on by default for the personal agent, plus the supporting fixes"
+date: "2026-05-18"
+---
+
+## mTLS, On By Default
+
+This release flips Bindu's transport-layer security from opt-in to default. The operator's personal agent (and any fleet agent that opts in with the same env block) bootstraps a real X.509 cert from production step-ca over a Hydra OIDC token, serves uvicorn under mTLS, and renews itself in-process every ~16 hours. The inbox spawns the personal agent with `BINDU_PERSONAL_MTLS=1` and starts the gateway with the same cert/key/CA bundle pointers, so outbound A2A from a `/plan` fan-out, inbox compose, or peer discovery all present a verified identity at the TLS layer before a single byte of JSON-RPC moves.
+
+This release also includes all the supporting fixes that surfaced once "mTLS on by default" actually started running on a developer laptop. There were six of them. Each one quietly broke mTLS in a different way.
+
+The UI gets a small but meaningful affordance: bindu DIDs now render everywhere as Gmail-shape `name+author@domain` addresses. Hover to see the raw DID. The "Gmail-for-A2A" framing now matches what the sidebar shows.
+
+---
+
+## The Six Things That Were Breaking mTLS
+
+Each fix is in this release.
+
+### 1. The .env Loaded After bindu Did
+
+The personal agent shipped with `MTLS__ENABLED=true` in the spawn env, but the generated `agent.py` loaded the .env file **after** importing bindu. bindu's `app_settings = Settings()` is built at module-import time, so the mTLS env vars landed in `os.environ` but never reached the singleton. `mtls.enabled` silently defaulted to `False`. The agent served plain HTTP. The spawner (which polls HTTPS) hung until the timeout. The wizard showed "starting…" forever.
+
+**Fix.** The generated `agent.py` template now loads .env **before** importing bindu. Same fix applied to every agent in `examples/gateway_test_fleet/`.
+
+### 2. Hydra Audience Drift Wasn't Reconciled
+
+After fixing the load order, mTLS bootstrap reached step-ca via Hydra and got back a 400: *"Requested audience 'step-ca' has not been whitelisted."* The registration path included that audience for brand-new clients, but if your agent had ever registered with mTLS off, the existing-client branch returned early and never reconciled. The agent silently degraded to plain HTTP.
+
+**Fix.** Hydra registration now reconciles audience drift on every boot. If your agent registered before mTLS was enabled and step-ca is later configured to issue against your DID, the agent patches its own Hydra client to include the step-ca audience instead of failing.
+
+### 3. Hydra Rotated the Client Secret on Reconciliation
+
+The second attempt at mTLS bootstrap returned a different 401: *"passwords do not match."* The reconciliation `PUT` was building its body from Hydra's `GET` response, which never returns the `client_secret`. Hydra interpreted the missing secret as a rotation and overwrote the agent's password — the next `client_credentials` call then 401'd.
+
+**Fix.** Reconciliation re-sends the local `client_secret` in the `PUT` body so Hydra doesn't rotate the password as a side effect of the missing field.
+
+### 4. The Agent Card Advertised `http://localhost`
+
+Once mTLS finally worked, the card published at `/.well-known/agent.json` advertised `url: "http://localhost"` — no scheme matching reality, no port. Peers fetching the card couldn't reach back. The `BinduApplication` constructor defaulted `url` to `"http://localhost"` and `bindufy()` never passed `agent_url` through.
+
+**Fix.** The agent-card endpoint reads `app.url` (not `manifest.url`) when building the payload. The penguin layer now passes the resolved deployment URL into `BinduApplication(url=...)` so the card advertises what bindu actually serves, port included.
+
+### 5. fetch failed — bundled undici 6 vs pinned undici 8
+
+Once peers could fetch the card, the inbox's live-agent inspector and `fetchWellKnown` both used Node's global `fetch` with our pinned undici-8 dispatcher. **Node 22 bundles undici 6.** The dispatcher protocol drifted between v6 and v8, so the call threw `TypeError: fetch failed` with no further detail. The same bug existed in the gateway's outbound JSON-RPC client and agent-card fetcher — every multi-agent `/plan` fan-out targeting an mTLS peer came back with `transport: fetch failed`.
+
+**Fix.** Both outbound fetch sites in the gateway (`gateway/src/bindu/client/fetch.ts`, `agent-card.ts`) and the inbox's live-agent inspector and well-known fetcher now route through `undici.fetch` when a dispatcher is present.
+
+### 6. The SAN Matcher Rejected URL-Fragment-Style DIDs
+
+The DID-pinned loopback dispatcher's SAN matcher rejected every valid cert. step-ca's Hydra OIDC provisioner emits the URI SAN as `https://hydra.getbindu.com#did:bindu:...` — **the DID is a URL fragment, not a bare URI.** The matcher checked for literal-DID-in-SANs only.
+
+**Fix.** The matcher now accepts both bare-DID SANs and URL-fragment-style SANs.
+
+### Plus: The Stale Inspector Row
+
+Independent of TLS: each personal-agent respawn picked a fresh free port and updated the in-memory `AGENT_URLS` map, but the ecosystem `agents` table row stayed pinned to the prior port. The inspector reads from that table and was always one spawn behind, surfacing "fetch failed" across all four panels.
+
+**Fix.** Spawning the personal agent now writes the new `url`/`did` into the ecosystem `agents` row in addition to the in-memory `AGENT_URLS` map.
+
+---
+
+## Personal Agent
+
+Two new behaviors and one new env var:
+
+- **`BINDU_PERSONAL_MTLS=1`** on the comms server now gates mTLS for the spawned personal agent. With it, the agent acquires a real cert and serves HTTPS; without it, it defaults to plain HTTP so local development without a configured Hydra still works. The baseUrl the spawner polls and the deployment URL written into `agent.py` both follow the same toggle, so the schemes always match what bindu actually serves.
+- The generated `agent.py` template loads .env **before** importing bindu so `MTLS__/HYDRA__/AUTH__` vars survive into the `app_settings` singleton (see fix #1).
+- Hydra registration reconciles audience drift on every boot (see fix #2).
+
+---
+
+## DIDs as Email Addresses
+
+`didToEmail()` (`inbox/src/lib/format.ts`) reverses bindu's deterministic DID slugifier and renders identities in a Gmail-shape form:
+
+```
+did:bindu:gateway_test_fleet_at_getbindu_com:joke_agent:47191e40…
+  → gateway_test_fleet+joke_agent@getbindu.com
+
+did:bindu:you_at_local:leonard-hofstadter:53f9d49f…
+  → you+leonard-hofstadter@local
+```
+
+The operator's email stays the base; the agent name lives in the `+subaddress` slot. Applied across:
+
+- The sidebar (ecosystem rows and the personal-agent block)
+- The compose-to dropdown
+- The sending-from footer
+- Event rows
+- The agent-info modal
+
+Raw DID survives on the `title` attribute for power users.
+
+---
+
+## Dependency Hygiene
+
+- `trufflesecurity/trufflehog` 3.95.2 → 3.95.3 (CI action patch bump, no runtime impact)
+- `cryptography` upper bound widened from `<47` to `<49` (constraint expansion only — no forced upgrade)
+- `rich` upper bound widened from `<15` to `<16` (constraint expansion only)
+- `brace-expansion` bumped to 5.0.6 in the gateway lockfile, clearing GHSA-jxxr-4gwj-5jf2 / CVE-2026-45149 (transitive DoS via minimatch)
+
+---
+
+## Operational Changes
+
+- The inbox passes `BINDU_PERSONAL_MTLS=1` through to the personal agent when set on the comms server. Local-dev users who want plain HTTP can omit the env var.
+- The inbox spawns the gateway with `BINDU_GATEWAY_TLS_CERT`, `BINDU_GATEWAY_TLS_KEY`, and `BINDU_GATEWAY_TLS_CA` pointing at the personal agent's cert files. Existing HTTP gateways spawned before the personal agent had a cert are recycled on next `/api/me/spawn` so the new gateway boot picks up TLS.
+- The `gateway_test_fleet` README still works against the new HTTPS defaults; every fleet agent's deployment URL is now `https://127.0.0.1:{PORT}` so the agent card advertises a reachable address.
+
+---
+
+## Upgrade Notes
+
+<Steps>
+  <Step title="Turn it on">
+    Start the inbox with `BINDU_PERSONAL_MTLS=1` in its env (e.g. `BINDU_PERSONAL_MTLS=1 npm run dev` in `inbox/`).
+  </Step>
+  <Step title="For fleet agents — set the same env block">
+    `AUTH__ENABLED=true`, `AUTH__PROVIDER=hydra`, `MTLS__ENABLED=true`, `MTLS__MODE=hybrid`, `MTLS__REQUIRE_CLIENT_CERT=false`, plus `HYDRA__ADMIN_URL` / `HYDRA__PUBLIC_URL` / `MTLS__CA_URL` / `MTLS__CA_ROOT_URL`.
+  </Step>
+  <Step title="If your Hydra client is stuck on an empty audience">
+    If you previously ran the personal agent with mTLS attempts and saw silent HTTP fallback, your Hydra client may be stuck with an empty audience array. This release reconciles that automatically on the next agent boot — no manual `curl` to Hydra admin needed.
+  </Step>
+  <Step title="If a prior reconciliation rotated your secret">
+    If your Hydra client got its secret rotated by an earlier reconciliation attempt (the "passwords do not match" symptom), delete `examples/<your-agent>/.bindu/oauth_credentials.json` to force a fresh registration on next start. The delete-and-recreate branch in `register_agent_in_hydra` handles the rest.
+  </Step>
+</Steps>
+
+---
+
+## Files of Note
+
+```
+bindu/penguin/bindufy.py
+bindu/auth/hydra/registration.py
+bindu/auth/hydra/client.py
+
+inbox/server/personal-agent.ts
+inbox/server/index.ts
+inbox/server/utils.ts
+
+gateway/src/bindu/client/fetch.ts
+gateway/src/bindu/client/agent-card.ts
+
+inbox/src/lib/format.ts
+inbox/src/components/{Sidebar,AgentPicker,ComposeModal,EventRow,AgentInfoModal}.tsx
+
+examples/gateway_test_fleet/{joke,math,poet,research,faq}_agent.py
+
+pyproject.toml                       # cryptography <49, rich <16
+gateway/package-lock.json            # brace-expansion 5.0.6
+.github/workflows/trufflehog.yml     # action SHA pin
+```
+
+---
+
+## Known Issues
+
+- `/.well-known/did.json` still returns 404 on bindu agents; the DID is discoverable via `/.well-known/agent.json`'s `capabilities.extensions[*].uri` field. Cosmetic, not blocking.
+- Two Dependabot bumps were deliberately held in this release: **PR #556** (opentelemetry stack 1.35→1.41 + instrumentation 0.56b0→0.62b1) and **PR #559** (starlette `==0.49.1` → `==1.0.0`, a major-version pin bump on the load-bearing HTTP framework). Both need manual migration testing before they land.
+
+---
+
+## Contributors
+
+[@raahulrahl](https://github.com/raahulrahl)

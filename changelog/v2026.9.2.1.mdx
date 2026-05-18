@@ -1,0 +1,28 @@
+---
+title: "v2026.9.2.1"
+description: "Relaxed version constraints on uvicorn and pydantic"
+date: "2026-02-23"
+---
+
+## Looser Pins, Easier Resolves
+
+Patch release. The exact pins on `uvicorn` and `pydantic` were friction for anyone trying to install Bindu alongside other packages — pydantic in particular sits in the middle of half the Python ecosystem, and pinning it to a specific point release forced unrelated downgrades. This release relaxes both.
+
+---
+
+## What Changed
+
+- `uvicorn`: `0.34.1` → `>=0.35` (in main dependencies and the `[core]` extra)
+- `pydantic`: exact version → `>=2.11.7`
+
+You now pick up newer uvicorn bug fixes and security patches automatically, and pydantic resolves cleanly against most ecosystem packages.
+
+---
+
+## Migration
+
+```bash
+uv sync
+```
+
+No code changes required. No breaking changes.

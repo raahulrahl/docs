@@ -1,0 +1,50 @@
+---
+title: "v2026.9.2"
+description: "Agent frameworks become optional dependencies, plus auth cleanup"
+date: "2026-02-23"
+---
+
+## Slimmer Installs and Tidier Auth
+
+If you only run your own custom handlers, you don't need Bindu to drag in agno, langchain, langgraph, ollama, and duckduckgo-search every time you `pip install`. This release moves all of those into an optional `[agents]` extra. The base install is now noticeably smaller; the example agents still work — you just opt in.
+
+Also: a small auth-config cleanup. `/agent/negotiation` is now correctly a public endpoint, and several routes that never should have been on the auth-bypass list were removed.
+
+---
+
+## What Changed
+
+### Optional Agent Frameworks
+
+The heavy agent SDKs are now off the default install path:
+
+```bash
+# Minimal — core Bindu only, for custom handlers
+uv pip install bindu
+
+# With the example-agent stack
+uv pip install bindu[agents]
+
+# Dev install
+uv pip install -e ".[agents]"
+```
+
+The `[agents]` extra covers agno, langchain, langgraph, ollama, and duckduckgo-search. Blockchain and payment dependencies (x402, web3) are still in the base install — they're considered core.
+
+### Public Endpoints Cleanup
+
+`/agent/negotiation` joined the public endpoints list (it never needed auth and was previously gated). Static file routes and a few other paths were removed from the auth bypass list where they had no business sitting. The middleware config is now easier to audit.
+
+---
+
+## Migration
+
+No breaking changes. Existing installs keep working.
+
+If you use agno, langchain, langgraph, or ollama from your handler code, switch your dependency to `bindu[agents]` so the imports keep resolving. If you only call your own framework, the base install is enough.
+
+---
+
+## Release Process
+
+The release workflow now uses week-based CalVer (`YYYY.W.D`). The create-release skill was updated to match.

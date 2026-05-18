@@ -1,0 +1,145 @@
+---
+title: "v2026.20.2"
+description: "Hybrid auth fail-closed hotfix, plus bindu deploy and the boxd runtime"
+date: "2026-05-12"
+---
+
+## Security Hotfix and `bindu deploy`
+
+Two things happening in one release. First, a high-severity fix: the hybrid OAuth2 + DID middleware on the prior version had a fail-open path that silently collapsed the documented two-layer auth model to OAuth-only for any caller willing to omit the DID signature header. Second, a feature: `bindu deploy my_agent.py --runtime=boxd` now takes any working bindu script and ships it to a public HTTPS-served microVM with one command. No Dockerfile, no reverse proxy, no TLS plumbing.
+
+The rest of the release is the gateway recipes work, DID provenance in SSE, agent-card fetching, a Hydra token-cache revocation fix, expanded examples, and broad doc refreshes including a beginner-friendly quickstart for the boxd runtime.
+
+---
+
+## Security First
+
+<Warning>
+**High-severity fix.** If you run `AUTH__ENABLED=true` with `did:*` OAuth clients on a public-facing agent, upgrade immediately. A stolen bearer token was previously sufficient to impersonate a DID agent for the full token TTL by simply omitting the `X-DID-Signature` header.
+</Warning>
+
+### What Was Broken
+
+`_verify_did_signature_asgi` had two fail-open branches. If a `did:*` client called without an `X-DID-Signature` header, the middleware returned `is_valid=True` and let the request through. Same story if the client's Hydra `metadata.public_key` was missing. The signature gate was advisory in both cases.
+
+### What's Fixed
+
+Both branches now fail closed:
+
+- **No signature header** → rejected with reason `missing_signature_headers`
+- **No public key in Hydra metadata** → rejected with reason `public_key_unavailable`
+
+Operator-facing warning logs explain how to remediate inline. There's no new config knob — the previous behavior was a bug, not a mode. A `did:*` client that cannot sign must either start signing or stop using a `did:*` `client_id`.
+
+Bug walkthrough: `bugs/core/2026-04-18-did-signature-fail-open.md`.
+
+### Bonus: Hydra Token Cache
+
+The Hydra introspection cache held tokens for 5 minutes regardless of upstream revocation. Revoked tokens stayed valid until the cache expired. Now invalidation happens promptly. Coverage at `tests/unit/server/middleware/test_hydra_token_cache.py`.
+
+---
+
+## `bindu deploy` and the Boxd Runtime
+
+Before this release, shipping a bindu agent to a stable public URL meant hand-rolling a Dockerfile, picking a hosting account, setting up a reverse proxy and TLS, and wiring port forwarding. Per agent. Every time.
+
+Now:
+
+```bash
+pip install 'bindu[runtime-boxd]'
+export BOXD_API_KEY=<your-key>
+bindu deploy my_agent.py --runtime=boxd
+```
+
+That command provisions a microVM, ships your project source (with a sensitive-file denylist applied), installs deps, starts the agent, and prints a public HTTPS URL. Cold deploy is ~10–60s depending on dep weight. Warm redeploy is 1–15s with state preserved via suspend/resume on Ctrl-C.
+
+### New CLI Surface
+
+- `bindu deploy <script> --runtime=boxd` — deploy to a microVM
+- `bindu logs <agent>` — `tail -F` the in-VM agent log over streaming exec
+- `bindu shell <agent>` — interactive bash on the VM
+- `bindu serve --script <path>` — in-VM execution mode
+
+Flags include `--vcpu`, `--memory`, `--auto-suspend`, `--on-exit suspend|destroy|detach`, `--bindu-version VERSION|local`, `--env KEY=VALUE`, `--image IMG`, and `--dry-run`.
+
+### Source Packager Safety
+
+The packager refuses to tarball anything that smells like a secret:
+
+```
+.env*, *.pem, *.key, id_rsa*, credentials*, *.kdbx, *.p12, *.pfx, *.kubeconfig
+```
+
+Plus the directories `.aws/`, `.ssh/`, `.gnupg/`, `.bindu/`. Secrets flow exclusively via `--env KEY=VALUE` and never enter the tarball. `BOXD_API_KEY` itself stays on the host — it's never copied into the VM, never tarballed, never logged.
+
+`--dry-run` lists tarball contents, sensitive-file drops, and env keys (values hidden) without touching the cloud.
+
+96 unit tests cover the runtime provider, boxd provider, source packager, deploy CLI, logs/shell subcommands, and provider contract. A gated real-VM end-to-end test lives at `tests/e2e/runtime/`.
+
+---
+
+## Gateway: Recipes, DID Provenance, AgentCard Fetching
+
+The gateway now uses **progressive-disclosure recipes** — markdown playbooks in `gateway/recipes/` that the planner lazy-loads on demand. The metadata (name + description) sits in the system prompt; the full body only loads when the planner calls `load_recipe`. The initial recipe set covers multi-agent research and the payment-required flow.
+
+The planner also fetches the agent card on first contact and activates a DID fallback verifier from the card's published key. The SSE stream now surfaces observed DIDs with provenance plus DID-signature verification counts, so clients can audit who actually spoke on each step.
+
+---
+
+## New Examples and Docs
+
+- New beginner quickstart at `docs/runtime/quickstart.md` walks a first-time user through deploying their first agent to a public HTTPS URL — no jargon, real terminal output, common gotchas called out inline.
+- Runtime overview at `docs/runtime/README.md`, flag reference at `docs/runtime/boxd.md`, custom-image mode at `docs/runtime/custom-image.md`.
+- `examples/runtime-boxd-agent/` — 10-line echo agent that runs locally and deploys to boxd with one command.
+- `examples/hermes_agent/` — new example.
+- Main README gains a deploy-to-cloud section.
+
+---
+
+## Migration
+
+<Steps>
+  <Step title="Upgrade and audit">
+    Upgrade is non-negotiable for any public-facing agent running `AUTH__ENABLED=true` with `did:*` clients.
+  </Step>
+  <Step title="Verify all DID clients sign every request">
+    The new fail-closed behavior surfaces previously-silent misbehavior. If any of your callers were relying on the bug, they will now get HTTP 403 with reason `missing_signature_headers` and need to be fixed.
+  </Step>
+  <Step title="Register missing public keys">
+    If a client's Hydra registration is missing `metadata.public_key`, register the base58 Ed25519 public key and re-test. The signing recipe lives in `docs/AUTHENTICATION.md`.
+  </Step>
+  <Step title="(Optional) Try the new deploy">
+    `pip install 'bindu[runtime-boxd]'`, export `BOXD_API_KEY`, and run `bindu deploy <your-script>.py --runtime=boxd`. `docs/runtime/quickstart.md` walks through the full first-time flow.
+  </Step>
+</Steps>
+
+---
+
+## Testing
+
+- 935 unit tests passing (3 skipped, 7 warnings) in ~4 seconds
+- 7 new tests pinning the DID signature fail-closed behavior
+- 96 unit tests for the runtime provider, boxd provider, source packager, deploy CLI, logs/shell subcommands, and provider contract
+- Token-cache revocation lag coverage added
+- Gated real-boxd e2e at `tests/e2e/runtime/test_boxd_e2e.py` (requires `BOXD_E2E=1` plus `BOXD_API_KEY`). Verified against production boxd: cold deploy, warm redeploy, A2A round-trip with DID-signed artifact, suspend/resume
+- Pre-commit clean: ruff, ruff-format, ty, bandit, detect-secrets, pydocstyle
+
+---
+
+## Known Issues
+
+- `bindu deploy --on-exit=suspend` doesn't always fire its cleanup handler under SIGINT from a non-interactive shell (e.g., CI scripts). The VM keeps running until manually suspended via the boxd Python SDK or dashboard. Interactive Ctrl-C from a real terminal works correctly.
+- The boxd Python SDK 0.1.1 `box.suspend()` returns success but may not actually suspend the VM in some configurations. `box.stop()` is reliable. Bumping the boxd floor to `>=0.1.2` is a follow-up.
+- `examples/beginner/dspy_agent.py` requires `dspy`, which is not in the `bindu[agents]` extra. Install separately with `pip install dspy`.
+
+---
+
+## Contributors
+
+Lead maintainer: **Raahul Dutta** (220 commits).
+
+Major feature contributor: **MichielMAnalytics** — Boxd RuntimeProvider integration (PR #527, 3878 lines).
+
+Community: Paraschamoli, Subhajit Das, chandan-1427, Sam Morris, kenji_ANKAN, Neha Pandey, CHANDAN, swatimonalisasolulab, sjhddh, Yash Kunwar, NexionisJake, Konal Puri, Jerphin Asmi, JAGAN-KARTHICK-A, Brian Code, itsA-D.
+
+Special thanks to the boxd team for the platform and SDK.

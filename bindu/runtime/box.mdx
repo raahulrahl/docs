@@ -27,9 +27,12 @@ without changing a single line of your agent script.
 
 ### 1. Meet the requirements
 
-- A boxd account and API key — set it in your shell:
+- A boxd account and credentials — bindu accepts either form
+  ([source](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py)):
 ```bash
-  export BOXD_API_KEY="bxk_..."
+  export BOXD_API_KEY="<your-key-from-boxd-dashboard>"
+  # or, short-lived:
+  export BOXD_TOKEN=$(boxd login --json | jq -r .token)
 ```
 - The boxd runtime extra for bindu:
 ```bash
@@ -88,8 +91,8 @@ That's it. Same script you run locally, one flag, public URL.
 ### 6. Pass secrets safely
 
 The agent's DID keys, x402 wallet, and OAuth tokens are generated and
-persisted **inside the VM**. `BOXD_API_KEY` stays on your host and is
-never shipped. User secrets go in via `--env`:
+persisted **inside the VM**. `BOXD_API_KEY` / `BOXD_TOKEN` stays on
+your host and is never shipped. User secrets go in via `--env`:
 
 ```bash
 bindu deploy agent.py --runtime=boxd \
@@ -97,29 +100,47 @@ bindu deploy agent.py --runtime=boxd \
   --env ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-The deploy CLI **never ships `.env`-style files**. It silently drops
-`.env*`, `*.pem`, `*.key`, `id_rsa*`, `credentials*.json`, and anything
-under `.aws/`, `.ssh/`, `.gnupg/`, `.bindu/`, and prints a warning listing
-what was dropped. Run `--dry-run` to see the full list before deploying.
+The deploy CLI **never ships secret-looking files**. The exact patterns
+are defined in
+[`source_packager._SENSITIVE_PATTERNS`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/source_packager.py):
+
+| Type | Patterns (exact `fnmatch`) |
+|---|---|
+| Files | `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.kdbx`, `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, `credentials.json`, `credentials.yaml`, `credentials.yml`, `*.kubeconfig` |
+| Dirs (whole subtree excluded) | `.aws/`, `.gnupg/`, `.ssh/`, `.bindu/` |
+
+A warning lists what was dropped. Run `--dry-run` to see the full
+list before deploying.
 
 ### 7. Source packaging rules
 
 Your project root is auto-discovered by walking up from the entry script
-looking for `pyproject.toml`, `setup.py`, `requirements.txt`, or `.git`.
+looking for `pyproject.toml`, `setup.py`, `requirements.txt`, or `.git`
+(see [`find_project_root`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/source_packager.py)).
 
-**Always shipped:** `*.py`, `*.toml`, `*.txt`, `*.md`, `*.json`, `*.yaml`  
-**Always excluded:** `__pycache__/`, `.git/`, `.venv/`, `node_modules/`,
-`*.pyc`, `*.log`, `*.sqlite`, `*.db`, plus everything in `.gitignore` and
-`.binduignore`  
-**Hard cap:** 50 MB compressed. Bigger sources fail fast with a pointer to
-`.binduignore`.
+The packager is **inclusion-by-default**: every file under the project
+root ships unless it matches an exclude rule. There is no allowlist of
+extensions — your `.csv`, `.sql`, `.html`, etc. all ship.
+
+**Excluded by directory name** (any path segment matches):
+`__pycache__/`, `.git/`, `.venv/`, `venv/`, `node_modules/`,
+`.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`
+
+**Excluded by suffix:** `.pyc`, `.pyo`, `.log`, `.sqlite`, `.db`
+
+**Also excluded:** the sensitive patterns from Section 6, plus
+everything matched by `.gitignore` and `.binduignore` at the project
+root (same syntax as gitignore).
+
+**Hard cap:** 50 MB compressed. Bigger sources fail fast with a
+`SourceTooLargeError` pointing to `.binduignore`.
 
 ### 8. Dev tools while it's running
 
 | Command | What it does |
 |---|---|
-| `bindu logs <agent>` | Stream the agent's stdout/stderr to your terminal. Pass `--no-follow` to print current logs and exit. |
-| `bindu shell <agent>` | Open an interactive shell inside the VM (`/app` is the working directory). |
+| `bindu logs <agent>` | Stream the agent's stdout/stderr to your terminal. Reads `/tmp/bindu-agent.log` inside the VM via `tail -F`. Pass `--no-follow` to `cat` the file and exit. |
+| `bindu shell <agent>` | Open an interactive `bash` inside the VM as the `boxd` user. You land in `/home/boxd`; your shipped source is at `/home/boxd/app`. |
 
 ---
 
@@ -133,7 +154,7 @@ a server, write a Dockerfile, or manage TLS.
 
 | Problem | Likely cause | Fix |
 |---|---|---|
-| `BOXD_API_KEY or BOXD_TOKEN must be set` | No credentials in host env | `export BOXD_API_KEY=bxk_...` |
+| `BOXD_API_KEY or BOXD_TOKEN must be set in the host environment` | No credentials in host env | `export BOXD_API_KEY=<your-key>` (or `export BOXD_TOKEN=$(boxd login --json \| jq -r .token)`) |
 | `script did not call bindufy()` | Entry script raised before reaching `bindufy()` | Run `python agent.py` directly to see the underlying error |
 | `agent at <url> did not become healthy within 60s` | VM up but agent failed to start | `bindu logs <agent>` — common causes: missing dep, syntax error, port 3773 already in use |
 | `pip install` failure | Dep not on PyPI or native build fails | Switch to [A1 mode](/bindu/runtime/custom-image) and install the dep at image-build time |
