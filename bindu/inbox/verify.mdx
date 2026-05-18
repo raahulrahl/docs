@@ -1,0 +1,230 @@
+---
+title: "Verify the inbox"
+description: "Don't trust the UI, prove it from your terminal"
+---
+
+## Don't trust the UI
+
+The UI shows green dots and "verified" badges. That's convenient, but it
+doesn't prove authentication is actually working end-to-end. This page shows
+you how to confirm it from your terminal, explains the three auth layers in
+play, and documents everything you need to operate the inbox day-to-day.
+
+---
+
+## How auth actually works here
+
+There are three independent auth layers. The inbox uses all three:
+
+There are three independent auth layers. The inbox uses all three:
+
+| Layer | Who enforces it | Default |
+| --- | --- | --- |
+| **Peer A2A auth** — outbound calls must carry a JWT + DID signature | The peer's bindufy middleware (`-32009` if missing) | **On** |
+| **Operator gate** — `/api/*` on the inbox requires a bearer token | `inbox/server/index.ts` | Off (single-user dev) |
+| **Webhook gate** — agents POSTing to `/webhooks/bindu/:agentId` must carry a bearer token | `inbox/server/index.ts` | Off |
+
+To enable each layer:
+
+| Layer | How to turn it on |
+| --- | --- |
+| **Peer A2A auth** | Set `AUTH__ENABLED=true` on the peer. Done automatically when the inbox spawns your personal agent or the demo peers. |
+| **Operator gate** | `export BINDU_COMMS_TOKEN=$(openssl rand -hex 32)` before `npm run dev`. UI needs `?token=<token>` in the URL (SSE can't send headers). |
+| **Webhook gate** | `export BINDU_WEBHOOK_TOKEN=<token>` and configure the same value as `global_webhook_token` on the bindufy side. |
+
+The first is non-negotiable once your personal agent is alive. The other two
+are belt-and-suspenders for multi-user or exposed deployments - leave them
+off until you actually share the URL.
+
+---
+
+## Prove it from your terminal
+
+**Find the personal-agent port:**
+```bash
+curl -s http://127.0.0.1:3787/api/me | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
+# → http://127.0.0.1:61380
+```
+
+**Confirm unauthed callers are rejected:**
+```bash
+curl -s -X POST http://127.0.0.1:61380/ \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"x","params":{"message":{"role":"user","kind":"message","parts":[{"kind":"text","text":"hi"}],"messageId":"m","contextId":"c","taskId":"t"}}}'
+# → {"jsonrpc":"2.0","error":{"code":-32009,"message":"Authentication is required ..."},"id":null}
+```
+
+**Confirm the inbox can send authed messages:**
+```bash
+curl -s -X POST http://127.0.0.1:3787/api/compose \
+  -H 'content-type: application/json' \
+  -d '{"agentId":"joke_agent","text":"hi"}'
+# → {"ok":true,"status":200,"contextId":"...","taskId":"...","response":{"jsonrpc":"2.0",...}}
+```
+
+**Inside the UI:** open any thread and click **Verify** in the top-right of
+the right rail. Each row should report `signed / verified` against the peer's
+published `publicKeyBase58`. The detail rail's **Verify** tab shows the DID
+match, the signature, and the timestamp nonce.
+
+---
+
+## Using the inbox
+
+### Layout
+
+| Pane | What it shows |
+| --- | --- |
+| **Left** | Folders (Inbox / Sent / Drafts / Archive), Contacts grouped into **Gateways** (orchestrators for multi-agent plans) and **Agents** (single-purpose peers). Your operator identity sits at the bottom. |
+| **Middle** | Thread list - newest first, one row per `context_id`. The badge is the message count. |
+| **Right** | Selected thread, oldest message at top. State pills + DID per row; bodies render inline. Reply composer pinned at the bottom. |
+
+### Sending
+
+- **One agent** → direct A2A `message/send` to that peer.
+- **Two or more agents** → the inbox auto-spawns a gateway (see `gateway-spawned-*` in Contacts), forwards your prompt as a plan, and threads the per-agent tool calls under one `context_id`. The gateway's `/plan` is bearer-gated; the inbox auto-loads `GATEWAY_API_KEY` from `gateway/.env.local` if it's there.
+
+### Reading a thread
+
+Each row carries:
+
+- **State pill** - `submitted` · `working` · `input-required` · `payment-required` · `auth-required` · `completed` · `failed`. Multi-agent plans also surface `task-started` / `task-artifact` / `task-finished` / `plan-answer`.
+- **Trust pill** - `first-contact` (new peer) · `known` · `self` (your own agents / planner).
+- **DID** of the counterparty - click for the full agent card.
+- Body text rendered inline; the `<remote_content>` wrapper is stripped for readability.
+
+**Stitched across N lanes** in the header means the thread spans more than
+one source (e.g. your direct outbox + a gateway-spawned thread sharing the
+same `context_id`).
+
+### Replying
+
+Type in the box at the bottom of the open thread. `⌘↵` sends. Replies inherit
+the thread's `context_id` and resume the existing task if it's still open,
+refine it (with `referenceTaskIds`) if the task ended terminal, or start fresh
+otherwise.
+
+---
+
+## Reference
+
+### Files & directories
+
+| Path | What's there |
+| --- | --- |
+| `inbox/data/events.db` | SQLite event log. Delete to start fresh; the schema rebuilds on boot. Gitignored. |
+| `inbox/.env.local` | Per-developer env. Gitignored. Same shell-env vars below also work. |
+| `inbox/scripts/logs/` | Demo-peer stdout/stderr. Gitignored. |
+| `inbox/scripts/pids/` | Demo-peer pidfiles. Gitignored. |
+| `~/.bindu/personal/persona.json` | Your operator persona. Hand-editable. |
+| `~/.bindu/personal/.env` | Mode-`0600` env file: OpenRouter key, Pipedream tokens, Hydra URLs, `AUTH__ENABLED=true`. Regenerated on every spawn. |
+| `~/.bindu/personal/agent.py` | Auto-generated bindufy agent. Hand-edits are overwritten - edit `persona.json` or the template in `server/personal-agent.ts`. |
+| `~/.bindu/personal/.bindu/oauth_credentials.json` | OAuth client_id + secret from Hydra. Required for outbound token minting. |
+| `~/.bindu/personal/.bindu/private.pem` | Ed25519 private key. Required for DID signatures. |
+| `~/.bindu/personal/logs/agent.log` | Personal agent stdout/stderr. Tail this when spawn fails. |
+| `examples/.env` | Shared env for the demo agents (`OPENROUTER_API_KEY=...`). The spawn script falls back to your shell env if this file isn't there. |
+
+### Environment knobs
+
+All optional unless noted:
+
+| Var | Default | Why |
+| --- | --- | --- |
+| `BINDU_COMMS_TOKEN` | unset | Bearer token gate on `/api/*`. See auth table above. |
+| `BINDU_WEBHOOK_TOKEN` | unset | Bearer token gate on `/webhooks/bindu/*`. Must match agent-side `global_webhook_token`. |
+| `BINDU_AGENT_URLS` | unset | `id=url,id=url` pairs that override the agents table. Ops escape hatch. |
+| `BINDU_REPO_DIR` | `..` | Where bindu lives. Needed if you moved the inbox out of the repo. |
+| `BINDU_PERSONAL_DIR` | `~/.bindu/personal` | Personal agent files. Useful for sandboxing tests. |
+| `BINDU_GATEWAY_DIR` | `../gateway` | Where the gateway lives. Needed if you split repos. |
+| `GATEWAY_API_KEY` | read from `gateway/.env.local` | Bearer the inbox sends to the gateway's `/plan`. Without it multi-agent compose 401s. |
+| `HYDRA__ADMIN_URL` | `https://hydra-admin.getbindu.com` | Hydra admin API. Used for OAuth client registration. |
+| `HYDRA__PUBLIC_URL` | `https://hydra.getbindu.com` | Token endpoint for outbound Hydra minting. |
+| `OPENROUTER_API_KEY` | unset | Required for the personal agent and demo peers. UI Settings tab is the recommended path. |
+| `BINDU_COMMS_MAX_HISTORY` | `30` | Max user/assistant turns the inbox forwards to the gateway on `/plan`. |
+| `BINDU_PERSONAL_USE_VENV` | unset | Skip `uv` and run the personal agent under `<repo>/.venv/bin/python` instead. |
+
+### Build
+
+```bash
+npm run build       # TypeScript + Vite production build
+npm run preview     # Serve the build locally
+npm run typecheck   # tsc -b --noEmit, no emit
+```
+
+---
+
+## When things go wrong
+
+**`npm install` fails on `better-sqlite3`.** Native build needs Xcode CLI
+tools on macOS / `build-essential` on Linux. Run `xcode-select --install` or
+`apt install build-essential python3-dev`, then `rm -rf node_modules && npm install`.
+
+**Port 3775 or 3787 already in use.** Something else is bound - usually an
+old inbox you forgot to stop. Find it: `lsof -ti:3775 -ti:3787 | xargs ps -p`
+to confirm it's stale, then `lsof -ti:3775 -ti:3787 | xargs kill`.
+
+**UI loads but everything fails with "Failed to fetch".** The API on `3787`
+died. Check the `[api]` lines in your `npm run dev` output. Common cause:
+`better-sqlite3` ABI mismatch - fix with `npm rebuild better-sqlite3`.
+
+**Personal agent stays "down" after clicking Start.** Open
+`~/.bindu/personal/logs/agent.log` and read the last 30 lines:
+- `OPENROUTER_API_KEY` not set → paste it in Settings or export it before `npm run dev`.
+- Hydra unreachable → set `HYDRA__ADMIN_URL` + `HYDRA__PUBLIC_URL` to a
+  Hydra you can reach. Check connectivity with
+  `curl -sI https://hydra.getbindu.com/.well-known/openid-configuration`.
+- `uv: command not found` → install uv (Prerequisites) or set `BINDU_PERSONAL_USE_VENV=1`.
+
+**`-32009: Authentication is required` on every send.** Personal agent isn't
+running, or its Hydra OAuth client isn't registered. Check
+`~/.bindu/personal/.bindu/oauth_credentials.json` exists. Stop and re-spawn
+from the UI; watch the log.
+
+**`spawn-demo-peers.sh` says `OPENROUTER_API_KEY not set and examples/.env missing`.**
+Export the key in your current shell or create `examples/.env`:
+```bash
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > examples/.env
+```
+
+**Add-a-peer says `agent-not-reachable` or returns no card.** The agent isn't
+up on that URL, or it's blocking `/.well-known/agent.json`. Confirm with:
+```bash
+curl http://127.0.0.1:5773/.well-known/agent.json
+```
+Should return JSON.
+
+**`pipedream-not-configured` when connecting Gmail/Notion.** Personal agent
+works fine without Pipedream - only the optional MCP tools need it. Either
+ignore or set `PIPEDREAM_PROJECT_ID` + `PIPEDREAM_CLIENT_ID` +
+`PIPEDREAM_CLIENT_SECRET` in Settings.
+
+**`unauthorized` on `/api/plan`** (multi-agent compose). Either
+`GATEWAY_API_KEY` isn't loaded (inbox prints a warning at boot) or it doesn't
+match the gateway's value. The inbox auto-reads `gateway/.env.local` - make
+sure it's not stale.
+
+**`SyntaxError` on Python startup.** You're on Python below 3.12. Install
+3.12+ and re-run `uv sync` so `.venv` picks up the right interpreter.
+
+**I want to nuke everything and start over.**
+```bash
+./scripts/stop-demo-peers.sh                                   # stop demo peers
+# In the UI: click Stop on the personal-agent card, then close the tab.
+rm -rf ~/.bindu/personal/                                      # forget your DID + Hydra client
+rm -f  inbox/data/events.db inbox/data/events.db-{shm,wal}    # wipe inbox history
+# Now restart from the Start it section.
+```
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Verify lets you -{" "}
+    <span className="brand-quote-highlight">prove authentication is working</span>.
+  </span>
+</span>

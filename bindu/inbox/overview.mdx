@@ -1,0 +1,136 @@
+---
+title: "Overview"
+description: "Bindu Inbox for observing agent activities."
+---
+
+## When agents break?
+
+You built an agent. It's live. It's talking to other agents, chaining
+steps, completing tasks. And then something breaks.
+
+You don't know which agent failed. You don't know what message triggered
+it. You don't know if the agent that replied was even who it claimed to be.
+Adding loggers and dashboards takes time you'd rather spend building.
+
+You need a single place to watch everything that's happening - without
+extra work.
+
+## What bindu inbox does?
+
+Bindu Inbox sits between your agents and gives you a Gmail-shaped view of
+every message on your A2A network. Every JSON-RPC call between two DIDs
+lands here as a row. Threads group by `context_id`. Signatures are verified
+inline so you can see whether an agent is actually who it claims to be.
+
+No code changes to your agents. No extra infrastructure. Just a console
+that listens.
+
+## Set it up
+
+### Quick start (if you've done this before)
+
+```bash
+git clone https://github.com/getbindu/Bindu.git && cd Bindu
+uv sync
+export OPENROUTER_API_KEY=<get one at https://openrouter.ai/keys>
+cd inbox && npm install && npm run dev    # → http://127.0.0.1:3775
+# In another shell, once the UI is up:
+./scripts/spawn-demo-peers.sh             # boots joke + poet agents
+# In the UI:  gear icon (top-left)  → paste OPENROUTER_API_KEY into Settings
+#            "+ Create your agent" (bottom-left) → fill persona → Save
+#            Start (same card)     → spawns your personal agent + Hydra OAuth
+#            Contacts → +          → paste http://127.0.0.1:5773 then 5776
+#            Compose               → pick joke_agent → type a message → ⌘↵
+```
+
+If you've never done this before, keep reading - every step below explains
+what it does and what you should see.
+
+### What ends up running
+
+By the time you finish this guide, five things will be alive on your machine:
+
+| Port | Process | What it does |
+| --- | --- | --- |
+| `3775` | Vite dev server | The React UI you open in your browser |
+| `3787` | Hono API (`server/index.ts`) | SQLite event store, webhook intake, outbound A2A composer |
+| `&lt;auto&gt;` (e.g. `5xxxx`) | Your personal agent (Python, spawned on demand) | Your DID + Hydra OAuth client. Listens for inbound A2A and signs everything you send. |
+| `5773` + `5776` | Demo peers (joke + poet) | Two example agents to talk to. Optional - bring your own if you have them. |
+| `3774` | Gateway (optional) | The planner. Only spawns when you message ≥2 agents at once. |
+
+`3775` is hard-pinned (Vite refuses to drift) and `3787` is hard-coded;
+both have to be free before you start. If something else is on those ports,
+the inbox won't boot - see [Troubleshooting](#troubleshooting).
+
+### Prerequisites
+
+You need four things on your machine before this works:
+
+1. **Node 20+** and **npm**. Check with `node --version`. If you need it:
+   [nodejs.org](https://nodejs.org/).
+
+2. **Python 3.12+** and [uv](https://github.com/astral-sh/uv). Check with
+   `python3 --version` and `uv --version`. To install uv:
+```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+3. **A bindu checkout with dependencies synced.** From scratch:
+```bash
+   git clone https://github.com/getbindu/Bindu.git
+   cd Bindu
+   uv sync           # installs python deps under .venv/
+```
+   The inbox lives at `Bindu/inbox` and locates the repo via `..` from its
+   own folder, so running it from inside the checkout just works. If you
+   moved the inbox out, set `BINDU_REPO_DIR=/path/to/Bindu`.
+
+4. **An OpenRouter API key.** The personal agent and the demo peers all use
+   OpenRouter for LLM calls.
+   - Get one (free trial credits, no card required) at
+     [openrouter.ai/keys](https://openrouter.ai/keys).
+   - Export it in your shell:
+```bash
+     export OPENROUTER_API_KEY=sk-or-v1-...
+```
+   - Or paste it into the inbox's Settings tab after boot (gear icon,
+     top-left). Settings-tab values win over env vars.
+
+No Docker, no Postgres, no Hydra of your own - the inbox uses the public
+Bindu Hydra at `hydra.getbindu.com` for OAuth.
+
+### Start it
+
+From the repo root:
+
+```bash
+cd inbox
+npm install        # ~30s first time, cached after
+npm run dev
+```
+
+You should see:
+
+```
+[web] VITE v6.x  ready in 400 ms
+[web] ➜  Local:   http://127.0.0.1:3775/
+[api] [inbox] api on http://127.0.0.1:3787
+```
+
+If you see `[inbox] GATEWAY_API_KEY not set` - that's a warning, not an
+error. You only need the gateway key for multi-agent compose, which isn't
+part of this guide.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Inbox lets you -{" "}
+    <span className="brand-quote-highlight">observe your agent activities</span>.
+  </span>
+</span>
