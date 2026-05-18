@@ -1,250 +1,390 @@
 ---
 title: "Storage"
-description: "Where Bindu keeps your tasks, messages, and artifacts so a restart doesn't eat your work."
+description: "Where Bindu keeps tasks, contexts, artifacts, and webhook configs so a restart doesn't eat your work."
 ---
 
 Picture this. Your agent is mid-task — a user asked it to summarize a 200-page document, it's been thinking for 90 seconds — and the process restarts. Maybe a deploy, maybe an OOM, doesn't matter. With in-memory storage, that task is gone. The user sees an error. The agent doesn't even know it was working on something.
 
-That's the trap: an agent that holds state in process memory is a demo, not a service. The moment uptime matters, you need persistence.
+That's the trap: an agent that holds state in process memory is a demo, not a service. The moment uptime matters, you need persistence — and the moment you run more than one replica, you need a store every replica can see.
 
-Bindu defaults to in-memory because local laptops don't have a Postgres handy. For production you switch to Postgres and the same code keeps running — tasks, contexts, and artifacts all land in a durable store you can query, replay, and audit.
+Bindu defaults to in-memory because local laptops don't have a Postgres handy. Switch to Postgres by setting two env vars and the same handler code keeps running — tasks, contexts, artifacts, and webhook configs all land in a durable store you can query, replay, and audit.
 
 <Note>
-  In-memory is the default. Switch to Postgres by setting two environment variables —
-  no code change in your handler. Details below.
+  `memory` is the default. The only other backend is `postgres`. There is no
+  SQLite or file-based backend. Pick via `STORAGE_TYPE` — no code change in your
+  handler.
 </Note>
 
 ## How Bindu Storage Works
 
-Bindu abstracts storage behind a consistent interface. You choose the backend in config; the rest of the system — TaskManager, workers, context handling — works the same regardless.
-
-### The Storage Model
-
-Bindu stores three categories of data:
-
-- **Tasks** — state, messages, metadata, and lifecycle history
-- **Contexts** — shared conversation context across multiple tasks
-- **Artifacts** — outputs produced by the agent (text, files, structured data)
-
-<CardGroup cols={3}>
-  <Card title="Tasks" icon="list-check">
-    Every task and its full state history, messages, and metadata.
-  </Card>
-  <Card title="Contexts" icon="layer-group">
-    Shared context that spans multiple tasks in a conversation.
-  </Card>
-  <Card title="Artifacts" icon="box-archive">
-    Agent outputs stored and retrievable by task ID.
-  </Card>
-</CardGroup>
-
-### Backends
-
-Bindu supports two storage backends:
+Every backend implements the same abstract `Storage` interface in `bindu/server/storage/base.py`. The TaskManager, workers, and handlers call that interface; the backend behind it is chosen at startup by the factory.
 
 ```mermaid
 graph LR
-    Agent[Bindu Agent] --> Interface[Storage Interface]
-    Interface --> Memory[Memory\nDevelopment]
-    Interface --> Postgres[PostgreSQL\nProduction]
+    Handler[Your Handler] --> TM[TaskManager]
+    TM --> Iface[Storage Interface<br/>base.py]
+    Iface --> Mem[InMemoryStorage<br/>dict in process]
+    Iface --> PG[PostgresStorage<br/>SQLAlchemy + asyncpg]
+    PG --> DB[(PostgreSQL<br/>JSONB tables)]
 
-    style Agent fill:#e1f5ff
-    style Interface fill:#fff4e1
-    style Memory fill:#d4f5e1
-    style Postgres fill:#ffd4e1
+    style Handler fill:#e1f5ff
+    style Iface fill:#fff4e1
+    style Mem fill:#d4f5e1
+    style PG fill:#ffd4e1
+    style DB fill:#fce8d4
 ```
+
+### What gets stored
+
+Bindu's storage layer persists four things — not three. The earlier model in the spec missed `webhook_configs`:
+
+<CardGroup cols={2}>
+  <Card title="Tasks" icon="list-check">
+    One row per task in `tasks`. State, message history, artifacts, metadata,
+    owner DID, timestamps.
+  </Card>
+  <Card title="Contexts" icon="layer-group">
+    One row per conversation in `contexts`. Shared message history that spans
+    multiple tasks, plus arbitrary `context_data`.
+  </Card>
+  <Card title="Task feedback" icon="comment-dots">
+    Optional ratings and comments per task in `task_feedback`. One task can
+    have many feedback rows.
+  </Card>
+  <Card title="Webhook configs" icon="bell">
+    One push-notification config per task in `webhook_configs`. Survives
+    restarts so long-running tasks can still call back.
+  </Card>
+</CardGroup>
+
+Artifacts are not a separate table — they live inside `tasks.artifacts` as a JSONB array on the task row.
+
+### Backends at a glance
 
 | | Memory | PostgreSQL |
 | --- | --- | --- |
-| Setup | None | Requires PostgreSQL instance |
+| Class | `InMemoryStorage` | `PostgresStorage` |
+| Storage | Python `dict`s in process | JSONB tables via SQLAlchemy async + asyncpg |
 | Persistence | Lost on restart | Survives restarts |
-| Scalability | Single process | Multi-instance, distributed |
-| Use case | Local development | Production |
-| Config | `"type": "memory"` | `"type": "postgres"` |
+| Replicas | One process only | Many replicas share one DB |
+| Concurrency | Single event loop | Connection pool (`pool_min=2`, `pool_max=10` by default) |
+| Migrations | None | Alembic (manual or auto on startup) |
+| Retries | `@retry_storage_operation` decorator | Tenacity wrapper on every call |
+| Compare-and-swap | No `await` between read and write | Single `UPDATE ... WHERE state = :from` |
+| Setup | None | Requires a running Postgres |
+| `STORAGE_TYPE` | `memory` | `postgres` |
+
+<Info>
+  Both backends honour `OwnershipError` and `caller_did` checks the same way.
+  The protocol surface is identical — the only differences are durability,
+  concurrency, and operational cost.
+</Info>
 
 ---
 
 ## Configuration
 
-Storage backends are picked via environment variables. No code change, no `config` dict key — credentials don't belong in a Python dict that ends up in git.
+Storage is configured purely from environment variables. Credentials don't belong in a Python `config` dict that ends up in git.
 
-### Memory (development)
+### Memory (default)
 
 ```bash
 # Default — no env vars needed. Just run your agent.
 STORAGE_TYPE=memory
 ```
 
-Tasks, contexts, and artifacts live in process memory. Gone when the agent stops. Fine for `uv run agent.py` while you're building.
+Tasks, contexts, feedback, and webhook configs live in a `dict` keyed by UUID. Gone when the process stops. Fine for `uv run agent.py` while you're building, useless beyond one replica.
 
-### PostgreSQL (production)
+### PostgreSQL
 
 ```bash
 STORAGE_TYPE=postgres
-DATABASE_URL=postgresql://user:password@localhost:5432/bindu
+DATABASE_URL=postgresql+asyncpg://bindu_user:secret@localhost:5432/bindu_db
 ```
 
-Bindu creates the required tables automatically on first run. No manual schema setup, no migration step.
+`DATABASE_URL` is the canonical name (`postgres_url` also works). Internally, if you pass a bare `postgresql://` URL, Bindu rewrites it to `postgresql+asyncpg://` so the async driver is used — but it's cleaner to write it correctly up front.
+
+<AccordionGroup>
+  <Accordion title="All Postgres env vars">
+    | Variable | Default | Meaning |
+    | --- | --- | --- |
+    | `STORAGE_TYPE` | `memory` | `memory` or `postgres`. |
+    | `DATABASE_URL` | _none_ | Full async DSN. Required when `STORAGE_TYPE=postgres`. |
+    | `STORAGE__POSTGRES_POOL_MIN` | `2` | Minimum pooled connections (advisory). |
+    | `STORAGE__POSTGRES_POOL_MAX` | `10` | Max pool size. Passed to SQLAlchemy `pool_size`. |
+    | `STORAGE__POSTGRES_TIMEOUT` | `60` | Pool-checkout timeout in seconds. |
+    | `STORAGE__POSTGRES_COMMAND_TIMEOUT` | `30` | Per-command timeout. |
+    | `STORAGE__POSTGRES_MAX_RETRIES` | `3` | Retry attempts for transient errors. |
+    | `STORAGE__POSTGRES_RETRY_DELAY` | `1.0` | Base delay between retries (seconds). |
+    | `STORAGE__RUN_MIGRATIONS_ON_STARTUP` | `false` | Run Alembic `upgrade head` on connect. |
+    | `DID` / `POSTGRES_DID` | _none_ | If set, isolates this agent's tables into a per-DID Postgres schema. |
+  </Accordion>
+</AccordionGroup>
 
 <Note>
-  Put these in `.env` for local development, or wire them in through your container
-  orchestrator's secret manager in production. The `config` dict your agent code uses
-  stays clean.
+  `run_migrations_on_startup` defaults to **false** — the spec previously
+  suggested tables are created on first run, but in current code production
+  deployments run Alembic explicitly. Turn it on locally if you want
+  zero-touch bootstrap.
 </Note>
+
+---
+
+## The Storage Interface
+
+Everything goes through `Storage` in `bindu/server/storage/base.py`. The methods your handler ends up exercising:
+
+```python
+# Tasks
+async def submit_task(context_id, message, caller_did=None) -> Task
+async def load_task(task_id, history_length=None) -> Task | None
+async def update_task(task_id, state, new_artifacts=None,
+                      new_messages=None, metadata=None) -> Task
+async def update_task_state_if(task_id, from_state, to_state) -> bool  # CAS
+async def list_tasks(length=None, offset=0, owner_did=None) -> list[Task]
+async def list_tasks_by_context(context_id, length=None, offset=0,
+                                owner_did=None) -> list[Task]
+async def count_tasks(status=None) -> int
+
+# Contexts
+async def load_context(context_id) -> ContextT | None
+async def append_to_contexts(context_id, messages) -> None
+async def update_context(context_id, context) -> None
+async def list_contexts(length=None, offset=0, owner_did=None) -> list[ContextT]
+
+# Webhooks (persisted per task for long-running callbacks)
+async def save_webhook_config(task_id, config) -> None
+async def load_webhook_config(task_id) -> PushNotificationConfig | None
+async def delete_webhook_config(task_id) -> None
+async def load_all_webhook_configs() -> dict[UUID, PushNotificationConfig]
+
+# Ownership / lifecycle
+async def get_task_owner(task_id) -> str | None
+async def get_context_owner(context_id) -> str | None
+async def clear_context(context_id) -> None
+async def clear_all() -> None
+async def close() -> None
+```
+
+A few things worth calling out:
+
+- **`update_task_state_if` is a compare-and-swap.** In Postgres it's a single `UPDATE ... WHERE state = :from`; in memory it's a comparison with no `await` between read and write. This is how cancel-vs-complete races stay correct.
+- **`OwnershipError`** is raised by `submit_task` when a context already exists with a different `owner_did`. Handlers catch it and convert to `ContextNotFoundError` so they don't leak existence to the caller.
+- **Terminal states are immutable.** `submit_task` on a task already in `completed`, `failed`, `canceled`, or `rejected` raises `ValueError` — you must create a new task with `reference_task_ids`.
+
+### Using the factory
+
+```python
+from bindu.server.storage.factory import create_storage, close_storage
+
+storage = await create_storage()        # reads STORAGE_TYPE from env
+# or, with DID-based schema isolation:
+storage = await create_storage(did="did:bindu:alice:agent1:abc123")
+
+task = await storage.load_task(task_id)
+# ... use storage ...
+await close_storage(storage)
+```
+
+If `STORAGE_TYPE=postgres` and SQLAlchemy / asyncpg aren't installed, the factory raises a clear `ValueError` telling you to `pip install sqlalchemy[asyncio] asyncpg`.
 
 ---
 
 ## The Storage Lifecycle
 
-Storage is used throughout the task lifecycle. Here is how it fits into a complete request:
-
 ```mermaid
 sequenceDiagram
     participant Client
-    participant TaskManager
-    participant Storage
-    participant Worker
-    participant Agent
+    participant TM as TaskManager
+    participant S as Storage
+    participant W as Worker
+    participant A as Agent
 
-    Client->>TaskManager: message/send
-    TaskManager->>Storage: Save task (status: submitted)
-    TaskManager-->>Client: task_id
+    Client->>TM: message/send
+    TM->>S: submit_task(context_id, message, caller_did)
+    S-->>TM: Task (state=submitted)
+    TM-->>Client: task_id
 
-    Worker->>Storage: Load task
-    Worker->>TaskManager: Update status (working)
-    TaskManager->>Storage: Update task status
+    W->>S: load_task(task_id)
+    W->>S: update_task_state_if(task_id, submitted, working)
+    W->>A: execute
+    A-->>W: result + artifacts
 
-    Worker->>Agent: Execute
-    Agent-->>Worker: Result
+    W->>S: update_task(task_id, state=completed,<br/>new_artifacts=[...], new_messages=[...])
+    W->>S: append_to_contexts(context_id, messages)
 
-    Worker->>Storage: Save artifact
-    Worker->>Storage: Update task (status: completed)
-
-    Client->>TaskManager: tasks/get
-    TaskManager->>Storage: Load task + artifact
-    Storage-->>TaskManager: Task data
-    TaskManager-->>Client: Task with artifacts
+    Client->>TM: tasks/get
+    TM->>S: load_task(task_id)
+    S-->>TM: Task (state=completed, history, artifacts)
+    TM-->>Client: full task
 ```
 
-Every state transition is written to storage. If the agent restarts mid-task, the task can be recovered and resumed from its last known state.
+Every state transition is a write. If the process dies between `working` and `completed`, the row still exists in `submitted` or `working` — the scheduler can re-pick it up and the worker resumes from the last persisted state.
 
 ---
 
-## Working with Tasks
+## The Postgres Schema
 
-Tasks are the primary unit of storage. Each task has a unique ID and carries its full history.
+Defined in `bindu/server/storage/schema.py` via SQLAlchemy Core. Bindu uses **imperative mapping** — the protocol `TypedDict`s in `bindu/common/protocol/types.py` are the model; the schema module is just the table definition.
 
-### Retrieving a Task
+<AccordionGroup>
+  <Accordion title="tasks">
+    ```text
+    id                UUID         PRIMARY KEY
+    context_id        UUID         FK contexts(id) ON DELETE CASCADE
+    owner_did         VARCHAR(255) NULL          -- authenticated caller
+    kind              VARCHAR(50)  NOT NULL DEFAULT 'task'
+    state             VARCHAR(50)  NOT NULL      -- submitted|working|...
+    state_timestamp   TIMESTAMPTZ  NOT NULL
+    history           JSONB        NOT NULL DEFAULT '[]'
+    artifacts         JSONB        NULL DEFAULT '[]'
+    metadata          JSONB        NULL DEFAULT '{}'
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+    updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now() ON UPDATE now()
+    ```
 
-```bash
-curl -X POST http://localhost:3773/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "tasks/get",
-    "params": {
-      "id": "task_abc123"
-    },
-    "id": 1
-  }'
-```
+    Indexes: `context_id`, `state`, `created_at`, `updated_at`, `owner_did`,
+    and a GIN index on `metadata`.
+  </Accordion>
+
+  <Accordion title="contexts">
+    ```text
+    id              UUID         PRIMARY KEY
+    owner_did       VARCHAR(255) NULL          -- write-once on first submit
+    context_data    JSONB        NOT NULL DEFAULT '{}'
+    message_history JSONB        NULL DEFAULT '[]'
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now() ON UPDATE now()
+    ```
+
+    Indexes: `created_at`, `updated_at`, `owner_did`, GIN on `context_data`.
+  </Accordion>
+
+  <Accordion title="task_feedback">
+    ```text
+    id            SERIAL       PRIMARY KEY
+    task_id       UUID         FK tasks(id) ON DELETE CASCADE
+    feedback_data JSONB        NOT NULL
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+    ```
+
+    Indexes: `task_id`, `created_at`.
+  </Accordion>
+
+  <Accordion title="webhook_configs">
+    ```text
+    task_id    UUID         PRIMARY KEY, FK tasks(id) ON DELETE CASCADE
+    config     JSONB        NOT NULL
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ  NOT NULL DEFAULT now() ON UPDATE now()
+    ```
+
+    One config per task. Loaded into memory on startup so long-running tasks
+    can still call their callback after a restart.
+  </Accordion>
+</AccordionGroup>
+
+A sample task row, decoded:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "result": {
-    "id": "task_abc123",
-    "status": {
-      "state": "completed",
-      "timestamp": "2026-03-30T12:00:00Z"
-    },
-    "history": [
-      {"role": "user", "parts": [{"text": "Summarize this document"}]},
-      {"role": "agent", "parts": [{"text": "Here is the summary..."}]}
-    ],
-    "artifacts": [
-      {
-        "name": "summary",
-        "parts": [{"text": "The document covers..."}]
-      }
-    ]
-  },
-  "id": 1
+  "id": "9b7f5e10-7b8d-4d4d-8c3d-6b6a4b8c1a99",
+  "context_id": "3f0e2c1a-1f4b-4f5b-8a2e-cdb8a9c3e7d1",
+  "owner_did": "did:bindu:alice:research-agent:abc123",
+  "kind": "task",
+  "state": "completed",
+  "state_timestamp": "2026-05-18T12:00:00+00:00",
+  "history": [
+    {"role": "user", "parts": [{"text": "Summarize this document"}]},
+    {"role": "agent", "parts": [{"text": "Here is the summary..."}]}
+  ],
+  "artifacts": [
+    {"name": "summary", "parts": [{"text": "The document covers..."}]}
+  ],
+  "metadata": {},
+  "created_at": "2026-05-18T11:59:58+00:00",
+  "updated_at": "2026-05-18T12:00:00+00:00"
 }
 ```
 
-### Listing Tasks
+### Helpers
 
-```bash
-curl -X POST http://localhost:3773/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "tasks/list",
-    "params": {},
-    "id": 1
-  }'
-```
+`bindu/server/storage/helpers/` ships small utilities used by `PostgresStorage`:
 
----
-
-## Contexts
-
-Contexts allow multiple tasks to share a common conversation thread. When a caller provides a `contextId`, Bindu links the task to that context and preserves the shared history.
-
-```python
-# First task in a context
-response = await agent.send_message(
-    "I am researching climate change",
-    context_id="research-session-001"
-)
-
-# Follow-up task in the same context
-response = await agent.send_message(
-    "What were the key findings from the last IPCC report?",
-    context_id="research-session-001"  # same context
-)
-# Agent has access to the full prior conversation
-```
-
-Contexts are stored alongside tasks and retrieved by `contextId`. They survive restarts when using PostgreSQL.
+- `validation.validate_uuid_type` / `normalization.normalize_uuid` — coerce string UUIDs to `UUID` and reject bad input early.
+- `normalization.normalize_message_uuids` — fix up `task_id`, `context_id`, `message_id`, `reference_task_ids` on inbound messages.
+- `serialization.serialize_for_jsonb` — recursively convert `UUID` to `str` so JSONB stays JSON-safe.
+- `security.mask_database_url` — strip the password before logging (`user:***@host`).
+- `security.sanitize_identifier` — used when DID-based schema isolation rewrites `search_path`; rejects anything that isn't `[A-Za-z0-9_]`.
+- `db_operations.get_current_utc_timestamp`, `prepare_jsonb_value`, `create_update_values` — common building blocks for `UPDATE` statements.
 
 ---
 
 ## PostgreSQL Setup
 
-For production deployments, you need a running PostgreSQL instance.
+<Steps>
+  <Step title="Run Postgres">
+    ```bash
+    docker run -d \
+      --name bindu-postgres \
+      -e POSTGRES_USER=bindu_user \
+      -e POSTGRES_PASSWORD=secret \
+      -e POSTGRES_DB=bindu_db \
+      -p 5432:5432 \
+      postgres:16
+    ```
+  </Step>
+  <Step title="Install the driver">
+    ```bash
+    uv add 'sqlalchemy[asyncio]' asyncpg alembic
+    ```
 
-### Docker (Quick Start)
+    The factory imports `PostgresStorage` lazily — without these packages
+    you'll get a clear error at startup, not at runtime.
+  </Step>
+  <Step title="Set the env vars">
+    ```bash
+    export STORAGE_TYPE=postgres
+    export DATABASE_URL='postgresql+asyncpg://bindu_user:secret@localhost:5432/bindu_db'
+    ```
 
-```bash
-docker run -d \
-  --name bindu-postgres \
-  -e POSTGRES_USER=bindu \
-  -e POSTGRES_PASSWORD=secret \
-  -e POSTGRES_DB=bindu \
-  -p 5432:5432 \
-  postgres:16
-```
+    For managed Postgres (Neon, RDS, Supabase) append `?sslmode=require`.
+  </Step>
+  <Step title="Create the schema">
+    Either let Bindu do it on connect:
 
-### Environment variables
+    ```bash
+    export STORAGE__RUN_MIGRATIONS_ON_STARTUP=true
+    ```
 
-```bash
-STORAGE_TYPE=postgres
-DATABASE_URL=postgresql://bindu:secret@localhost:5432/bindu
-```
+    Or run Alembic yourself:
 
-### Schema
+    ```bash
+    uv run alembic upgrade head
+    ```
 
-Bindu manages its own schema. On first startup with PostgreSQL configured, it creates the necessary tables:
+    Other useful Alembic commands:
 
-```text
-bindu_tasks       — task state, metadata, and message history
-bindu_contexts    — shared conversation contexts
-bindu_artifacts   — agent output artifacts
-```
+    ```bash
+    uv run alembic history          # see applied/pending migrations
+    uv run alembic downgrade -1     # rollback one revision
+    ```
+  </Step>
+  <Step title="Run your agent">
+    Your handler code doesn't change. The factory picks up `STORAGE_TYPE`,
+    `PostgresStorage.connect()` opens the pool (`pool_pre_ping=True`), and
+    everything else is identical to memory mode.
+  </Step>
+</Steps>
 
-No manual migration steps are needed for initial setup.
+---
+
+## Retries, Pooling, Durability
+
+- **Retries.** Memory wraps each call in a `@retry_storage_operation` decorator (3 attempts, 0.1s → 1.0s backoff). Postgres routes every call through `execute_with_retry` from `bindu.utils.retry`, governed by `STORAGE__POSTGRES_MAX_RETRIES` and `STORAGE__POSTGRES_RETRY_DELAY`. Same Tenacity primitives used elsewhere — see [Retry](/bindu/learn/retry/overview).
+- **Pooling.** `PostgresStorage` creates a single `async_engine` per process with `pool_size=postgres_pool_max`, `max_overflow=0`, and `pool_pre_ping=True` so dead connections are detected before they bite a request.
+- **Transactions.** Multi-step writes (`submit_task`, `update_task`) run inside `session.begin()`. The status update and the history/artifacts append commit atomically.
+- **Durability.** Memory loses everything on restart, including queued webhook callbacks. Postgres persists every state transition; webhook configs reload on startup via `load_all_webhook_configs`.
 
 ---
 
@@ -252,27 +392,35 @@ No manual migration steps are needed for initial setup.
 
 <AccordionGroup>
   <Accordion title="Multi-turn conversations">
-    A user starts a research task, the agent asks a clarifying question, and the user
-    responds. With persistent storage, the task resumes from `input-required` state
-    with full context intact — even if the agent restarted between turns.
+    A user starts research, the agent asks a clarifying question
+    (`state=input-required`), the user replies. Postgres keeps both the task
+    row and the context's `message_history` so a follow-up `tasks/send` picks
+    up exactly where the agent paused — even across a redeploy.
   </Accordion>
 
-  <Accordion title="Long-running tasks">
-    A data analysis task that takes several minutes. The client submits the task, gets
-    a `task_id` immediately, and polls for completion. Storage keeps the task alive
-    across the entire execution window.
+  <Accordion title="Long-running tasks with webhooks">
+    Task takes minutes. Client registers a push-notification config; Bindu
+    writes it to `webhook_configs`. On restart, `load_all_webhook_configs`
+    rehydrates the in-memory map so the worker can still call the callback
+    when the task finishes.
   </Accordion>
 
   <Accordion title="Audit and replay">
-    Every task stores its full message history and state transitions. You can retrieve
-    any past task by ID and inspect exactly what happened, when, and what the agent
-    produced.
+    Every state transition writes a row update. `history` and `artifacts` are
+    append-only JSONB arrays. Query by `owner_did`, `state`, or
+    `created_at` range — the indexes are already there.
   </Accordion>
 
-  <Accordion title="Multi-instance deployments">
-    With PostgreSQL, multiple instances of the same agent share a single storage
-    backend. Any instance can pick up a task from the queue and write results back to
-    the same store.
+  <Accordion title="Multi-replica deployments">
+    With Postgres, N replicas of the same agent share one DB. Whoever wins
+    `update_task_state_if(submitted → working)` owns the task. The compare-
+    and-swap is a single SQL `UPDATE` — no two workers can both win.
+  </Accordion>
+
+  <Accordion title="Per-agent schema isolation">
+    Pass `DID=did:bindu:alice:agent1:...` and `PostgresStorage` rewrites
+    `search_path` to a sanitized per-DID Postgres schema. Same database,
+    isolated tables — handy for multi-tenant hosting.
   </Accordion>
 </AccordionGroup>
 
@@ -281,13 +429,23 @@ No manual migration steps are needed for initial setup.
 ## Security Best Practices
 
 <CardGroup cols={2}>
-  <Card title="Use environment variables" icon="lock">
-    Database credentials don't belong in a Python dict that ends up in git. Use
-    `DATABASE_URL` and keep it in `.env` or your orchestrator's secret manager.
+  <Card title="Keep credentials out of code" icon="lock">
+    `DATABASE_URL` belongs in `.env` (gitignored) locally and in your
+    orchestrator's secret manager in prod. Bindu logs the URL with the
+    password masked via `mask_database_url`.
   </Card>
-  <Card title="Restrict Database Access" icon="shield-check">
-    The Bindu agent only needs read/write access to its own tables. Use a dedicated
-    database user with minimal permissions.
+  <Card title="Least-privilege DB user" icon="shield-check">
+    The agent only needs DML on its own tables (plus DDL if you let it run
+    migrations on startup). Don't give it `SUPERUSER`.
+  </Card>
+  <Card title="Enable TLS" icon="key">
+    Append `?sslmode=require` (or stronger) when connecting to managed
+    Postgres. asyncpg supports the full `sslmode` ladder.
+  </Card>
+  <Card title="Respect ownership" icon="user-shield">
+    `caller_did` is recorded on every task and context. Pass the
+    authenticated DID through and let `OwnershipError` keep cross-tenant
+    leakage out of your error responses.
   </Card>
 </CardGroup>
 
@@ -296,6 +454,7 @@ No manual migration steps are needed for initial setup.
 ## Related
 
 - [Architecture](/bindu/concepts/task-first-and-architecture)
+- [Retry](/bindu/learn/retry/overview)
 - [Scheduler](/bindu/learn/scheduler/overview)
 - [Observability](/bindu/learn/observability/overview)
 
@@ -310,6 +469,6 @@ No manual migration steps are needed for initial setup.
   <span className="brand-quote-text">
     Storage is what turns a stateless script into{" "}
     <span className="brand-quote-highlight">an agent that remembers</span> —
-    every task, every turn, every result.
+    every task, every turn, every artifact, every callback.
   </span>
 </span>

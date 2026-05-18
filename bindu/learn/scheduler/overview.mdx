@@ -1,247 +1,382 @@
 ---
 title: "Scheduler"
-description: "The queue between an HTTP request and the actual work, so two simultaneous callers don't stall each other."
+description: "The queue between an HTTP request and the actual work — so two callers don't stall each other, and a crash doesn't take your inbox with it."
 ---
 
-Two requests hit your agent at the same time. Both want a 30-second answer. Without a scheduler, the second caller waits 30 seconds for the first one to finish, then 30 more for their own. A single-threaded agent is a queue of one — and queues of one are how production starts melting.
+Two requests hit your agent at the same time. Both want a 30-second answer. Without a scheduler, the second caller waits 30s for the first to finish, then 30s more for their own. A single-threaded agent is a queue of one — and queues of one are how production starts melting.
 
-The scheduler sits between the HTTP layer and the worker that actually runs your handler. Submission is non-blocking — the caller gets a `task_id` immediately. Workers pull tasks from the queue and execute them in parallel. The agent stops being a bottleneck and starts being a service.
+The scheduler sits between the `TaskManager` (your HTTP layer) and the `ManifestWorker` (your handler runner). Submission is non-blocking: the caller gets a `task_id` immediately and goes away. The worker pulls operations off the queue and executes them. Storage holds the heavy state; the queue stays lean.
 
-In memory for local dev, Redis for production. Same `bindufy(config, handler)` either way; you just flip two environment variables.
+In-memory for local dev. Redis for production. Same `bindufy(config, handler)` either way — you flip one or two environment variables.
 
 <Note>
-  Single process? In-memory is fine. Multiple processes or restart-survival required?
-  Switch to Redis with two env vars. Details below.
+  Single process and don't care about restart survival? `SCHEDULER_TYPE=memory` is
+  the default, no setup needed. Multiple processes, horizontal scaling, or
+  durable queueing required? `SCHEDULER_TYPE=redis` + `REDIS_URL` and you're done.
 </Note>
 
-## How the Bindu Scheduler Works
+## What the scheduler actually schedules
 
-The scheduler sits between the TaskManager and the worker pool. When a task is submitted, the TaskManager enqueues the task ID. Workers dequeue task IDs and execute them. The storage layer holds the full task data.
+Not raw functions. Not HTTP requests. The scheduler queues **task operations** — small typed envelopes that tell the worker what to do with a `task_id` whose data already lives in storage.
 
-### The Scheduling Model
-
-```mermaid
-graph LR
-    Client[Client] --> TaskManager[TaskManager]
-    TaskManager --> Queue[Scheduler Queue]
-    Queue --> Worker1[Worker 1]
-    Queue --> Worker2[Worker 2]
-    Queue --> Worker3[Worker 3]
-    Worker1 --> Storage[(Storage)]
-    Worker2 --> Storage
-    Worker3 --> Storage
-
-    style Client fill:#e1f5ff
-    style TaskManager fill:#fff4e1
-    style Queue fill:#ffe1f5
-    style Worker1 fill:#d4f5e1
-    style Worker2 fill:#d4f5e1
-    style Worker3 fill:#d4f5e1
-    style Storage fill:#ffe1e1
+```python
+# bindu/server/scheduler/base.py
+TaskOperation = _RunTask | _CancelTask | _PauseTask | _ResumeTask
+#                 "run"     "cancel"     "pause"     "resume"
 ```
 
+Four operations, one discriminator field. The queue holds operation envelopes; storage holds the task body. Workers pop an operation, load the task from storage, execute the handler, and write the result back. Two systems, one task — clean separation.
+
 <CardGroup cols={3}>
-  <Card title="Non-blocking" icon="bolt">
-    Task submission returns immediately. Execution happens asynchronously in a worker.
+  <Card title="Non-blocking submit" icon="bolt">
+    `run_task()` returns as soon as the operation lands on the queue. The HTTP
+    response carries the `task_id`, not the answer.
   </Card>
-  <Card title="Concurrent" icon="arrows-split-up-and-left">
-    Multiple workers pull from the same queue and execute tasks in parallel.
+  <Card title="Concurrent dispatch" icon="arrows-split-up-and-left">
+    Multiple workers (or multiple agent processes, with Redis) pop from the same
+    queue. Redis guarantees each operation is delivered to exactly one worker.
   </Card>
-  <Card title="Durable" icon="database">
-    Redis-backed queue survives agent restarts. In-flight tasks are not lost.
+  <Card title="Backpressure" icon="gauge-high">
+    The in-memory queue is bounded (100 ops). If producers outrun the worker, the
+    sender awaits — you get backpressure instead of unbounded memory growth.
   </Card>
 </CardGroup>
 
-### Backends
+---
 
-Bindu supports two scheduler backends:
+## Backends at a glance
 
-| | Memory | Redis |
+| | `memory` | `redis` |
 | --- | --- | --- |
-| Setup | None | Requires Redis instance |
-| Durability | Lost on restart | Survives restarts |
-| Multi-worker | Single process only | Distributed workers |
-| Use case | Local development | Production |
-| Config | `"type": "memory"` | `"type": "redis"` |
+| Selected by | `SCHEDULER_TYPE=memory` (default) | `SCHEDULER_TYPE=redis` |
+| Transport | `anyio` memory object stream (buffer = 100) | Redis `LIST` (`RPUSH` / `BLPOP`) |
+| Cross-process | No — single Python process only | Yes — many processes, many hosts |
+| Restart survival | Lost on process exit | Pending ops survive; in-flight do not (see note) |
+| Trace context | Live OpenTelemetry `Span` reference | Serialized `trace_id` / `span_id` |
+| Extra deps | None | `redis[hiredis]` and a running Redis |
+| Best for | Local dev, single-replica deploys, tests | Production, horizontal scaling, restart-safe queueing |
+
+<Info>
+  **Delivery semantics are at-least-once-on-enqueue, not exactly-once-on-execute.**
+  `BLPOP` atomically removes the operation from the queue before the worker
+  starts executing. If the worker crashes mid-handler, the operation is gone — the
+  task body is still in storage (state = `working`), but no one will retry it
+  unless you restart it explicitly. There is no visibility-timeout or
+  redelivery layer. For execution-level resilience, see [Retry](/bindu/learn/retry/overview).
+</Info>
 
 ---
 
-## Configuration
-
-Scheduler backends are picked via environment variables. Same pattern as [Storage](/bindu/learn/storage/overview) — connection strings don't belong in a Python dict that ends up in git.
-
-### Memory (development)
-
-```bash
-# Default — no env vars needed.
-SCHEDULER_TYPE=memory
-```
-
-The in-memory scheduler uses an asyncio queue inside the agent process. Fast, zero setup, and tasks are gone if the process stops. Good for `uv run agent.py` while you're building.
-
-### Redis (production)
-
-```bash
-SCHEDULER_TYPE=redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-<Note>
-  Put both in `.env` for local development; pull them from your orchestrator's secret
-  manager in production. The `config` dict your agent code uses stays clean.
-</Note>
-
----
-
-## The Task Execution Lifecycle
-
-Here is how the scheduler fits into the full task lifecycle:
+## The dispatch flow
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant TaskManager
-    participant Queue as Scheduler Queue
-    participant Worker
+    participant Scheduler
+    participant Worker as ManifestWorker
     participant Storage
-    participant Agent
+
+    Note over TaskManager,Worker: At startup
+    TaskManager->>Scheduler: create_scheduler(config)
+    TaskManager->>Worker: spawn loop
+    Worker->>Scheduler: async for op in receive_task_operations()
+
+    Note over Client,Storage: Per-request
 
     Client->>TaskManager: message/send
-    TaskManager->>Storage: Save task (submitted)
-    TaskManager->>Queue: Enqueue task_id
-    TaskManager-->>Client: task_id (immediate)
+    TaskManager->>Storage: save Task (state = submitted)
+    TaskManager->>Scheduler: run_task(params)
 
-    Note over Client: Client polls or waits
+    alt memory backend
+        Scheduler->>Scheduler: write_stream.send(_RunTask)
+    else redis backend
+        Scheduler->>Scheduler: RPUSH bindu:tasks <json>
+    end
 
-    Queue->>Worker: Dequeue task_id
-    Worker->>Storage: Load task data
-    Worker->>Storage: Update status (working)
+    TaskManager-->>Client: { task_id } (immediate)
 
-    Worker->>Agent: Execute with messages
-    Agent-->>Worker: Result
+    alt memory backend
+        Scheduler-->>Worker: read_stream yields op
+    else redis backend
+        Scheduler-->>Worker: BLPOP returns op
+    end
 
-    Worker->>Storage: Save artifact
-    Worker->>Storage: Update status (completed)
+    Worker->>Storage: update state = working
+    Worker->>Worker: execute handler
+    Worker->>Storage: write artifact, state = completed | failed
 
-    Client->>TaskManager: tasks/get
-    TaskManager->>Storage: Load task
-    Storage-->>TaskManager: Task + artifact
-    TaskManager-->>Client: Completed task
+    Client->>TaskManager: tasks/get { task_id }
+    TaskManager->>Storage: load task + artifact
+    TaskManager-->>Client: result
 ```
 
-The client never waits for execution. It submits, gets a `task_id`, and polls or uses push notifications to know when the task is done.
+Submission and execution never touch each other on the call stack. The HTTP request ends the moment the operation is on the queue.
 
 ---
 
-## Worker Concurrency
+## Backends
 
-By default, Bindu runs a single worker. You can increase concurrency by configuring the number of workers:
+<CardGroup cols={2}>
+  <Card title="In-memory scheduler" icon="microchip" href="#in-memory-backend">
+    `InMemoryScheduler`. `anyio` memory object stream, bounded buffer of 100,
+    zero external dependencies. The default.
+  </Card>
+  <Card title="Redis scheduler" icon="server" href="#redis-backend">
+    `RedisScheduler`. Redis list with `RPUSH` + `BLPOP`, connection pool of 10,
+    default queue key `bindu:tasks`.
+  </Card>
+</CardGroup>
 
-```json
-{
-  "scheduler": {
-    "type": "redis",
-    "url": "redis://localhost:6379/0",
-    "workers": 4
-  }
-}
+### In-memory backend
+
+```python
+# bindu/server/scheduler/memory_scheduler.py
+self._write_stream, self._read_stream = anyio.create_memory_object_stream[
+    TaskOperation
+](100)
 ```
 
-With Redis, you can also run multiple agent instances pointing at the same queue. Each instance runs its own worker pool, and tasks are distributed across all of them automatically.
+A producer (`TaskManager`) and a consumer (`ManifestWorker`) share an `anyio` memory object stream. The stream is **bounded at 100 operations** — once full, `run_task()` awaits until the worker drains it. That's intentional: an unbounded queue would let a runaway producer eat the process's RAM.
 
-```bash
-# Instance 1
-REDIS_URL=redis://redis:6379/0 uv run python main.py
+Trace context is preserved by stashing a live OpenTelemetry `Span` reference directly in the operation envelope (`_current_span`). Cheap and exact, but only works inside one process — which is fine, since this backend is one process by definition.
 
-# Instance 2 (same Redis, same queue)
-REDIS_URL=redis://redis:6379/0 uv run python main.py
+### Redis backend
+
+```python
+# bindu/server/scheduler/redis_scheduler.py
+await self._redis_client.rpush(self.queue_name, serialized_task)   # producer
+result = await self._redis_client.blpop([self.queue_name], timeout=self.poll_timeout)  # consumer
 ```
 
-Both instances compete for tasks from the same queue. Redis ensures each task is delivered to exactly one worker.
+A plain Redis `LIST` (not a Stream, not a Sorted Set) keyed at `bindu:tasks` by default. Producers `RPUSH` JSON-serialized operations to the tail; consumers `BLPOP` from the head, blocking up to `poll_timeout` seconds (default `1s`) before retrying. Atomic on the Redis side — one operation, one worker.
+
+Because operations cross process boundaries, the live `Span` from the in-memory case won't survive serialization. The Redis scheduler instead writes `trace_id` / `span_id` into the envelope so the worker can reconstruct a child span on the other side.
+
+The connection pool is sized at `max_connections=10`, with `retry_on_timeout=True`. If Redis goes briefly unreachable mid-`BLPOP`, the receive loop logs and backs off **1 second** before retrying — no tight CPU loop. Producer-side, every `run_task` / `cancel_task` / `pause_task` / `resume_task` call is wrapped in `@retry_scheduler_operation` (Tenacity), so a transient blip won't drop your enqueue.
 
 ---
 
-## Redis Setup
+## Configuration
 
-For production deployments, you need a running Redis instance.
-
-### Docker (Quick Start)
-
-```bash
-docker run -d \
-  --name bindu-redis \
-  -p 6379:6379 \
-  redis:7-alpine
-```
-
-### Environment variables
-
-```bash
-SCHEDULER_TYPE=redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-### With authentication
-
-```bash
-REDIS_URL=redis://:your-password@localhost:6379/0
-```
-
----
-
-## Combining Storage and Scheduler
-
-In production, you typically run both Postgres and Redis together:
-
-```bash
-STORAGE_TYPE=postgres
-DATABASE_URL=postgresql://bindu:secret@localhost:5432/bindu
-SCHEDULER_TYPE=redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-The queue holds task IDs. The database holds task data. Workers read from both. This separation means the queue stays lean and fast while the database handles the heavy state.
-
----
-
-## Real-World Use Cases
+The scheduler reads from `SchedulerSettings` (Pydantic `BaseSettings`) in `bindu/settings.py`. Environment variables override defaults. The factory builds a `SchedulerConfig` from settings if you don't pass one.
 
 <AccordionGroup>
-  <Accordion title="Handling request bursts">
-    When many tasks arrive at once, the queue absorbs the burst. Workers process at
-    their own pace without dropping requests or blocking the HTTP layer.
+  <Accordion title="Memory backend env vars">
+    Nothing is required. `SCHEDULER_TYPE=memory` is the default.
+
+    ```bash
+    # Optional — explicit is fine
+    SCHEDULER_TYPE=memory
+    ```
+
+    No URL, no pool, no queue name. The buffer (100) is a code-level constant — change it by subclassing `InMemoryScheduler` if you really need to.
   </Accordion>
 
-  <Accordion title="Long-running tasks">
-    A task that takes minutes to complete does not block the agent from accepting new
-    requests. The worker handles it in the background while the HTTP server stays
-    responsive.
+  <Accordion title="Redis backend env vars">
+    ```bash
+    SCHEDULER_TYPE=redis
+
+    # Pick ONE of: a full URL, or host+port (+ optional auth)
+    REDIS_URL=redis://localhost:6379/0
+    # or
+    REDIS_URL=rediss://default:****@redis-12345.upstash.io:6379
+
+    # Optional tuning
+    REDIS_POLL_TIMEOUT=1   # seconds; how long BLPOP blocks before re-polling
+    ```
+
+    These are the env-var-mapped fields on `SchedulerSettings`:
+
+    | Field | Env var | Default |
+    | --- | --- | --- |
+    | `backend` | `SCHEDULER_TYPE` | `memory` |
+    | `redis_url` | `REDIS_URL` | `None` |
+    | `poll_timeout` | `REDIS_POLL_TIMEOUT` | `1` |
+    | `queue_name` | — | `bindu:tasks` |
+    | `max_connections` | — | `10` |
+    | `retry_on_timeout` | — | `true` |
+
+    `redis_host`, `redis_port`, `redis_password`, `redis_db` are also accepted on
+    the dataclass — the factory will assemble a URL from them if `REDIS_URL` is
+    not provided. Prefer the URL form; it's less error-prone.
   </Accordion>
 
-  <Accordion title="Surviving restarts">
-    With Redis, tasks that were queued but not yet started survive an agent restart.
-    When the agent comes back up, workers pick up where the queue left off.
-  </Accordion>
+  <Accordion title="Retry tuning (scheduler operations)">
+    Scheduler enqueue/cancel calls are wrapped with `@retry_scheduler_operation`.
+    Defaults from `RetrySettings`:
 
-  <Accordion title="Horizontal scaling">
-    Deploy multiple agent instances behind a load balancer, all pointing at the same
-    Redis queue. Tasks are distributed across instances automatically. No coordination
-    code required.
+    ```python
+    scheduler_max_attempts = 3
+    scheduler_min_wait     = 1.0   # seconds
+    scheduler_max_wait     = 8.0   # seconds
+    ```
+
+    These cover transient producer-side failures (e.g. brief Redis disconnect during
+    `RPUSH`). They do **not** retry the agent handler — that's the worker's job, see
+    [Retry](/bindu/learn/retry/overview).
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Security Best Practices
+## Setup
+
+<Steps>
+  <Step title="Default: nothing to do">
+    `SCHEDULER_TYPE` is unset, so the factory returns `InMemoryScheduler`. Run
+    `uv run python main.py` and you're scheduled.
+  </Step>
+
+  <Step title="Switch to Redis">
+    Start Redis locally (Docker is fine):
+
+    ```bash
+    docker run -d --name bindu-redis -p 6379:6379 redis:7-alpine
+    ```
+
+    Set two env vars and restart:
+
+    ```bash
+    export SCHEDULER_TYPE=redis
+    export REDIS_URL=redis://localhost:6379/0
+    ```
+
+    On boot you'll see `Redis scheduler connected to redis://localhost:6379/0`.
+    The factory does a `PING` first — if Redis is unreachable, startup fails
+    loudly instead of silently degrading.
+  </Step>
+
+  <Step title="Scale horizontally">
+    Point a second process at the same Redis:
+
+    ```bash
+    # Instance A
+    SCHEDULER_TYPE=redis REDIS_URL=redis://redis:6379/0 uv run python main.py
+
+    # Instance B — same Redis, same queue
+    SCHEDULER_TYPE=redis REDIS_URL=redis://redis:6379/0 uv run python main.py
+    ```
+
+    Both processes call `BLPOP` against `bindu:tasks`. Redis hands each operation
+    to exactly one waiter. No coordination code from you.
+  </Step>
+
+  <Step title="Switching back">
+    `export SCHEDULER_TYPE=memory` (or unset) and restart. Any operations sitting
+    in Redis stay in Redis — they're not processed by the in-memory backend.
+    Flush them with `RedisScheduler.clear_queue()` or `redis-cli DEL bindu:tasks`
+    if you don't want them resurrected next time you flip back.
+  </Step>
+</Steps>
+
+---
+
+## Choosing a backend
+
+<AccordionGroup>
+  <Accordion title="Pick memory when…">
+    - You're developing locally and want zero setup.
+    - You're running a single process and don't need restart survival.
+    - You're writing tests — the in-memory backend is deterministic and fast.
+    - You don't care if a process crash drops a few pending submits.
+  </Accordion>
+
+  <Accordion title="Pick Redis when…">
+    - You run more than one agent process (multiple replicas, blue/green, autoscale).
+    - You need pending submissions to survive a restart or redeploy.
+    - You want to observe queue depth from outside the agent (`LLEN bindu:tasks`).
+    - You're already running Redis for storage or rate-limiting and want to consolidate.
+  </Accordion>
+
+  <Accordion title="What survives a restart, exactly">
+    **Memory backend:** nothing. The stream lives in the process; both the queue
+    and any in-flight handler die together. Storage state is still consistent
+    (the task row will show `submitted` or `working` forever until you clean it).
+
+    **Redis backend:** pending ops in `bindu:tasks` survive — when a new worker
+    starts, it `BLPOP`s them. In-flight ops (already popped, handler running)
+    are *not* recovered. The task body remains in storage; you can re-enqueue it
+    yourself, but the scheduler will not.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Programmatic factory
+
+Most agents don't need this — env vars are enough. But the factory is callable directly if you're embedding Bindu or writing tests:
+
+```python
+from bindu.common.models import SchedulerConfig
+from bindu.server.scheduler.factory import create_scheduler, close_scheduler
+
+# Explicit Redis config
+scheduler = await create_scheduler(SchedulerConfig(
+    type="redis",
+    redis_url="redis://localhost:6379/0",
+    queue_name="bindu:tasks",
+    max_connections=10,
+    poll_timeout=1,
+))
+
+async with scheduler:           # opens Redis pool, pings on entry
+    await scheduler.run_task(params)
+    # ...
+await close_scheduler(scheduler)  # idempotent; safe on either backend
+
+# Or: pass None to use app_settings defaults
+scheduler = await create_scheduler(None)
+```
+
+The factory imports `RedisScheduler` lazily inside a `try/except ImportError`. If you don't have `redis` installed and you ask for `type="redis"`, you get a clear `ValueError: Redis scheduler requires redis package. Install with: pip install redis[hiredis]` — not an obscure import crash on startup.
+
+---
+
+## Observability and debug helpers
+
+The Redis backend exposes a few helpers that are handy in ops:
+
+```python
+await scheduler.health_check()      # bool — PING-based readiness probe
+await scheduler.get_queue_length()  # int  — LLEN bindu:tasks
+await scheduler.clear_queue()       # int  — DEL bindu:tasks, returns count
+```
+
+For a quick external check without going through Python:
+
+```bash
+redis-cli LLEN bindu:tasks       # depth
+redis-cli LRANGE bindu:tasks 0 4 # peek at the first 5 envelopes (JSON)
+redis-cli DEL bindu:tasks        # drain
+```
+
+Tracing crosses the boundary too: every operation carries `trace_id` / `span_id` (Redis) or a live `Span` (memory), so worker spans link back to the HTTP submit span in your OTLP backend. See [Observability](/bindu/learn/observability/overview).
+
+---
+
+## Operational notes
 
 <CardGroup cols={2}>
-  <Card title="Use environment variables" icon="lock">
-    Redis connection strings don't belong in a Python dict that ends up in git. Use
-    `REDIS_URL` in `.env` or your orchestrator's secret manager.
+  <Card title="Secrets in env, not config" icon="lock">
+    `REDIS_URL` belongs in `.env` (dev) or your orchestrator's secret manager
+    (prod). Don't bake connection strings into the `config` dict you pass to
+    `bindufy()` — that ends up in git.
   </Card>
-  <Card title="Enable Redis Auth" icon="shield-check">
-    In production, configure Redis with a password and use TLS if the connection
-    crosses a network boundary.
+  <Card title="Use TLS across networks" icon="shield-check">
+    If your Redis isn't on `localhost` or a private network, use `rediss://`
+    (TLS) and a password. Upstash, ElastiCache-in-transit-encryption, and
+    Redis Cloud all support it.
+  </Card>
+  <Card title="Tune `poll_timeout` deliberately" icon="gauge">
+    The default `1s` is a good tradeoff. Lower values reduce task-start latency
+    but increase Redis command rate. Higher values are cheaper on managed Redis
+    with command-based pricing.
+  </Card>
+  <Card title="No visibility timeout" icon="triangle-exclamation">
+    A popped operation is gone from the queue. If you need redelivery on crash,
+    wrap your handler in retry logic and persist intent before doing
+    irrecoverable side effects.
   </Card>
 </CardGroup>
 
@@ -249,9 +384,10 @@ The queue holds task IDs. The database holds task data. Workers read from both. 
 
 ## Related
 
-- [Storage](/bindu/learn/storage/overview)
-- [Architecture](/bindu/concepts/task-first-and-architecture)
-- [Observability](/bindu/learn/observability/overview)
+- [Retry](/bindu/learn/retry/overview) — execution-level retries inside the handler
+- [Storage](/bindu/learn/storage/overview) — where the task body actually lives
+- [Observability](/bindu/learn/observability/overview) — tracing the dispatch flow end-to-end
+- [Architecture](/bindu/concepts/task-first-and-architecture) — how scheduler, storage, and worker fit together
 
 <span className="brand-quote">
   <img
