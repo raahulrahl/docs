@@ -15,7 +15,7 @@ config = {
     "name": "research_agent",
     "deployment": {
         "url": "http://localhost:3773",
-        "expose": False,   # required: True opens an FRP tunnel, False stays local
+        "expose": False,   # required (no default); declares intent only — real tunnel is launch=True
     },
 }
 ```
@@ -25,9 +25,9 @@ config = {
 | `author` | Goes into your agent's DID. Sanitized (`@` → `_at_`, `.` → `_`) so the DID stays URL-safe. Use the email you'd be okay seeing in another team's logs. |
 | `name` | The human-readable slug. Also sanitized into the DID. |
 | `deployment.url` | Where the agent listens. Must be a valid http(s) URL — validated via `urlparse`. |
-| `deployment.expose` | `True` launches an FRP tunnel for a public URL; `False` keeps you on `deployment.url`. No default — you must set one. |
+| `deployment.expose` | Required (no default). Declares intent — `True` means the agent is meant to be publicly reachable, `False` means local-only. **Note**: the FRP public tunnel is actually opened by passing `launch=True` to `bindufy(config, handler, launch=True)`, not by this flag. `expose` is currently a placeholder for future trust-level signaling. |
 
-Miss any of these and `bindufy()` raises `ConfigError: '<field>' is a required field in the agent configuration.` with an example config attached.
+Miss `author`, `name`, or `deployment.url` and the config validator raises `ConfigError: '<field>' is a required field in the agent configuration.` with an example config attached. Miss `deployment.expose` (when a `deployment` block is present) and the deployment builder raises `ValueError: Missing required config field(s): deployment.expose` — different error class, different message format.
 
 ## The keys you'll actually touch
 
@@ -42,7 +42,7 @@ config = {
     "version": "1.0.0",
     "deployment": {
         "url": "http://localhost:3773",
-        "expose": True,                              # FRP tunnel — laptop on the internet
+        "expose": True,                              # required; declares public-facing intent (tunnel comes from launch=True)
         "cors_origins": ["http://localhost:5173"],   # for the inbox UI or your frontend
     },
     "skills": ["skills/question-answering"],         # see /bindu/skills/introduction/overview
@@ -95,7 +95,7 @@ These are off by default. Turn them on when you need them — each one has its o
 
 | Feature | How you turn it on | Docs |
 |---|---|---|
-| **OAuth2 (Hydra)** | Either path works: (1) put it in your config — `"auth": {"enabled": True, "provider": "hydra", "admin_url": "...", "public_url": "..."}` is applied to `app_settings.auth` and `app_settings.hydra` via [`update_auth_settings`](https://github.com/getbindu/Bindu/blob/main/bindu/utils/config/settings.py); (2) or use env vars `AUTH__ENABLED=true`, `HYDRA__ADMIN_URL=...`, `HYDRA__PUBLIC_URL=...` ([HydraSettings](https://github.com/getbindu/Bindu/blob/main/bindu/settings.py)). | [Authentication](/bindu/learn/authentication/overview) |
+| **OAuth2 (Hydra)** | Either path works: (1) put it in your config — `"auth": {"enabled": True, "provider": "hydra", "admin_url": "...", "public_url": "..."}` is applied to `app_settings.auth` and `app_settings.hydra` via [`prepare_auth_settings`](https://github.com/getbindu/Bindu/blob/main/bindu/utils/config/settings.py); (2) or use env vars `AUTH__ENABLED=true`, `HYDRA__ADMIN_URL=...`, `HYDRA__PUBLIC_URL=...` ([HydraSettings](https://github.com/getbindu/Bindu/blob/main/bindu/settings.py)). | [Authentication](/bindu/learn/authentication/overview) |
 | **x402 payments** | Add `"execution_cost": {...}` to the config dict — the middleware activates when execution_cost is present and produces payment requirements ([applications.py:686](https://github.com/getbindu/Bindu/blob/main/bindu/server/applications.py)). Env vars `X402__FACILITATOR_URL`, `X402_PAY_TO` configure it further. | [Payment](/bindu/learn/payment/introduction) |
 | **OpenTelemetry** | On by default (`telemetry: True`). Send traces by setting env vars `OLTP_ENDPOINT=...`, optionally `OLTP_SERVICE_NAME`, `OLTP_HEADERS='{"Authorization":"..."}'`. Turn off with `TELEMETRY_ENABLED=false`. | [Observability](/bindu/learn/observability/overview) |
 | **Sentry** | Env: `SENTRY_ENABLED=true`, `SENTRY_DSN=...` | [Observability](/bindu/learn/observability/overview) |
@@ -116,7 +116,7 @@ config = {
     "version": "1.2.0",
     "deployment": {
         "url": "https://research.yourco.io",
-        "expose": False,                             # you have real DNS in prod
+        "expose": False,                             # local-only intent — real DNS in prod, no FRP tunnel
         "cors_origins": ["https://app.yourco.io"],
     },
     "capabilities": {

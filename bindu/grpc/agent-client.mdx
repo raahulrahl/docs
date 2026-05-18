@@ -265,7 +265,8 @@ Now that you know how to write handlers, let's look at what happens when `binduf
   </Step>
 
   <Step title="SDK starts a heartbeat loop">
-    Every 30 seconds.
+    Every 30 seconds in the reference TS SDK; the cadence is an SDK convention
+    rather than a core-enforced one.
   </Step>
 
   <Step title="You see 'Waiting for messages...'">
@@ -383,7 +384,10 @@ grpc_client.health_check()       # Is the SDK still running? Returns True/False
 grpc_client.get_capabilities()   # What can the SDK do? Returns name, version, etc.
 ```
 
-These are used during heartbeat processing and capability discovery.
+Both methods are available on `GrpcAgentClient` for any caller that needs them
+(for example a future capability-discovery sweep). They are **not** invoked from
+the current `BinduService.Heartbeat` handler — heartbeats only update the
+registry's `last_heartbeat` timestamp.
 
 <Warning>
   Current limitations:

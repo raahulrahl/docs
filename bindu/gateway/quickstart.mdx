@@ -183,10 +183,10 @@ Expected stream (a few fields like `agent_did`, `agent_did_source`, and `signatu
 
 ```
 event: session
-data: {"session_id":"s_01H...","external_session_id":null,"created":true}
+data: {"session_id":"8f3c4a1e-...","external_session_id":null,"created":true}
 
 event: plan
-data: {"plan_id":"m_01H...","session_id":"s_01H..."}
+data: {"plan_id":"b21e7c98-...","session_id":"8f3c4a1e-..."}
 
 event: task.started
 data: {"task_id":"call_01H...","agent":"joke","skill":"tell_joke","input":{"input":"Tell me a joke about databases."}}
@@ -198,14 +198,14 @@ event: task.finished
 data: {"task_id":"call_01H...","agent":"joke","state":"completed"}
 
 event: text.delta
-data: {"session_id":"s_01H...","part_id":"p_01H...","delta":"Here"}
+data: {"session_id":"8f3c4a1e-...","part_id":"c9d2f60a-...","delta":"Here"}
 
 event: text.delta
-data: {"session_id":"s_01H...","part_id":"p_01H...","delta":"'s a joke..."}
+data: {"session_id":"8f3c4a1e-...","part_id":"c9d2f60a-...","delta":"'s a joke..."}
 ... (many more deltas) ...
 
 event: final
-data: {"session_id":"s_01H...","stop_reason":"stop","usage":{"inputTokens":1130,"outputTokens":52,"totalTokens":1182,"cachedInputTokens":0}}
+data: {"session_id":"8f3c4a1e-...","stop_reason":"stop","usage":{"inputTokens":1130,"outputTokens":52,"totalTokens":1182,"cachedInputTokens":0}}
 
 event: done
 data: {}
@@ -226,7 +226,7 @@ What each event means, in the order they arrived:
 | 1 | `session` | The gateway opened an in-memory session for this `/plan` call. `session_id` is a per-call handle; `external_session_id` echoes whatever the client sent (or `null`). Since the gateway is stateless, this id is *not* a resumption key — to give the planner context across requests, pass prior turns via the `history` field on each call. |
 | 2 | `plan` | The planner started its first turn. |
 | 3 | `task.started` | The planner decided to call the joke agent. `input: {input: "..."}` is what it's sending. |
-| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. The `verified` attribute takes one of four values — `yes`, `no`, `unsigned`, `unknown` — and is `unknown` here because we used `auth.type: "none"`. With `did_signed` it becomes `yes` (signed and verified), `no` (signature mismatch), or `unsigned` (the peer didn't sign). |
+| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. The `verified` attribute takes one of four values — `yes`, `no`, `unsigned`, `unknown` — and is `unknown` here because the request didn't ask the gateway to verify peer signatures. Verification is opt-in per peer via the agent's `trust.verifyDID: true` flag (with an optional `trust.pinnedDID`) — it is **independent of `auth.type`**, which controls how the gateway authenticates outbound to the peer. Once `trust.verifyDID` is on, the label becomes `yes` (signed and verified), `no` (signature mismatch), or `unsigned` (the peer didn't sign). |
 | 5 | `task.finished` | That call is complete. |
 | 6 | `text.delta` (many) | The planner is now writing its own final answer, streamed a word or two at a time. Concatenate them in order (they all share a `part_id`). |
 | 7 | `final` | Done. `stop_reason: "stop"` means "natural end". `usage` reports token counts for billing. |

@@ -7,15 +7,71 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
 
 <AccordionGroup>
   <Accordion title="What is Bindu?">
-    Bindu is an AI agent framework for A2A (Agent-to-Agent communication), AP2, and X402 protocols. It handles infrastructure, identity, observability, and payments, turning any local agent script into a production-ready microservice without rewriting code.
+    Bindu is an AI agent framework that speaks the **A2A** protocol (Agent-to-Agent communication) and the **X402** micropayment extension. It handles infrastructure, identity (DIDs + Hydra OAuth2 + optional mTLS), observability, and payments, turning any local agent script into a production-ready microservice without rewriting code. Native AP2 support is on the roadmap, not shipped.
   </Accordion>
 
   <Accordion title="What is the A2A Protocol and why does Bindu use it?">
-    The A2A Protocol is a standardized JSON-RPC communication layer. Bindu uses it so agents can communicate, share context, and transfer artifacts regardless of what programming language or framework they were built with.
+    A2A is a JSON-RPC 2.0 protocol that defines task lifecycle, context sharing, agent cards, push notifications, and extensions — Bindu implements **A2A v0.3.0**. The reason Bindu uses it instead of rolling something custom: agents written in different languages, on different frameworks, deployed by different teams can talk to each other without a translation layer. The task-first execution model (every interaction becomes a tracked task with state) is what makes orchestration possible across that boundary.
   </Accordion>
 
   <Accordion title="When should I use a Workflow vs. a Team (multi-agent team)?">
     Use a **Workflow** for sequential, step-by-step processing within a single agent (e.g., search -> extract -> summarize). Use a **Team** when you need multiple specialized agents with different identities and tools collaborating on a complex problem.
+  </Accordion>
+
+  <Accordion title="Do I need a DID if I'm running with AUTH__ENABLED=false?">
+    No. With auth off, the middleware never inspects the request and no DID is required. As soon as you turn auth on, the bearer token's `client_id` becomes a DID (the Bindu default), and the agent demands a matching `X-DID` header + signature on every call. The cleanest path is to generate a DID once when you `bindufy()` your agent — `bindufy` writes it to `.bindu/oauth_credentials.json` and the same DID survives across restarts.
+  </Accordion>
+
+  <Accordion title="I lost the seed file for my DID. Can I recover it?">
+    No — the seed **is** the private key. Without it, you cannot sign requests as that DID and you cannot prove ownership. Generate a fresh seed, derive a new DID, and re-register it with Hydra (with the new public key in `metadata.public_key`). Anything that referenced the lost DID (allowlists, peer agent configs) needs to be updated to point at the new one. Treat the seed file with `.ssh/id_rsa`-level care: chmod 600, never commit, back up to a password manager or HSM.
+  </Accordion>
+
+  <Accordion title="Can I rotate my DID's keypair without changing the DID string itself?">
+    No. The DID's last segment is `sha256(public_key)[0..32]` formatted as a UUID — change the keypair and the derived DID changes too. This is intentional: the DID is a fingerprint of the public key, so "rotating keys but keeping the DID" would defeat the verification chain. If you need to rotate, mint a new DID, register the new public key in Hydra, and update consumers.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Getting Started Confusion
+
+<AccordionGroup>
+  <Accordion title="What's the difference between Bindu, the inbox, and the gateway?">
+    Three layers in the same stack, doing different jobs:
+
+    - **Bindu** — the agent framework itself. You wrap your handler with `bindufy()` and get a Starlette HTTP server speaking A2A on port 3773 by default.
+    - **Gateway** — a separate service (`gateway/`) that plans and fans out work across multiple Bindu agents. You call `POST /plan` with a high-level intent; the gateway decides which agents to invoke and orchestrates the multi-agent flow.
+    - **Inbox** — the UI (`inbox/`) that bootstraps a personal agent, registers it with Hydra, signs outbound messages, and renders agents as Gmail-shaped addresses (`fleet+agent@getbindu.com`). It's the easiest way to talk to a fleet without writing a caller.
+
+    You can run Bindu standalone without the gateway or inbox. The other two are convenience layers.
+  </Accordion>
+
+  <Accordion title="I called bindufy() and my script just hangs. Is that right?">
+    Yes — `bindufy()` starts a uvicorn server and blocks. That's the intended behavior for a single-agent process. If you want to do other work after starting the server, run it in a background thread, use `asyncio.create_task` on the underlying coroutine, or run multiple agents as separate processes orchestrated by a process manager like `supervisord` or `concurrently`.
+  </Accordion>
+
+  <Accordion title="Can I run multiple Bindu agents in one Python process?">
+    Technically yes, but it's almost always the wrong call. Each agent occupies its own port and has its own DID, manifest, and storage. Running them as separate processes is simpler, makes scaling and crash isolation cleaner, and matches how the `examples/gateway_test_fleet/` pattern works. If you really need in-process composition, build one Bindu agent whose **handler** orchestrates several underlying framework agents (Agno team, LangGraph nodes, CrewAI crew).
+  </Accordion>
+
+  <Accordion title="Where does my agent listen by default? How do I change it?">
+    Default is `http://localhost:3773` (`default_host=localhost`, `default_port=3773` in `settings.py`). Override with `BINDU_PORT=4000 python agent.py` or `BINDU_HOST=0.0.0.0 BINDU_PORT=4000 python agent.py`. If you need a different public URL than the bind address (e.g., behind a reverse proxy), set `BINDU_DEPLOYMENT_URL=https://my-agent.example.com` — that's what the agent card advertises.
+  </Accordion>
+
+  <Accordion title="My agent card shows url: 'http://localhost' even though I'm running on a real domain. Why?">
+    `BinduApplication` defaults `url` to `"http://localhost"` and `bindufy()` only overrides it when you pass `deployment.url` through the manifest. Set `BINDU_DEPLOYMENT_URL` in your env, or pass an explicit `url=...` into the deployment dict you give to `bindufy()`. Peers fetching `/.well-known/agent.json` will then see the real address.
+  </Accordion>
+
+  <Accordion title="How do I expose my local agent so another agent on a different machine can reach it?">
+    Three options, ordered by use case:
+
+    1. **Development / demo:** `bindufy(launch=True, ...)` creates an FRP tunnel and publishes a public URL. Convenient, not durable.
+    2. **Production:** put the agent behind your own load balancer + TLS terminator and set `BINDU_DEPLOYMENT_URL` to the public address.
+    3. **Peer-to-peer over public internet:** turn on mTLS so the agent serves HTTPS directly with a step-ca cert. See the mTLS section below.
+  </Accordion>
+
+  <Accordion title="Does Bindu need internet access to start?">
+    Only if auth is on and you point at the hosted Hydra (`https://hydra.getbindu.com`). With `AUTH__ENABLED=false`, `STORAGE_TYPE=memory`, `SCHEDULER_TYPE=memory`, and a local LLM (Ollama, LM Studio), the agent runs fully offline. Hydra is the only mandatory external dependency when auth is on — and you can self-host Hydra in an air-gapped network.
   </Accordion>
 </AccordionGroup>
 
@@ -89,15 +145,15 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
 
 <AccordionGroup>
   <Accordion title="How do I switch between different LLM providers?">
-    Because Bindu is framework-agnostic, you switch providers by changing the model configuration in your underlying framework (e.g., swapping `OpenAIChat` for `Anthropic` in Agno) and updating your `.env` API keys. Bindu's A2A wrapper does not need to change.
+    Bindu is framework-agnostic — it doesn't talk to the LLM directly, your driver framework does. Switch providers by changing the model config in your framework (e.g., Agno: swap `OpenAIChat` → `Anthropic`; LangChain: swap `ChatOpenAI` → `ChatAnthropic`; CrewAI: swap the `llm=` argument) and update the API keys in your `.env`. The Bindu wrapper around your handler stays unchanged.
   </Accordion>
 
   <Accordion title="How do I use a local model like Ollama or LM Studio with Bindu?">
-    Configure your driver framework to point to your local endpoint (e.g., `http://localhost:11434` for Ollama) and pass that agent to Bindu's `bindufy()` function.
+    Configure your driver framework to point at your local endpoint (`http://localhost:11434` for Ollama, `http://localhost:1234/v1` for LM Studio) and pass that agent to `bindufy()`. Bindu sees a normal handler — it doesn't care that the LLM happens to be local.
   </Accordion>
 
   <Accordion title="Can I use different models for different agents inside the same workflow?">
-    Yes. You can instantiate multiple agents with different models in your underlying framework (e.g., using AG2 GroupChat) and wrap the final orchestration logic in a single Bindu handler.
+    Yes. Instantiate each agent with its own model in your driver framework (Agno multi-agent team, LangGraph nodes, CrewAI crew, AutoGen group chat), wrap the orchestration logic in a single handler, and pass that handler to `bindufy()`. Bindu treats the whole composition as one agent with one DID; the model choices live entirely inside your handler.
   </Accordion>
 
   <Accordion title="How do I fall back to a cheaper model when my primary model fails?">
@@ -127,7 +183,95 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
   </Accordion>
 
   <Accordion title="What happens if an agent in the workflow fails mid-task?">
-    The task state transitions to `failed`. If you are using Bindu's built-in retry decorators, the framework will automatically attempt to recover using exponential backoff before permanently failing.
+    The task state transitions to `failed` and becomes immutable — refinements create a new task instead of reopening the old one. Bindu's internal scheduler and storage layers have retry-with-backoff for transient infrastructure failures (Redis hiccups, Postgres locks), but **your handler is not wrapped in automatic retries**. If you want LLM-call retries, wrap them yourself with a library like `tenacity` inside your handler. See the [Retry overview](/bindu/learn/retry/overview) for what the framework retries on your behalf.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Tasks & A2A Protocol Mechanics
+
+<AccordionGroup>
+  <Accordion title="What's the difference between taskId, contextId, and messageId?">
+    Three IDs, three scopes:
+
+    - **`messageId`** — one inbound or outbound message. Cheap, single-use.
+    - **`taskId`** — one unit of work the agent is tracking. Has a lifecycle (`submitted` → `working` → `input-required` or `completed`). The task is the thing you poll, cancel, and reference.
+    - **`contextId`** — a conversation thread that may contain many tasks. Use the same `contextId` across calls when you want the agent to see prior turns.
+
+    Rule of thumb: every task lives inside exactly one context. Every message lives inside exactly one task.
+  </Accordion>
+
+  <Accordion title="Why can't I send a follow-up message to a completed task?">
+    A2A's task immutability rule. Once a task reaches a terminal state (`completed`, `failed`, `canceled`, `rejected`), it cannot be reopened. To continue the conversation, create a **new task** in the same `contextId`. If the new task should build on prior outputs, include the old task's ID in `referenceTaskIds`. That's the explicit dependency edge an orchestrator uses to chain work.
+  </Accordion>
+
+  <Accordion title="How do I resume a task that's in input-required?">
+    Send another `message/send` call with the same `taskId` (still in `input-required`, not terminal yet) and the user's answer in the message body. The agent's handler will be called again with the new message appended to the task history. Once your handler returns a non-`input-required` result, the task transitions to its terminal state.
+  </Accordion>
+
+  <Accordion title="What is referenceTaskIds for?">
+    It's how you express dependencies between tasks. When you create Task4 and need Task2 and Task3's outputs available, pass `referenceTaskIds: [task2_id, task3_id]` in the message. The agent (and any orchestrator like Sapthami) can then read the referenced tasks' artifacts when planning Task4's work. Without `referenceTaskIds`, dependencies live only in your application logic and orchestrators can't reason about them.
+  </Accordion>
+
+  <Accordion title="I'm getting 'params.configuration field required' — what's that?">
+    Every `message/send` request must include `params.configuration.acceptedOutputModes`, even if it's just `["application/json"]`. The JSON-RPC schema validator rejects the request before auth or the handler even runs. Minimum valid params:
+
+    ```json
+    {
+      "message": { "role": "user", "parts": [{"kind":"text","text":"..."}], "messageId": "...", "contextId": "...", "taskId": "..." },
+      "configuration": { "acceptedOutputModes": ["application/json"] }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Can my agent return files instead of plain text?">
+    Yes — A2A defines a `FilePart` with two flavors: `FileWithBytes` (inline base64 payload) for small files, `FileWithUri` (presigned URL) for large ones. Your handler returns a part with `kind: "file"`, and the artifact attached to the completed task carries the file part. Clients fetch it via `tasks/get` after the task reaches `completed`.
+  </Accordion>
+
+  <Accordion title="Does Bindu support streaming responses?">
+    Yes. Call `message/stream` instead of `message/send` — the agent returns a Server-Sent Events (SSE) stream of intermediate status updates and the final result. Use this when your handler produces incremental output (token-by-token LLM responses, multi-step tool calls) and you want clients to render progress instead of waiting for the whole task.
+  </Accordion>
+
+  <Accordion title="How do clients get notified when a task completes without polling?">
+    Use push notifications. Call `tasks/pushNotificationConfig/set` with a webhook URL on a task, and Bindu will POST a notification to that URL on every status transition. Webhook payloads are DID-signed by the agent so the receiver can verify origin. See the [Notifications](/bindu/learn/notification/overview) page for the webhook contract.
+  </Accordion>
+
+  <Accordion title="How long are completed tasks kept around?">
+    With `STORAGE_TYPE=memory`, tasks live for the lifetime of the process. With `STORAGE_TYPE=postgres`, tasks persist forever unless you implement a retention policy yourself — Bindu does not auto-purge completed tasks. For production, set up a periodic job to archive or delete tasks older than your retention window (e.g., 30 or 90 days).
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Multi-Agent Topologies
+
+<AccordionGroup>
+  <Accordion title="Can one Bindu agent call another from inside its handler?">
+    Yes. Inside your handler, use any HTTP client (`httpx`, `requests`) to POST a JSON-RPC `message/send` to the other agent's URL. If the called agent has auth on, you need a bearer token + DID signature on the outbound call — easiest to use the gateway as a signing proxy, or use the helper in `bindu/utils/did/signature.py` to build the signed headers. Pass `contextId` through if you want the called agent to see your task's conversation history.
+  </Accordion>
+
+  <Accordion title="How does agent discovery work in a fleet?">
+    Every Bindu agent serves its public manifest at `/.well-known/agent.json`. To discover an agent, fetch that URL — you get the agent's DID, advertised skills, supported protocols, and capabilities. There is no central registry: a fleet "exists" because each agent's URL is known to its callers (registered in the inbox, configured in the gateway, hardcoded by your orchestrator). For more sophisticated discovery, the negotiation extension (`/agent/negotiation`) lets agents bid on capability requests.
+  </Accordion>
+
+  <Accordion title="When should I use the gateway vs. handler-to-handler calls?">
+    Use the **gateway** when you need plan-then-execute multi-agent workflows from outside (a client sends a high-level intent; the gateway decides who runs what). Use **handler-to-handler** calls when one agent has a deterministic dependency on another (an orchestrator agent that always delegates summarization to a summary agent, for example). Rule of thumb: gateway for dynamic, intent-driven fan-out; direct calls for static, code-driven composition.
+  </Accordion>
+
+  <Accordion title="How do I do a fan-out / fan-in across multiple agents?">
+    Two patterns:
+
+    1. **Gateway-driven:** POST a single `/plan` request to the gateway with the high-level intent. The gateway parses, dispatches to several agents in parallel, and aggregates the results.
+    2. **Handler-driven:** in your orchestrator agent's handler, use `asyncio.gather` to call N peer agents concurrently, then synthesize the responses. Each peer call produces its own `taskId`; you can include all of them in `referenceTaskIds` on the synthesis task so the dependency graph is explicit.
+  </Accordion>
+
+  <Accordion title="Can different agents share the same Postgres database?">
+    Yes — `PostgresStorage` namespaces every row by the agent's DID. Pointing N agents at the same `DATABASE_URL` is safe and is the recommended way to run a horizontally scaled fleet: each agent has its own slice, but ops only manages one database. Tasks, contexts, and artifacts never leak across DIDs.
+  </Accordion>
+
+  <Accordion title="Does Bindu support gRPC?">
+    Yes — there's a parallel gRPC transport in `bindu/grpc/` for language-agnostic agent clients. The gRPC port is separate from the HTTP port (3773 by default for HTTP). Use gRPC when you need an agent driver in a non-Python language and don't want to hand-roll the A2A JSON-RPC contract. See the [Multi-Language Sidecar](/bindu/grpc/overview) docs.
   </Accordion>
 </AccordionGroup>
 
@@ -163,7 +307,7 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
   </Accordion>
 
   <Accordion title="Can Bindu agents use skills and toolkits directly?">
-    Yes. You can define abstract capabilities in Bindu's `skills/` directory (using YAML or Markdown), which Bindu will advertise publicly. You then implement the actual tools in your handler.
+    Yes. A skill is a directory containing either a `skill.yaml` or a `SKILL.md` file describing the capability (id, name, description, input/output schema). You pass the directory path to `load_skills([...])`, and the agent advertises each loaded skill at `/agent/skills/{skill_id}`. There is no implicit `skills/` folder the framework auto-scans — paths are registered explicitly via `bindufy()`.
   </Accordion>
 
   <Accordion title="How do I connect a Bindu agent to a SQL or vector database?">
@@ -224,8 +368,24 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
     Set the environment variable `LOGGING__DEFAULT_LEVEL=DEBUG` before starting your agent.
   </Accordion>
 
-  <Accordion title="I'm getting 'AuthorizationError: JWT verification failed.' What does this mean?">
-    This means the client calling your agent provided an expired or invalid Bearer token. You can disable authentication for local development by setting `AUTH__ENABLED=false`.
+  <Accordion title="I'm getting HTTP 401 with JSON-RPC error -32009. What does this mean?">
+    The real error class is `AuthenticationRequiredError` (code `-32009`), and it means the bearer token is missing, expired, or not recognized by the Hydra introspection endpoint the agent is pointing at. Note: Bindu uses **opaque Hydra tokens** introspected at runtime, not JWTs — the legacy error message mentions "JWT" but the actual flow goes through `/admin/oauth2/introspect`.
+
+    Quick fixes in order: (1) mint a fresh token, (2) confirm your agent's `HYDRA__ADMIN_URL` matches the Hydra that issued the token, (3) for local development, set `AUTH__ENABLED=false` to bypass auth entirely. See [Making Authenticated Requests](/bindu/learn/authentication/making-requests) for the 4-gate decoder table.
+  </Accordion>
+
+  <Accordion title="I'm getting HTTP 403 with details.reason: did_mismatch / public_key_unavailable / invalid_signature. What's the difference?">
+    These are the three DID-signature failure modes the auth middleware reports — they only appear when the bearer token's `client_id` is a DID (the Bindu default):
+
+    - **`did_mismatch`** — the `X-DID` header doesn't equal the token's `client_id`. Mint the token with the same DID you send.
+    - **`public_key_unavailable`** — Hydra has no `metadata.public_key` for that DID. `GET /admin/clients/<did>` and patch the metadata.
+    - **`invalid_signature`** — body bytes changed between sign and send, JSON canonicalization mismatch (the JS-vs-Python whitespace gotcha), wrong seed, or clock skew >300s.
+
+    Full troubleshooting table and a canonical cross-language fixture lives at [Making Authenticated Requests](/bindu/learn/authentication/making-requests).
+  </Accordion>
+
+  <Accordion title="How do I check if authentication is actually enforced on my running agent?">
+    `curl http://localhost:3773/health` — if this returns `200` without an `Authorization` header, the agent is up but health is intentionally public. To check enforcement, POST a JSON-RPC method without a token: `curl -X POST http://localhost:3773/ -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{"role":"user","parts":[{"kind":"text","text":"hi"}],"messageId":"x","contextId":"y","taskId":"z"},"configuration":{"acceptedOutputModes":["application/json"]}}}'`. If you get `-32009`, auth is on. If you get a normal task response, `AUTH__ENABLED` is false.
   </Accordion>
 
   <Accordion title="My agent gets stuck in a tool-calling loop. How do I prevent this?">
@@ -241,7 +401,11 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
   </Accordion>
 
   <Accordion title="How do I trace agent runs with OpenTelemetry?">
-    Set `TELEMETRY_ENABLED=true` and configure the `OLTP_ENDPOINT` and `OLTP_HEADERS` in your environment. Bindu will automatically export traces to platforms like Langfuse or Arize.
+    Set `TELEMETRY_ENABLED=true` and configure `OLTP_ENDPOINT`, `OLTP_SERVICE_NAME`, and `OLTP_HEADERS` in your environment. Bindu will automatically export traces to platforms like Langfuse, Arize, or any OTLP-compatible collector.
+
+    <Note>
+    The env var prefix is `OLTP_*` (not `OTLP_*`) in the current code. Yes, that's a typo of the OpenTelemetry Protocol acronym — it's load-bearing in [`bindu/utils/config/enricher.py`](https://github.com/getbindu/Bindu/blob/main/bindu/utils/config/enricher.py), so use `OLTP_*` when configuring your `.env`.
+    </Note>
   </Accordion>
 </AccordionGroup>
 
@@ -251,10 +415,78 @@ description: 'Answers to common questions about Bindu, setup, architecture, and 
 
 <AccordionGroup>
   <Accordion title="What's the recommended way to deploy a Bindu agent to production?">
-    For production, deploy Bindu inside a Docker container connected to **PostgreSQL** (for storage) and **Redis** (for the task scheduler). Ensure `launch=True` (Tunneling) is disabled.
+    Deploy Bindu inside a Docker container, set `STORAGE_TYPE=postgres` with a `DATABASE_URL` and `SCHEDULER_TYPE=redis` with a `REDIS_URL`, and call `bindufy()` with `launch=False` (the default) so no public FRP tunnel is created. Front the container with your own load balancer + TLS, and turn auth on with `AUTH__ENABLED=true` pointing at a production Hydra. For wire-level encryption between agents, see the [Security Stack](/bindu/learn/authentication/security-stack) page for the full mTLS env block.
   </Accordion>
 
   <Accordion title="How do I scale a multi-agent crew horizontally?">
     Deploy multiple instances of your Bindu agent container behind a load balancer. Point all instances to the same Redis instance (`REDIS_URL`) and PostgreSQL database (`DATABASE_URL`) so they can share the task queue and memory state.
+  </Accordion>
+
+  <Accordion title="What metrics does Bindu expose at /metrics?">
+    Prometheus-formatted metrics including request rate, request latency histograms, active task counts grouped by state (`submitted`, `working`, `input-required`), worker utilization, queue depth, and storage operation durations. Scrape interval 15s is a reasonable default. Combine with the OTLP traces (`TELEMETRY_ENABLED=true`) for full request-path observability.
+  </Accordion>
+
+  <Accordion title="How do I do a zero-downtime deploy?">
+    Run at least two replicas behind a load balancer, both pointed at the same `DATABASE_URL` and `REDIS_URL`. Roll one replica at a time: drain in-flight HTTP requests via a `SIGTERM`-triggered graceful shutdown (uvicorn handles this), let the second replica pick up new tasks from the shared Redis queue, then bring the new version up. Because tasks live in Postgres and the queue lives in Redis, the rolling restart doesn't drop work in flight.
+  </Accordion>
+
+  <Accordion title="What's a healthy /health response look like?">
+    `GET /health` returns 200 with a JSON body including `application.penguin_id`, `application.agent_did`, runtime version, and storage/scheduler readiness. The `/healthz` endpoint is a stricter k8s-style readiness probe — returns 200 only when storage and scheduler are both reachable. Use `/health` for liveness, `/healthz` for readiness gates.
+  </Accordion>
+
+  <Accordion title="Can I run Bindu on Kubernetes?">
+    Yes. A typical deployment is a `Deployment` with N replicas, a `Service` for in-cluster traffic, an `Ingress` for external traffic, plus a `ConfigMap` for non-secret env (`STORAGE_TYPE=postgres`, `SCHEDULER_TYPE=redis`) and a `Secret` for credentials (`DATABASE_URL`, `REDIS_URL`, Hydra client secrets). Use `/healthz` as the readiness probe and `/health` as the liveness probe. For mTLS, store cert files in a `Secret` mounted at `~/.bindu/` or let the agent fetch them from step-ca on boot.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## mTLS & Wire Security
+
+<AccordionGroup>
+  <Accordion title="When do I need mTLS on top of Hydra OAuth2 + DID signatures?">
+    You don't need mTLS for a single-tenant agent behind your own TLS terminator — Hydra + DID signing already prove who the caller is and that the body wasn't tampered with. You **do** need mTLS when peer agents talk to each other directly over the open internet (no shared load balancer), when bearer tokens shouldn't traverse the wire in cleartext at any layer, or when you want a cryptographic bind between the TCP socket and the DID. See [Security Stack](/bindu/learn/authentication/security-stack) for the three-layer model.
+  </Accordion>
+
+  <Accordion title="What's the minimum env block to turn mTLS on for an agent?">
+    ```bash
+    export AUTH__ENABLED=true
+    export AUTH__PROVIDER=hydra
+    export HYDRA__ADMIN_URL=https://hydra-admin.getbindu.com
+    export HYDRA__PUBLIC_URL=https://hydra.getbindu.com
+    export MTLS__ENABLED=true
+    export MTLS__MODE=hybrid                    # mtls + Hydra both checked
+    export MTLS__REQUIRE_CLIENT_CERT=false      # set true for strict mTLS
+    export MTLS__CA_URL=https://ca.getbindu.com
+    export MTLS__CA_ROOT_URL=https://ca.getbindu.com/roots.pem
+    ```
+    The agent then registers with Hydra, exchanges an OIDC token at step-ca for a 24h X.509 cert, and serves uvicorn over HTTPS. Cert TTL is 24h; renewal kicks in 8h before expiry.
+  </Accordion>
+
+  <Accordion title="I set MTLS__ENABLED=true but the agent is still serving plain HTTP. Why?">
+    The #1 cause is `load_dotenv` ordering. Bindu's `app_settings` is constructed at module-import time. If your `agent.py` imports `bindu` before calling `load_dotenv()`, your `MTLS__*` env vars land in `os.environ` but never reach the settings singleton, and the agent silently falls back to HTTP.
+
+    **Fix:** call `load_dotenv()` first, before any `bindu` import. Confirm by greping the boot log for `Bootstrapping mTLS` — if it's missing, the settings never saw your env block.
+  </Accordion>
+
+  <Accordion title="step-ca is rejecting my token with 'Requested audience step-ca has not been whitelisted'. What gives?">
+    Your Hydra client was registered before mTLS was enabled, so its `audience` array doesn't include `step-ca`. Recent Bindu builds reconcile this drift on every boot — restart the agent and the registration flow patches the audience. If you're on an older build, delete `.bindu/oauth_credentials.json` and restart to force a fresh registration.
+  </Accordion>
+
+  <Accordion title="How do I verify the cert my agent is actually serving?">
+    ```bash
+    openssl x509 \
+      -in ~/.bindu/personal/.bindu/tls_cert.pem \
+      -noout -subject -dates -ext subjectAltName
+    ```
+    You should see the agent's DID in the SAN URI as `https://hydra.getbindu.com#did:bindu:...`. Issuer should be `CN=Bindu Intermediate CA`. Cert validity should be 24h from the renewal timestamp.
+  </Accordion>
+
+  <Accordion title="How do I force-rotate an mTLS cert without waiting for the 24h TTL?">
+    Delete the cert files and restart the agent — it regenerates on next boot:
+    ```bash
+    rm ~/.bindu/personal/.bindu/tls_*.pem ~/.bindu/personal/.bindu/ca_bundle.pem
+    ```
+    There is no CRL or OCSP in this design — short TTL + renewal **is** the revocation strategy.
   </Accordion>
 </AccordionGroup>

@@ -79,7 +79,10 @@ Output: GetCapabilitiesResponse { name, description, version, supports_streaming
 
 ### HealthCheck
 
-Return `{healthy: true, message: "OK"}`. The core uses this during heartbeat processing to verify your SDK is still responsive.
+Return `{healthy: true, message: "OK"}`. `GrpcAgentClient.health_check()` can call
+this on demand, but the core's `BinduService.Heartbeat` handler does **not**
+invoke it — heartbeats only update the registry timestamp. Implement the RPC
+anyway so future eviction sweeps and external watchdogs work.
 
 ---
 
@@ -104,7 +107,11 @@ The `config_json` is a JSON string matching the Python `bindufy()` config format
 
 ### Heartbeat
 
-Call this every 30 seconds to signal liveness. Without it, the core has no way to know whether your SDK process is still running.
+Call this on a regular interval — the reference TypeScript SDK uses 30 seconds — to
+signal liveness. The cadence is an SDK convention, not a core-enforced contract;
+the Python core records `last_heartbeat` but does not currently evict stale
+agents, so the value mainly matters when an external watchdog or future eviction
+sweep is wired in.
 
 ```text
 Input: HeartbeatRequest { agent_id, timestamp }
@@ -112,7 +119,11 @@ Input: HeartbeatRequest { agent_id, timestamp }
 
 ### UnregisterAgent
 
-Call this when your SDK process is shutting down cleanly, so the core can release the agent slot immediately instead of waiting for heartbeat timeout.
+Call this when your SDK process is shutting down cleanly so the core can release
+the agent slot immediately. Today this is the **only** way an agent leaves the
+registry — the Python core does not currently evict on heartbeat timeout, so
+without `UnregisterAgent` a crashed SDK leaks its registry entry until the core
+restarts.
 
 ```text
 Input: UnregisterAgentRequest { agent_id }

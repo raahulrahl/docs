@@ -126,8 +126,8 @@ The sidecar works because calls move in both directions. The SDK talks to the co
 | Method | What it does |
 | --- | --- |
 | `RegisterAgent` | "Here is my config, skills, and callback address. Turn me into a microservice." |
-| `Heartbeat` | "I am still alive." (every 30 seconds) |
-| `UnregisterAgent` | "I am shutting down. Clean up." Reserved for SDKs that implement graceful shutdown — the current TypeScript SDK does not call this; it relies on heartbeat timeout instead. |
+| `Heartbeat` | "I am still alive." (SDK convention — the reference TS SDK pings every 30s; cadence isn't enforced by the core) |
+| `UnregisterAgent` | "I am shutting down. Clean up." Reserved for SDKs that implement graceful shutdown — the current TypeScript SDK does not call this. The core's registry records `last_heartbeat` but does **not** evict stale entries automatically yet; cleanup happens on explicit `UnregisterAgent` or core restart. |
 
 **AgentHandler** (lives in the SDK on a dynamic port) — the core calls this when work arrives:
 
@@ -194,7 +194,7 @@ The sidecar model already gives you full parity for core infrastructure. The cur
     By default, deployments run **without** mTLS credentials — same-host setups (SDK and
     core on `localhost`) don't need them, and the upstream Hydra audience whitelisting for
     step-ca-issued certificates hasn't shipped yet. The code path is wired; the operational
-    rollout is the gating piece. See `docs/MTLS_DEPLOYMENT_GUIDE.md` for the deployment story.
+    rollout is the gating piece.
   </Accordion>
 
   <Accordion title="No Automatic Reconnection">

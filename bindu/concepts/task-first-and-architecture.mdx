@@ -250,14 +250,14 @@ graph TB
     subgraph "Protocol Layer"
         HTTP[HTTP/JSON-RPC]
         A2A[A2A Protocol v0.3.0]
-        AP2[AP2 Protocol v0.1.0]
         X402[X402 Payment]
+        Negotiation[Negotiation]
     end
     
     subgraph "Security Layer"
-        Auth[Authentication]
+        Auth[Hydra OAuth2]
+        mTLS[Mutual TLS]
         DID[DID Identity]
-        PKI[PKI/Crypto]
     end
     
     subgraph "Application Layer"
@@ -292,18 +292,18 @@ graph TB
     Client --> Discovery
     Discovery --> HTTP
     HTTP --> A2A
-    HTTP --> AP2
     HTTP --> X402
+    HTTP --> Negotiation
     
     A2A --> Auth
-    AP2 --> Auth
     X402 --> Auth
+    Negotiation --> Auth
     
     Auth --> DID
-    Auth --> PKI
+    Auth --> mTLS
     
     DID --> Server
-    PKI --> Server
+    mTLS --> Server
     
     Server --> Router
     Router --> Validator
@@ -331,11 +331,11 @@ graph TB
     style Discovery fill:#d4f5e1
     style HTTP fill:#fff4e1
     style A2A fill:#e1ffe1
-    style AP2 fill:#e1ffe1
     style X402 fill:#98fb98
+    style Negotiation fill:#e1ffe1
     style Auth fill:#ffd4e1
+    style mTLS fill:#ffd4e1
     style DID fill:#ffd4e1
-    style PKI fill:#ffd4e1
     style Server fill:#ffe1f5
     style Router fill:#ffe1f5
     style Validator fill:#ffe1f5
@@ -447,22 +447,22 @@ The architecture is easier to reason about when the layers are spelled out direc
 
 ### Protocol Layer
 
-- **A2A Protocol** - Agent-to-agent communication (task lifecycle, context management)
-- **AP2 Protocol** - Commerce extensions (payment mandates, cart management)
-- **X402 Protocol** - Micropayments (cryptographic signatures, multi-currency)
+- **A2A Protocol v0.3.0** - Agent-to-agent communication (task lifecycle, context management) over JSON-RPC 2.0
+- **X402 Protocol** - Micropayments delivered as an A2A extension (payment sessions, cryptographic signatures)
+- **Negotiation** - Bid/award flow for matching tasks to capable agents, exposed at `/agent/negotiation`
 
-All use JSON-RPC 2.0 for request and response handling.
+A2A method calls (`message/send`, `tasks/get`, `tasks/cancel`, `contexts/*`) are dispatched through JSON-RPC at `POST /`. Discovery, skills, payments, and negotiation use dedicated HTTP routes.
 
 ### Security And Identity Layer
 
-- **Authentication** - Auth0, OAuth2, API Keys, Mutual TLS
-- **DID (Decentralized Identity)** - Unique, verifiable agent identity
-- **PKI** - RSA/ECDSA key generation, signature verification
+- **Hydra OAuth2** - ORY Hydra acts as the OAuth2 / OIDC provider for authenticated routes
+- **Mutual TLS** - Optional cert-pinned transport via the mTLS extension (step-ca issuance)
+- **DID (Decentralized Identity)** - Unique, verifiable agent identity surfaced in the agent card and accepted in `allowed_dids` allowlists
 
 ### Application Layer
 
-- **BinduApplication** - Starlette-based web server with async/await, WebSocket support
-- **Request Router** - Routes to `/agent/card`, `/agent/skills`, `/tasks/*`, `/contexts/*`
+- **BinduApplication** - Starlette-based ASGI web server with async/await
+- **Request Router** - Registers `/`, `/.well-known/agent.json`, `/agent/private.json` (when configured), `/agent/skills`, `/agent/skills/{skill_id}`, `/agent/skills/{skill_id}/documentation`, `/agent/negotiation`, `/did/resolve`, `/health`, `/metrics`, plus payment-session routes when X402 is enabled
 - **Schema Validator** - Validates request structure and types
 
 ### Orchestration Layer
@@ -502,7 +502,7 @@ The architecture is designed around a few practical goals.
 - **Reliability** - Built-in error handling and recovery
 - **Observability** - Complete visibility into operations
 - **Security** - Authentication and identity built-in
-- **Standards** - Protocol-first design (`A2A`, `AP2`, `X402`)
+- **Standards** - Protocol-first design (`A2A`, `X402`)
 
 This is the point of the layered design: each part can evolve independently while still fitting into one coherent system.
 

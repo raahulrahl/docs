@@ -95,8 +95,8 @@ Three things just happened:
   <Step title="It POSTed to Hydra's admin API to register.">
     As an OAuth client, with its DID as the `client_id` and its public key in the metadata. **Idempotent** - safe to restart as many times as you like.
   </Step>
-  <Step title="It exchanged client credentials for an OAuth access token.">
-    That token is now cached in memory and refreshed 30 seconds before expiry.
+  <Step title="It wired up a client-credentials token provider.">
+    The first call to a `did_signed` peer triggers an OAuth `client_credentials` exchange against `BINDU_GATEWAY_HYDRA_TOKEN_URL`; the resulting access token is cached in memory and proactively refreshed 30 seconds before expiry. Concurrent callers during a refresh share the same in-flight fetch — Hydra is hit at most once per refresh window.
   </Step>
 </Steps>
 
@@ -132,18 +132,24 @@ That's your gateway's public key, served over HTTP, signed by no one but vouchin
 Change the `/plan` request:
 
 ```json
-"auth": { "type": "did_signed" }
+{
+  "name": "research",
+  "endpoint": "https://research.example.com",
+  "auth": { "type": "did_signed" },
+  "trust": { "verifyDID": true, "pinnedDID": "did:bindu:..." },
+  "skills": [{ "id": "web_research" }]
+}
 ```
 
 <Info>
-No `token` or `envVar` - the gateway will use its own Hydra token automatically.
+No `token` or `envVar` on `auth` — the gateway will use its own Hydra token automatically. The optional `trust` block is a separate decision: it tells the gateway to verify *incoming* signatures from this peer (and, if `pinnedDID` is set, to reject responses signed by any other key). You can sign outbound without verifying inbound, or verify inbound without signing outbound — they're independent.
 </Info>
 
 Re-fire. On the wire, three things change:
 
 <CardGroup cols={3}>
   <Card title="Body signed" icon="signature">
-    The gateway serializes the JSON-RPC body with `JSON.stringify` (matching the Python reference agent's `json.dumps(payload, sort_keys=True)` byte-for-byte — see `gateway/src/bindu/identity/local.ts`) and signs those exact bytes with its Ed25519 private key.
+    The gateway wraps the serialized JSON-RPC body in `{"body": <body>, "did": <gateway DID>, "timestamp": <unix seconds>}` and serializes that envelope with a Python-compatible sorted-keys serializer (matches the reference agent's `json.dumps(payload, sort_keys=True)` byte-for-byte, spaces and all — see [`gateway/src/bindu/identity/local.ts`](https://github.com/GetBindu/Bindu/blob/main/gateway/src/bindu/identity/local.ts)). Those exact UTF-8 bytes are then signed with the gateway's Ed25519 private key.
   </Card>
   <Card title="Three signing headers attached" icon="file-shield">
     `X-DID` (your gateway's DID), `X-DID-Signature` (base58 Ed25519 signature), and `X-DID-Timestamp` (unix seconds) go on every signed call.
@@ -171,14 +177,14 @@ On the receiving side, the agent:
 </Steps>
 
 <Tip>
-**Audit trail.** Each signed call's verification result is surfaced inline in the SSE stream — the `<remote_content>` envelope you saw in the quickstart carries a `verified` attribute with four possible values:
+**Audit trail.** Each peer call's verification result is surfaced inline in the SSE stream — the `<remote_content>` envelope you saw in the quickstart carries a `verified` attribute with four possible values:
 
 - `"yes"` — the peer signed and the signature checked out.
 - `"no"` — at least one signed artifact failed verification. The task is also marked `failed`.
 - `"unsigned"` — verification ran but the peer attached no signature. Treat the body as unverified hearsay.
-- `"unknown"` — verification didn't run (e.g., no pinned DID, or DID document resolution failed).
+- `"unknown"` — verification didn't run (no `trust.verifyDID`, no resolvable DID, or DID-document resolution failed).
 
-With `auth.type: "did_signed"` against a properly-configured peer, you'll see `verified="yes"` on every successful call.
+`auth.type` and `trust.verifyDID` are two separate knobs: `auth.type: "did_signed"` controls how the gateway authenticates itself on outbound calls, while `trust.verifyDID: true` (with an optional `trust.pinnedDID`) is what asks the gateway to verify the *peer's* signatures on the way back. Turn both on against a properly-configured peer and you'll see `verified="yes"` on every successful call.
 </Tip>
 
 <Warning>

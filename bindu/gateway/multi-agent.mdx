@@ -29,7 +29,7 @@ Five agents now, each on its own port:
 | `research_agent` | 3777 | Web search + summarize a factual question |
 | `faq_agent` | 3778 | Answers from a canned FAQ |
 
-Each is ~60 lines of Python. Open any one - say `joke_agent.py` - and you'll see a small configuration that wires a language model (`openai/gpt-4o-mini`) to a few lines of instructions (*"tell jokes, refuse other requests"*). Narrow scope on purpose so mistakes are visible.
+Each is under ~100 lines of Python. Open any one - say `joke_agent.py` - and you'll see a small configuration that wires a language model (`openai/gpt-4o-mini`, dispatched through OpenRouter) to a few lines of instructions (*"tell jokes, refuse other requests"*). Narrow scope on purpose so mistakes are visible.
 
 <Info>
 Gateway is already running from the [previous chapter](/bindu/gateway/quickstart); don't restart it.

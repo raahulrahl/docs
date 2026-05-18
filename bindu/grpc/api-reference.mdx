@@ -133,8 +133,8 @@ Let's walk through each phase and look at the exact message shapes involved.
       ```protobuf Request
       message HandleRequest {
         repeated ChatMessage messages = 1;  // Conversation history
-        string task_id = 2;
-        string context_id = 3;
+        string task_id = 2;                 // reserved — not populated by GrpcAgentClient today
+        string context_id = 3;              // reserved — not populated by GrpcAgentClient today
       }
 
       message ChatMessage {
@@ -153,6 +153,14 @@ Let's walk through each phase and look at the exact message shapes involved.
       }
       ```
     </CodeGroup>
+
+    <Note>
+      `task_id` and `context_id` are part of the wire contract, but
+      [`GrpcAgentClient._build_request`](https://github.com/getbindu/Bindu/blob/main/bindu/grpc/client.py)
+      only sets `messages` today — both fields arrive as empty strings on the SDK side.
+      Treat them as reserved for forthcoming task-context propagation; SDKs should
+      ignore them for now.
+    </Note>
 
     Response rules:
 
@@ -186,7 +194,10 @@ Let's walk through each phase and look at the exact message shapes involved.
       ```
     </CodeGroup>
 
-    SDKs send `Heartbeat` every 30 seconds and call `UnregisterAgent` before exiting.
+    SDKs typically send `Heartbeat` every ~30 seconds (the reference TypeScript SDK uses
+    30s) and call `UnregisterAgent` before exiting. The cadence is an SDK convention — the
+    Python core does not enforce or read it; `GRPC__HEALTH_CHECK_INTERVAL` exists in
+    settings but has no consumer in `bindu/grpc/` today.
   </Step>
 </Steps>
 
@@ -203,7 +214,7 @@ Lives in the Bindu core. SDKs call this to register and manage agents.
 | Method | What it does |
 | --- | --- |
 | `RegisterAgent` | SDK sends config + skills, core runs the full `bindufy` pipeline and returns the agent's identity |
-| `Heartbeat` | Keep-alive signal sent every 30 seconds |
+| `Heartbeat` | Keep-alive signal — SDK-driven cadence (TS SDK uses 30s; core does not enforce) |
 | `UnregisterAgent` | Clean shutdown call before SDK exit |
 
 ### AgentHandler (dynamic port)
@@ -213,15 +224,16 @@ Lives in the SDK. The core calls this when work arrives.
 | Method | What it does |
 | --- | --- |
 | `HandleMessages` | Core sends conversation history, SDK runs the developer's handler and returns the response |
-| `HandleMessagesStream` | Server-side streaming variant — supported in `GrpcAgentClient` via `use_streaming=True` |
+| `HandleMessagesStream` | Server-side streaming variant — Python core wired, no shipped SDK implements the server side yet |
 | `GetCapabilities` | Core queries what the SDK agent supports |
 | `HealthCheck` | Core verifies the SDK is responsive |
 
 <Info>
-  `HandleMessagesStream` is fully supported. `GrpcAgentClient` calls it when initialized
-  with `use_streaming=True`. The SDK's `AgentHandler` must implement this RPC to use
-  streaming. The TypeScript SDK currently returns `supports_streaming: false` from
-  `GetCapabilities`, but the proto contract and Python core are both fully ready for it.
+  `HandleMessagesStream` is **Python-side ready, not end-to-end usable**. `GrpcAgentClient`
+  calls it when initialized with `use_streaming=True`, and the proto contract is in place,
+  but no shipped SDK implements the server side. The TypeScript SDK still returns
+  `supports_streaming: false` from `GetCapabilities`. Use unary `HandleMessages` until an
+  SDK implements the streaming RPC.
 </Info>
 
 ---
