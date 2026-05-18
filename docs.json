@@ -105,14 +105,6 @@
                 ]
               },
               {
-                "group": "Create Bindu Agent",
-                "pages": [
-                  "bindu/create-bindu-agent/overview",
-                  "bindu/create-bindu-agent/configuration",
-                  "bindu/create-bindu-agent/deploy"
-                ]
-              },
-              {
                 "group": "Architecture",
                 "pages": [
                   "bindu/concepts/task-first-and-architecture"
