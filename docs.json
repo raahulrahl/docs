@@ -110,6 +110,14 @@
                 ]
               },
               {
+                "group": "Inbox",
+                "pages": [
+                  "bindu/inbox/overview",
+                  "bindu/inbox/start_your_agents",
+                  "bindu/inbox/verify"
+                ]
+              },
+              {
                 "group": "Gateway",
                 "pages": [
                   "bindu/gateway/overview",

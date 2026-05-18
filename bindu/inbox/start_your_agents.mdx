@@ -1,0 +1,167 @@
+---
+title: "Start Your Agents"
+description: "Let's start your agents"
+---
+
+## Where you are
+
+You've finished setup from the [overview](./overview) page. The inbox is
+running but empty - no identity, no contacts, no messages. This page takes
+you from that blank screen to your first signed, authenticated conversation
+in four steps.
+
+---
+
+## What clicking "Start" actually does
+
+When you click **Start**, the inbox doesn't just run a script. It gives you
+a cryptographic identity on the A2A network - a DID with an Ed25519 keypair,
+registered with Hydra OAuth. Every message you send from this point is signed
+with that key and auth-verified before any agent accepts it.
+
+That's what makes this different from a normal chat UI. The agents you talk
+to can prove the message came from you, and you can prove their replies came
+from them.
+
+---
+
+## Four steps to your first message
+
+Open [http://127.0.0.1:3775](http://127.0.0.1:3775). You'll see:
+- **Left sidebar**: folders (Inbox, Sent), an empty Contacts section, a **gear icon** at the top (Settings - API keys), and at the bottom a dashed-border **➕ Create your agent** button.
+- **Middle pane**: empty thread list.
+- **Right pane**: nothing selected.
+
+That's the cold-start state. The next four steps fill it in.
+
+> **Recommended first**: click the **gear icon** at the top of the sidebar
+> and paste your OpenRouter API key into Settings. The personal agent reads it
+> from the database on every spawn, so doing it before Step 2 saves you a retry.
+
+### 1 · Create your persona (opens the wizard)
+
+At the bottom of the sidebar, click **➕ Create your agent**. This opens the
+persona wizard.
+
+Fill in at least:
+- **Name** - anything. "Sheldon Cooper" works fine.
+- **Occupation** - a short title + organization.
+- **Personality traits** - a few comma-separated traits.
+
+Click **Save**. This writes `~/.bindu/personal/persona.json` and the
+bottom-of-sidebar card changes: it now shows your persona name, a gray dot,
+status **down**, and a **Start** button. **Nothing is signed yet** - you're
+just a row in the inbox DB.
+
+### 2 · Spawn your personal agent (this is what turns auth on)
+
+Click **Start** on the personal-agent card (where the wizard button used to be).
+
+Here's what happens behind the scenes, in order - this takes ~10s the first
+time, ~3s on subsequent spawns:
+
+1. **Port picked.** A free local port (typically in the 50000–65000 range) is assigned.
+2. **Files written to `~/.bindu/personal/`.**
+   - `agent.py` - rendered from the template in `server/personal-agent.ts`. Hand-edits get overwritten.
+   - `.env` - mode `0600` (POSIX), contains `AUTH__ENABLED=true`, `AUTH__PROVIDER=hydra`, `HYDRA__ADMIN_URL`, `HYDRA__PUBLIC_URL`, `OPENROUTER_API_KEY`.
+3. **`uv run python agent.py` is spawned** from the bindu repo root. Bindufy then:
+   - **Registers an OAuth client with Hydra** (`https://hydra-admin.getbindu.com` by default). `client_id` = your DID. Public key goes into the client metadata. Idempotent - re-runs reuse the same client.
+   - **Generates an Ed25519 keypair** under `~/.bindu/personal/.bindu/private.pem` + `public.pem`. First spawn only.
+   - **Starts the A2A server** on the assigned port and the gRPC core on its own.
+
+When the spawn returns, the slot flips to **alive** (green dot) and shows
+your DID:
+
+```
+did:bindu:<your-author>:<persona-slug>:<uuid>
+```
+
+That's your cryptographic identity from now on. Every outbound message the
+inbox sends is **bearer-token-authed against Hydra** *and* **Ed25519-signed
+with this key** - same envelope a fully-deployed bindufy agent uses.
+
+**If it didn't go alive:** see Troubleshooting → `Personal agent stays "down"`.
+
+### 3 · Add a peer (spawn two demo agents)
+
+You need at least one other agent to talk to. The inbox ships a script that
+spawns two single-purpose demo agents with auth on:
+
+```bash
+# from the inbox/ directory
+./scripts/spawn-demo-peers.sh
+```
+
+This boots:
+- **`joke_agent`** on [http://127.0.0.1:5773](http://127.0.0.1:5773) - tells jokes, declines anything else.
+- **`poet_agent`** on [http://127.0.0.1:5776](http://127.0.0.1:5776) - writes 4-line poems, declines anything else.
+
+Both run with `AUTH__ENABLED=true`, so they reject unauthenticated callers -
+same as your personal agent. Source:
+[`examples/gateway_test_fleet/joke_agent.py`](../examples/gateway_test_fleet/joke_agent.py)
+and [`poet_agent.py`](../examples/gateway_test_fleet/poet_agent.py).
+
+Output looks like:
+
+```
+Spawning demo peers for the inbox...
+[joke_agent] starting on port 5773...
+[joke_agent] ready, pid=12345, log=.../scripts/logs/joke_agent.log
+[poet_agent] starting on port 5776...
+[poet_agent] ready, pid=12346, log=.../scripts/logs/poet_agent.log
+Paste these into the inbox: Contacts → + → Add a peer
+joke_agent   http://127.0.0.1:5773
+poet_agent   http://127.0.0.1:5776
+```
+
+Now in the UI:
+1. Sidebar → **Contacts** section → click the **+** button.
+2. Paste `http://127.0.0.1:5773`. The inbox calls `/.well-known/agent.json`,
+   records the DID, and tags the contact `protected` (because Hydra auth is on).
+3. Repeat with `http://127.0.0.1:5776`.
+
+Both should now appear under **Agents** in the sidebar.
+
+Stop the demo peers later with `./scripts/stop-demo-peers.sh`. Their logs
+live under `inbox/scripts/logs/` - both are gitignored.
+
+> ℹ️ **Bringing your own agent works the same way.** Any bindufy URL - local
+> or remote, with or without auth - is a valid peer. The inbox auto-detects
+> the auth shape from the agent card.
+
+### 4 · Send your first message
+
+1. Click the big **Compose** button at the top of the sidebar.
+2. In the modal, pick **joke_agent** from the recipient picker.
+3. Type something like `tell me a joke about databases`.
+4. Press `⌘↵` (or click **Send**).
+
+The inbox does this:
+1. Mints (or reuses, if cached) a Hydra client-credentials token with `agent:read agent:write`.
+2. Builds the JSON-RPC `message/send` envelope with a fresh `contextId` + `taskId`.
+3. **Signs the canonical body** with your personal agent's Ed25519 private key,
+   attaches `X-DID`, `X-DID-Signature`, `X-DID-Timestamp` headers.
+4. POSTs to [http://127.0.0.1:5773/](http://127.0.0.1:5773/) with `Authorization: Bearer <jwt>`.
+
+Two things should happen within a few seconds:
+- A new row appears in the **Sent** folder (your outbound message).
+- The agent's webhook fires back to the inbox at `/webhooks/bindu/joke_agent`,
+  and a reply appears in the **Inbox** folder. Both messages are threaded
+  under the same `context_id`.
+
+Click the thread to read the reply. You're done - you've just sent a signed,
+authed A2A message and received an answer.
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    Inbox is as familiar -{" "}
+    <span className="brand-quote-highlight">as your email UI</span>.
+  </span>
+</span>
