@@ -1,0 +1,207 @@
+---
+title: "Troubleshooting"
+description: "Common boot failures, what causes them, and the exact command that fixes each one."
+---
+
+Everything below is something that's actually broken on someone's machine at least once. The pattern is the same: a one-line diagnosis, the root cause, the fix.
+
+---
+
+## `npm install` fails on `better-sqlite3`
+
+Native build needs Xcode CLI tools on macOS / `build-essential` on Linux.
+
+```bash
+# macOS
+xcode-select --install
+
+# Linux (Debian/Ubuntu)
+sudo apt install build-essential python3-dev
+
+# Then:
+rm -rf node_modules && npm install
+```
+
+---
+
+## Port already in use
+
+Symptom: `npm run dev` errors with `EADDRINUSE` on `3775` or `3787`. Usually an old inbox you forgot to stop.
+
+```bash
+# Find the offending process (confirms it's stale)
+lsof -ti:3775 -ti:3787 | xargs ps -p
+
+# Kill it
+lsof -ti:3775 -ti:3787 | xargs kill
+```
+
+<Warning>
+Don't change the ports. `3775` is hard-pinned in Vite config; `3787` is hard-coded in the server. If you have a real conflict on those ports, kill the conflicting process — don't try to relocate the inbox.
+</Warning>
+
+---
+
+## UI loads but everything fails with "Failed to fetch"
+
+The API on `3787` died. Check the `[api]` lines in your `npm run dev` output. Most common cause: `better-sqlite3` ABI mismatch after a Node upgrade.
+
+```bash
+npm rebuild better-sqlite3
+```
+
+If that doesn't do it, nuke `node_modules` and reinstall.
+
+---
+
+## Personal agent stays "down"
+
+You clicked **Start**, the dot stayed gray. Open `~/.bindu/personal/logs/agent.log` and read the last 30 lines.
+
+<AccordionGroup>
+  <Accordion title="OPENROUTER_API_KEY not set" icon="key">
+    The personal agent needs an LLM. Either paste the key into Settings (gear icon) or export it before `npm run dev`:
+
+    ```bash
+    export OPENROUTER_API_KEY=sk-or-v1-...
+    ```
+
+    Then click Stop → Start on the personal-agent card.
+  </Accordion>
+  <Accordion title="Hydra unreachable" icon="cloud-bolt">
+    Your network / firewall is blocking `hydra-admin.getbindu.com`. Either fix the connectivity or point at a Hydra you can reach:
+
+    ```bash
+    export HYDRA__ADMIN_URL=https://hydra-admin.<your-domain>
+    export HYDRA__PUBLIC_URL=https://hydra.<your-domain>
+    ```
+
+    Sanity check:
+
+    ```bash
+    curl -sI https://hydra.getbindu.com/.well-known/openid-configuration
+    ```
+
+    If that 200s but the agent still can't reach Hydra, it's probably a proxy/cert chain issue inside your shell — not the public Hydra.
+  </Accordion>
+  <Accordion title="uv: command not found" icon="terminal">
+    Install uv (see [Quickstart → Step 0](/bindu/inbox/quickstart#step-0-what-you-need)) or skip it entirely:
+
+    ```bash
+    export BINDU_PERSONAL_USE_VENV=1
+    ```
+
+    That runs the personal agent under `<repo>/.venv/bin/python` instead. Requires that you've already done `uv sync` from the repo root.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## `-32009: Authentication is required` on every send
+
+Your personal agent isn't running, or its Hydra OAuth client isn't registered.
+
+```bash
+ls ~/.bindu/personal/.bindu/oauth_credentials.json
+```
+
+If that file is missing, the Hydra registration step never completed. Stop and re-spawn from the UI, and watch `~/.bindu/personal/logs/agent.log` for the Hydra error line.
+
+---
+
+## `spawn-demo-peers.sh` says OPENROUTER_API_KEY not set
+
+The spawn script reads the key from either your shell env or `examples/.env`. Either is fine.
+
+```bash
+# Option A: export in the current shell
+export OPENROUTER_API_KEY=sk-or-v1-...
+
+# Option B: persist for the demo agents
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > examples/.env
+```
+
+Then re-run the script.
+
+---
+
+## `agent-not-reachable` when adding a peer
+
+The agent isn't up on that URL, or it's blocking `/.well-known/agent.json`.
+
+```bash
+curl http://127.0.0.1:5773/.well-known/agent.json
+```
+
+If that returns no JSON, the agent isn't running — start it (or re-run `./scripts/spawn-demo-peers.sh` for the demo ones).
+
+---
+
+## `pipedream-not-configured` when connecting Gmail/Notion
+
+The personal agent works fine without Pipedream — only the optional MCP tools need it. Either ignore the warning, or set the three Pipedream vars in Settings:
+
+- `PIPEDREAM_PROJECT_ID`
+- `PIPEDREAM_CLIENT_ID`
+- `PIPEDREAM_CLIENT_SECRET`
+
+---
+
+## `unauthorized` on `/api/plan` (multi-agent compose)
+
+Either `GATEWAY_API_KEY` isn't loaded (the inbox prints a warning at boot) or it doesn't match the gateway's value.
+
+The inbox auto-reads `gateway/.env.local` on startup. Make sure:
+
+- The file exists.
+- `GATEWAY_API_KEY=` in it matches what the gateway itself loads.
+- You restarted `npm run dev` after editing the file (env is read once at boot).
+
+---
+
+## `SyntaxError` on Python startup
+
+You're on Python below 3.12. Install 3.12+ and re-run `uv sync` so `.venv` picks up the right interpreter.
+
+```bash
+python3 --version          # should be 3.12+
+uv sync                    # rebuilds .venv against the correct python
+```
+
+---
+
+## Nuke everything and start over
+
+When you want a *truly* clean slate — new DID, new Hydra client, empty inbox:
+
+```bash
+# 1 · Stop demo peers
+./scripts/stop-demo-peers.sh
+
+# 2 · In the UI: click Stop on the personal-agent card, then close the tab.
+
+# 3 · Forget your DID + Hydra client
+rm -rf ~/.bindu/personal/
+
+# 4 · Wipe inbox history
+rm -f inbox/data/events.db inbox/data/events.db-{shm,wal}
+
+# 5 · Restart from the Quickstart
+```
+
+<Warning>
+Step 3 deletes your private key. If your DID has been registered anywhere off-machine (e.g. a long-running peer recognizes it), those peers will see you as a new identity after the reset. For local-only work this doesn't matter.
+</Warning>
+
+---
+
+## Still stuck?
+
+<CardGroup cols={2}>
+  <Card title="Open an issue" icon="github" href="https://github.com/getbindu/Bindu/issues">
+    Logs from `~/.bindu/personal/logs/agent.log` and the `[api]` lines from `npm run dev` are the two most useful things to attach.
+  </Card>
+  <Card title="Ask on Discord" icon="discord" href="https://discord.com/invite/3w5zuYUuwt">
+    Screenshots of the right rail + the Verify tab help a lot. Mention the personal-agent log tail if the spawn failed.
+  </Card>
+</CardGroup>

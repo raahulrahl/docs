@@ -139,6 +139,16 @@
                 ]
               },
               {
+                "group": "Inbox",
+                "pages": [
+                  "bindu/inbox/overview",
+                  "bindu/inbox/quickstart",
+                  "bindu/inbox/verify-auth",
+                  "bindu/inbox/using",
+                  "bindu/inbox/troubleshooting"
+                ]
+              },
+              {
                 "group": "Runtime",
                 "pages":[
                   "bindu/runtime/overview",

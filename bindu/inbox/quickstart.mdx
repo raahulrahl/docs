@@ -1,0 +1,248 @@
+---
+title: "Quickstart"
+description: "Five steps — one persona, two demo peers, one signed message."
+---
+
+This chapter has five steps after a short prereq pass. Follow them in order; nothing here assumes a previous step was skipped.
+
+---
+
+## Step 0 — What you need
+
+You need four things on your machine before this works.
+
+<CardGroup cols={2}>
+  <Card title="Node 20+ and npm" icon="node-js">
+    `node --version` should print v20 or higher. Get it at [nodejs.org](https://nodejs.org/).
+  </Card>
+  <Card title="Python 3.12+ and uv" icon="python">
+    `python3 --version` ≥ 3.12, `uv --version` present. uv installer below.
+  </Card>
+  <Card title="A bindu checkout" icon="code-branch">
+    Cloned and `uv sync`'d. The inbox locates the repo via `..` from its own folder.
+  </Card>
+  <Card title="An OpenRouter API key" icon="key">
+    Free trial credits, no card required. Grab one at [openrouter.ai/keys](https://openrouter.ai/keys).
+  </Card>
+</CardGroup>
+
+<AccordionGroup>
+  <Accordion title="Installing uv" icon="terminal">
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+  </Accordion>
+  <Accordion title="Cloning bindu from scratch" icon="github">
+    ```bash
+    git clone https://github.com/getbindu/Bindu.git
+    cd Bindu
+    uv sync          # installs python deps under .venv/
+    ```
+    The inbox lives at `Bindu/inbox`. If you moved it out of the repo, set `BINDU_REPO_DIR=/path/to/Bindu`.
+  </Accordion>
+  <Accordion title="Where to put the OpenRouter key" icon="key">
+    Either export it in your shell before `npm run dev`:
+    ```bash
+    export OPENROUTER_API_KEY=sk-or-v1-...
+    ```
+    …or paste it into the inbox's Settings tab after boot (gear icon, top-left). Settings-tab values win over env vars.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+**No Docker, no Postgres, no Hydra of your own.** The inbox uses the public Bindu Hydra at `hydra.getbindu.com` for OAuth out of the box. You only need your own Hydra if you're going multi-tenant.
+</Note>
+
+---
+
+## Step 1 — Boot the inbox
+
+From the repo root:
+
+```bash
+cd inbox
+npm install        # ~30s first time, cached after
+npm run dev
+```
+
+You should see two concurrent processes logging side by side:
+
+```
+[web] VITE v6.x  ready in 400 ms
+[web] ➜  Local:   http://127.0.0.1:3775/
+[api] [inbox] api on http://127.0.0.1:3787
+```
+
+<Tip>
+If you see `[inbox] GATEWAY_API_KEY not set` it's a **warning, not an error** — you only need the gateway key for multi-agent compose, which isn't part of this quickstart.
+</Tip>
+
+Open <http://127.0.0.1:3775>. You'll see:
+
+- **Left sidebar**: folders (Inbox, Sent), an empty Contacts section, a **gear icon** at the top (Settings — API keys), and at the bottom a dashed-border **➕ Create your agent** button.
+- **Middle pane**: empty thread list.
+- **Right pane**: nothing selected.
+
+That's the cold-start state. The next four steps fill it in.
+
+<Note>
+**Recommended first**: click the **gear icon** at the top of the sidebar and paste your OpenRouter API key into Settings. The personal agent reads it from the database on every spawn, so doing it before Step 2 saves you a retry.
+</Note>
+
+---
+
+## Step 2 — Create your persona
+
+At the bottom of the sidebar, click **➕ Create your agent**. This opens the persona wizard.
+
+Fill in at least:
+
+- **Name** — anything. *"Sheldon Cooper"* works fine.
+- **Occupation** — a short title + organization.
+- **Personality traits** — a few comma-separated traits.
+
+Click **Save**. This writes `~/.bindu/personal/persona.json` and the bottom-of-sidebar card changes: it now shows your persona name, a gray dot, status **down**, and a **Start** button.
+
+<Warning>
+**Nothing is signed yet.** Saving the persona is just a row in the inbox DB. The cryptographic identity comes in the next step.
+</Warning>
+
+---
+
+## Step 3 — Spawn your personal agent
+
+This is the step that turns auth on. Click **Start** on the personal-agent card (where the wizard button used to be).
+
+Here's what happens behind the scenes, in order — this takes ~10s the first time, ~3s on subsequent spawns:
+
+<Steps>
+  <Step title="Port picked">
+    A free local port (typically in the 50000–65000 range) is assigned.
+  </Step>
+  <Step title="Files written to ~/.bindu/personal/">
+    `agent.py` is rendered from the template in [`server/personal-agent.ts`](https://github.com/getbindu/Bindu/blob/main/inbox/server/personal-agent.ts) — hand-edits get overwritten. `.env` is written at mode `0600` with `AUTH__ENABLED=true`, `AUTH__PROVIDER=hydra`, `HYDRA__ADMIN_URL`, `HYDRA__PUBLIC_URL`, and `OPENROUTER_API_KEY`.
+  </Step>
+  <Step title="uv run python agent.py is spawned from the bindu repo root">
+    Bindufy then:
+
+    - **Registers an OAuth client with Hydra** (`https://hydra-admin.getbindu.com` by default). `client_id` = your DID. Public key goes into the client metadata. Idempotent — re-runs reuse the same client.
+    - **Generates an Ed25519 keypair** under `~/.bindu/personal/.bindu/private.pem` + `public.pem`. First spawn only.
+    - **Starts the A2A server** on the assigned port and the gRPC core on its own.
+  </Step>
+  <Step title="Slot flips to alive">
+    When the spawn returns, the card shows a green dot and your DID:
+
+    ```
+    did:bindu:<your-author>:<persona-slug>:<uuid>
+    ```
+
+    That's your cryptographic identity from now on.
+  </Step>
+</Steps>
+
+Every outbound message the inbox sends from here is **bearer-token-authed against Hydra** *and* **Ed25519-signed with this key** — same envelope a fully-deployed bindufy agent uses.
+
+<Tip>
+**If it didn't go alive:** see [Troubleshooting → Personal agent stays "down"](/bindu/inbox/troubleshooting#personal-agent-stays-down).
+</Tip>
+
+---
+
+## Step 4 — Add a peer
+
+You need at least one other agent to talk to. The inbox ships a script that spawns two single-purpose demo agents with auth on:
+
+```bash
+# from the inbox/ directory
+./scripts/spawn-demo-peers.sh
+```
+
+This boots:
+
+- **`joke_agent`** on `http://127.0.0.1:5773` — tells jokes, declines anything else.
+- **`poet_agent`** on `http://127.0.0.1:5776` — writes 4-line poems, declines anything else.
+
+Both run with `AUTH__ENABLED=true`, so they reject unauthenticated callers — same as your personal agent. Source: [`examples/gateway_test_fleet/joke_agent.py`](https://github.com/getbindu/Bindu/blob/main/examples/gateway_test_fleet/joke_agent.py) and [`poet_agent.py`](https://github.com/getbindu/Bindu/blob/main/examples/gateway_test_fleet/poet_agent.py).
+
+Output looks like:
+
+```
+Spawning demo peers for the inbox...
+  [joke_agent] starting on port 5773...
+  [joke_agent] ready, pid=12345, log=.../scripts/logs/joke_agent.log
+  [poet_agent] starting on port 5776...
+  [poet_agent] ready, pid=12346, log=.../scripts/logs/poet_agent.log
+
+Paste these into the inbox: Contacts → + → Add a peer
+  joke_agent   http://127.0.0.1:5773
+  poet_agent   http://127.0.0.1:5776
+```
+
+Now in the UI:
+
+<Steps>
+  <Step title="Open the contacts row">
+    Sidebar → **Contacts** section → click the **+** button.
+  </Step>
+  <Step title="Paste the first URL">
+    `http://127.0.0.1:5773`. The inbox calls `/.well-known/agent.json`, records the DID, and tags the contact `protected` (because Hydra auth is on).
+  </Step>
+  <Step title="Repeat for the second peer">
+    `http://127.0.0.1:5776`. Both should now appear under **Agents** in the sidebar.
+  </Step>
+</Steps>
+
+Stop the demo peers later with `./scripts/stop-demo-peers.sh`. Their logs live under `inbox/scripts/logs/` — both are gitignored.
+
+<Info>
+**Bringing your own agent works the same way.** Any bindufy URL — local or remote, with or without auth — is a valid peer. The inbox auto-detects the auth shape from the agent card.
+</Info>
+
+---
+
+## Step 5 — Send your first signed message
+
+<Steps>
+  <Step title="Open Compose">
+    Click the big **Compose** button at the top of the sidebar.
+  </Step>
+  <Step title="Pick a recipient">
+    In the modal, pick **joke_agent** from the recipient picker.
+  </Step>
+  <Step title="Write something">
+    Type something like `tell me a joke about databases`.
+  </Step>
+  <Step title="Send">
+    Press `⌘↵` (or click **Send**).
+  </Step>
+</Steps>
+
+The inbox does this:
+
+1. Mints (or reuses, if cached) a Hydra client-credentials token with `agent:read agent:write`.
+2. Builds the JSON-RPC `message/send` envelope with a fresh `contextId` + `taskId`.
+3. **Signs the canonical body** with your personal agent's Ed25519 private key, attaches `X-DID`, `X-DID-Signature`, `X-DID-Timestamp` headers.
+4. POSTs to `http://127.0.0.1:5773/` with `Authorization: Bearer <jwt>`.
+
+Two things should happen within a few seconds:
+
+- A new row appears in the **Sent** folder (your outbound message).
+- The agent's webhook fires back to the inbox at `/webhooks/bindu/joke_agent`, and a reply appears in the **Inbox** folder. Both messages are threaded under the same `context_id`.
+
+Click the thread to read the reply. **You're done.** You've just sent a signed, authed A2A message and received an answer.
+
+---
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Prove it with curl" icon="terminal" href="/bindu/inbox/verify-auth">
+    Confirm from your terminal that unauthed callers really do get rejected, and that the signature really does verify.
+  </Card>
+  <Card title="Use the UI" icon="window-maximize" href="/bindu/inbox/using">
+    Layout, multi-agent compose, state pills, and the reply box.
+  </Card>
+  <Card title="Something broke" icon="wrench" href="/bindu/inbox/troubleshooting">
+    Port collisions, dead spawns, Hydra unreachable, and the nuke-it-all reset.
+  </Card>
+</CardGroup>

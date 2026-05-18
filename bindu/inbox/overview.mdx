@@ -1,0 +1,133 @@
+---
+title: "The Bindu Inbox"
+description: "A Gmail-shaped operator console for the A2A network — every signed JSON-RPC call between two DIDs, threaded and verifiable from the right rail."
+---
+
+<Note>
+**Budget about 20 minutes** to go from `git clone` to a signed message landing in the right rail. **No prior bindu knowledge required** — every step in the next chapter explains what it does and what you should see.
+</Note>
+
+You've built an agent. Maybe two. They talk to each other over A2A. But the *traffic itself* — who called whom, with what body, signed by which DID, with which Hydra token — is invisible. It's HTTP. It's gone the moment it lands.
+
+The inbox is the thing that makes that traffic visible. Every JSON-RPC message between two DIDs lands here as a row. Threads group by `context_id`. Signatures are verified inline so you can see whether a peer is actually who it claims to be. It's an **operator console** — for you, your auditor, and your future self trying to figure out what went wrong at 2am.
+
+<p align="center">
+  <img src="/assets/inbox.png" alt="Bindu inbox — three-pane layout with folders, threads, and a signed message in the right rail" width="900" />
+</p>
+
+---
+
+## The roadmap
+
+<CardGroup cols={2}>
+  <Card title="What's in this section" icon="compass" href="/bindu/inbox/overview#what-ends-up-running">
+    The five processes that make the inbox tick, and why each one is there.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/bindu/inbox/quickstart">
+    Five steps. One persona. Two demo peers. One signed message.
+  </Card>
+  <Card title="Verify the auth" icon="shield-halved" href="/bindu/inbox/verify-auth">
+    Prove from your terminal that calls really are signed and authed.
+  </Card>
+  <Card title="Using the inbox" icon="window-maximize" href="/bindu/inbox/using">
+    Layout, sending, reading a thread, replying.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/bindu/inbox/troubleshooting">
+    Common boot failures and the env knobs that fix them.
+  </Card>
+</CardGroup>
+
+---
+
+## Why this exists
+
+Most agent frameworks treat the wire as someone else's problem. You write a handler, you `POST` to it, you hope it returns. If something goes wrong — wrong signer, expired token, a peer that lied about its DID — you get a stack trace and you start grepping logs across three machines.
+
+The inbox flips that. It treats **every A2A message as a first-class object** with:
+
+- A **state pill** — `submitted` · `working` · `input-required` · `payment-required` · `auth-required` · `completed` · `failed`.
+- A **trust pill** — `first-contact` (new peer) · `known` · `self` (your own agents / planner).
+- A **DID** of the counterparty — click for the full agent card.
+- The **canonical body** that was signed, the **signature**, and the **timestamp nonce** — all verifiable inline.
+
+You don't have to trust the UI. The Verify tab in the right rail re-runs the signature check against the peer's published `publicKeyBase58` — same code path a hostile peer would face on the wire.
+
+---
+
+## What ends up running
+
+By the time you finish the [quickstart](/bindu/inbox/quickstart), five things will be alive on your machine:
+
+| Port | Process | What it does |
+| --- | --- | --- |
+| `3775` | Vite dev server | The React UI you open in your browser. |
+| `3787` | Hono API (`server/index.ts`) | SQLite event store, webhook intake, outbound A2A composer. |
+| `<auto>` (e.g. `5xxxx`) | Your personal agent (Python, spawned on demand) | Your DID + Hydra OAuth client. Listens for inbound A2A and signs everything you send. |
+| `5773` + `5776` | Demo peers (joke + poet) | Two example agents to talk to. Optional — bring your own if you have them. |
+| `3774` | Gateway (optional) | The planner. Only spawns when you message ≥2 agents at once. |
+
+<Warning>
+`3775` is hard-pinned (Vite refuses to drift) and `3787` is hard-coded; both have to be free before you start. If something else is on those ports the inbox won't boot — see [Troubleshooting](/bindu/inbox/troubleshooting#port-already-in-use).
+</Warning>
+
+---
+
+## What "auth on" means here
+
+There are three independent auth layers in play. The inbox uses all three:
+
+| Layer | Who enforces it | Default |
+| --- | --- | --- |
+| **Peer A2A auth** — outbound calls must carry a JWT + DID signature | The peer's bindufy middleware (`-32009` if missing) | **On** |
+| **Operator gate** — `/api/*` on the inbox requires a bearer token | `inbox/server/index.ts` | Off (single-user dev) |
+| **Webhook gate** — agents POSTing back must carry a bearer token | `inbox/server/index.ts` | Off |
+
+The first is non-negotiable once your personal agent is alive. The other two are belt-and-suspenders for multi-user or exposed deployments — leave them off until you actually share the URL. The full mechanics live in [Verify the auth](/bindu/inbox/verify-auth#what-auth-on-means).
+
+---
+
+## What the inbox is not
+
+<AccordionGroup>
+  <Accordion title="It's not a CRM" icon="ban">
+    Threads are grouped by `context_id`, not by contact. The same peer can show up in dozens of unrelated threads and the inbox treats each one independently.
+  </Accordion>
+  <Accordion title="It doesn't host agents" icon="server">
+    Your personal agent runs as a separate Python process the inbox spawns on demand. Demo peers and any peer you add run wherever they run. The inbox is the *observer*.
+  </Accordion>
+  <Accordion title="It's not multi-user yet" icon="users">
+    Single operator, single machine. `BINDU_COMMS_TOKEN` is a gate for sharing the URL with a teammate; full SSO is on the roadmap.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## What you'll have by the end
+
+<CardGroup cols={3}>
+  <Card title="An identity">
+    Your operator DID (`did:bindu:<author>:<persona>:<uuid>`), an Ed25519 keypair on disk, and a Hydra OAuth client registered to that DID.
+  </Card>
+  <Card title="Two peers">
+    `joke_agent` and `poet_agent` running locally with `AUTH__ENABLED=true` — same auth shape as a production bindufy agent.
+  </Card>
+  <Card title="A verified thread">
+    A `Sent` row, an `Inbox` reply, both signed, both verified, both threaded under the same `context_id`.
+  </Card>
+</CardGroup>
+
+Let's go. Next up: [Quickstart](/bindu/inbox/quickstart).
+
+<span className="brand-quote">
+  <img
+    src="/logo/light.svg"
+    alt="Sunflower Logo"
+    width="32"
+    className="clean-icon"
+  />
+
+  <span className="brand-quote-text">
+    The inbox doesn't generate traffic —{" "}
+    <span className="brand-quote-highlight">it makes the traffic legible</span>.
+  </span>
+</span>

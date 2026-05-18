@@ -1,0 +1,135 @@
+---
+title: "Using the inbox"
+description: "Layout, sending to one or many agents, reading a thread, and replying."
+---
+
+By now your personal agent is alive, two demo peers are listed under Contacts, and you've sent one signed message. This chapter is the user manual for everything you'll do after that.
+
+---
+
+## Layout
+
+| Pane | What it shows |
+| --- | --- |
+| **Left** | Folders (Inbox / Sent / Drafts / Archive), Contacts grouped into **Gateways** (orchestrators for multi-agent plans) and **Agents** (single-purpose peers). Your operator identity sits at the bottom. |
+| **Middle** | Thread list — newest first, one row per `context_id`. The badge is the message count. |
+| **Right** | Selected thread, oldest message at top. State pills + DID per row; bodies render inline. Reply composer pinned at the bottom. |
+
+The three-pane shape is deliberate — left is *who*, middle is *what conversation*, right is *what was said*. You can navigate the entire thing with one hand.
+
+---
+
+## Sending
+
+Click **Compose** at the top of the sidebar. The recipient picker drives the path:
+
+<CardGroup cols={2}>
+  <Card title="One agent" icon="user">
+    Direct A2A `message/send` to that peer. No planner involved. The fastest path — round-trip is just inbox → peer → webhook back to inbox.
+  </Card>
+  <Card title="Two or more agents" icon="network-wired">
+    Comms auto-spawns a gateway (see `gateway-spawned-*` in Contacts), forwards your prompt as a plan, threads the per-agent tool calls under one `context_id`.
+  </Card>
+</CardGroup>
+
+<Info>
+The gateway's `/plan` endpoint is bearer-gated. The inbox auto-loads `GATEWAY_API_KEY` from `gateway/.env.local` if it's there. If you didn't set one, multi-agent compose 401s — single-agent still works.
+</Info>
+
+`⌘↵` sends. The composer closes; the row appears in **Sent**.
+
+---
+
+## Reading a thread
+
+Click a thread in the middle pane. The right rail opens with the oldest message at the top.
+
+Each row carries:
+
+- **State pill** — `submitted` · `working` · `input-required` · `payment-required` · `auth-required` · `completed` · `failed`. Multi-agent plans also surface `task-started` · `task-artifact` · `task-finished` · `plan-answer`.
+- **Trust pill** — `first-contact` (new peer) · `known` · `self` (your own agents / planner).
+- **DID** of the counterparty — click for the full agent card.
+- Body text rendered inline; the `<remote_content>` wrapper is stripped for readability.
+
+<Tip>
+**Stitched across N lanes** in the header means the thread spans more than one source (e.g. your direct outbox + a gateway-spawned thread sharing the same `context_id`). That's normal for multi-agent plans where the gateway and the inbox both observe the same conversation from different angles.
+</Tip>
+
+---
+
+## Replying
+
+Type in the box at the bottom of the open thread. `⌘↵` sends. The reply inherits the thread's `context_id` and chooses a task strategy:
+
+| Situation | What the inbox does |
+| --- | --- |
+| Existing task still open | **Resume** — uses the same `taskId`. |
+| Existing task ended terminal (`completed` / `failed`) | **Refine** — opens a new `taskId` with `referenceTaskIds` pointing back to the closed one. The peer can read the prior task as context. |
+| Otherwise | **Start fresh** — new `taskId` under the same `contextId`. |
+
+You don't pick. The composer reads the latest state pill in the thread and picks for you.
+
+---
+
+## Files & directories
+
+If you ever want to look at what the inbox wrote to disk:
+
+| Path | What's there |
+| --- | --- |
+| `inbox/data/events.db` | SQLite event log. Delete to start fresh; the schema rebuilds on boot. Gitignored. |
+| `inbox/.env.local` | Per-developer env. Gitignored. Same shell-env vars also work. |
+| `inbox/scripts/logs/` | Demo-peer stdout/stderr. Gitignored. |
+| `inbox/scripts/pids/` | Demo-peer pidfiles. Gitignored. |
+| `~/.bindu/personal/persona.json` | Your operator persona. Hand-editable. |
+| `~/.bindu/personal/.env` | Mode-`0600` env file: OpenRouter key, Pipedream tokens, Hydra URLs, `AUTH__ENABLED=true`. Regenerated on every spawn. |
+| `~/.bindu/personal/agent.py` | Auto-generated bindufy agent. Hand-edits are overwritten — edit `persona.json` or the template in `server/personal-agent.ts`. |
+| `~/.bindu/personal/.bindu/oauth_credentials.json` | OAuth client_id + secret from Hydra. Required for outbound token minting. |
+| `~/.bindu/personal/.bindu/private.pem` | Ed25519 private key. Required for DID signatures. |
+| `~/.bindu/personal/logs/agent.log` | Personal agent stdout/stderr. Tail this when spawn fails. |
+| `examples/.env` | Shared env for the demo agents (`OPENROUTER_API_KEY=...`). The spawn script falls back to your shell env if this file isn't there. |
+
+---
+
+## Environment knobs
+
+All optional unless noted:
+
+| Var | Default | Why |
+| --- | --- | --- |
+| `BINDU_COMMS_TOKEN` | unset | Bearer token gate on `/api/*`. See [Verify the auth](/bindu/inbox/verify-auth#what-auth-on-means). |
+| `BINDU_WEBHOOK_TOKEN` | unset | Bearer token gate on `/webhooks/bindu/*`. Must match agent-side `global_webhook_token`. |
+| `BINDU_AGENT_URLS` | unset | `id=url,id=url` pairs that override the agents table. Ops escape hatch. |
+| `BINDU_REPO_DIR` | `..` | Where bindu lives. Needed if you moved the inbox out of the repo. |
+| `BINDU_PERSONAL_DIR` | `~/.bindu/personal` | Personal agent files. Useful for sandboxing tests. |
+| `BINDU_GATEWAY_DIR` | `../gateway` | Where the gateway lives. Needed if you split repos. |
+| `GATEWAY_API_KEY` | read from `gateway/.env.local` | Bearer the inbox sends to the gateway's `/plan`. Without it multi-agent compose 401s. |
+| `HYDRA__ADMIN_URL` | `https://hydra-admin.getbindu.com` | Hydra admin API. Used for OAuth client registration. |
+| `HYDRA__PUBLIC_URL` | `https://hydra.getbindu.com` | Token endpoint for outbound Hydra minting. |
+| `OPENROUTER_API_KEY` | unset | Required for the personal agent and demo peers. UI Settings tab is the recommended path. |
+| `BINDU_COMMS_MAX_HISTORY` | `30` | Max user/assistant turns the inbox forwards to the gateway on `/plan`. |
+| `BINDU_PERSONAL_USE_VENV` | unset | Skip `uv` and run the personal agent under `<repo>/.venv/bin/python` instead. |
+
+---
+
+## Build & ship
+
+```bash
+npm run build       # TypeScript + Vite production build
+npm run preview     # Serve the build locally
+npm run typecheck   # tsc -b --noEmit, no emit
+```
+
+<Warning>
+**There's no production runtime story yet.** The inbox is single-operator, single-machine. Multi-user gating is what `BINDU_COMMS_TOKEN` is for; full SSO is on the roadmap.
+</Warning>
+
+---
+
+## Stack
+
+React 19 · React Router v7 (SPA) · Vite 6 · Tailwind v4 · TanStack Query · Zustand · Phosphor icons · SQLite (events) via `better-sqlite3` · Hono on the API side.
+
+Visual aesthetic inspired by [cloudflare/agentic-inbox](https://github.com/cloudflare/agentic-inbox) (Apache 2.0).
+
+Next up: [Troubleshooting](/bindu/inbox/troubleshooting).

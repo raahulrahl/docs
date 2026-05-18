@@ -1,0 +1,138 @@
+---
+title: "Verify the auth"
+description: "Don't trust the UI — prove from your terminal that calls really are signed and authed, and learn which layer rejects what."
+---
+
+The inbox shows a `signed / verified` badge on every row. That's nice, but the UI is the thing under test — you shouldn't trust it to grade its own homework. This chapter does two things:
+
+1. Walks you through curl commands that prove the auth is real.
+2. Explains which of the three auth layers rejects which class of attack, so you know what each one is actually buying you.
+
+---
+
+## Prove it from your terminal
+
+Open a new shell tab. Keep the inbox running.
+
+### 1 · Find the personal-agent port
+
+```bash
+curl -s http://127.0.0.1:3787/api/me | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
+# → http://127.0.0.1:61380
+```
+
+The port is dynamic — the inbox picked it on spawn. Substitute it into the next two commands.
+
+### 2 · Confirm unauthed callers are rejected
+
+```bash
+curl -s -X POST http://127.0.0.1:61380/ \
+  -H 'content-type: application/json' \
+  -d '{
+    "jsonrpc":"2.0",
+    "method":"message/send",
+    "id":"x",
+    "params":{
+      "message":{
+        "role":"user",
+        "kind":"message",
+        "parts":[{"kind":"text","text":"hi"}],
+        "messageId":"m",
+        "contextId":"c",
+        "taskId":"t"
+      }
+    }
+  }'
+```
+
+Expected:
+
+```json
+{"jsonrpc":"2.0","error":{"code":-32009,"message":"Authentication is required ..."},"id":null}
+```
+
+That `-32009` is bindufy's auth middleware saying *"no token, no signature, go away."* Same response a hostile peer would get.
+
+### 3 · Confirm the inbox can get through
+
+```bash
+curl -s -X POST http://127.0.0.1:3787/api/compose \
+  -H 'content-type: application/json' \
+  -d '{"agentId":"joke_agent","text":"hi"}'
+```
+
+Expected:
+
+```json
+{"ok":true,"status":200,"contextId":"...","taskId":"...","response":{"jsonrpc":"2.0",...}}
+```
+
+Same agent, same wire — but the inbox went through `/api/compose`, which mints a Hydra token and signs the body before forwarding. The peer accepts it because it can verify both layers.
+
+### 4 · Verify from inside the UI
+
+Open any thread and click **Verify** in the top-right of the right rail. Each row should report `signed / verified` against the peer's published `publicKeyBase58`. The detail rail's **Verify** tab shows:
+
+- The **DID match** (claimed DID resolves to the same public key the signature verifies against).
+- The **signature** bytes.
+- The **timestamp nonce** (rejects replays older than the configured window).
+
+If any of those is missing or red, the row is suspect — don't act on it.
+
+---
+
+## What "auth on" means
+
+There are three independent auth layers in play. The inbox uses all three.
+
+| Layer | Who enforces it | How to turn it on | Default |
+| --- | --- | --- | --- |
+| **Peer A2A auth** — outbound calls must carry a JWT + DID signature | The peer's bindufy middleware (`-32009` if missing) | Set `AUTH__ENABLED=true` on the peer. Done automatically when the inbox spawns your personal agent or the demo peers. | **On** |
+| **Operator gate** — `/api/*` on the inbox requires a bearer token | `inbox/server/index.ts` | `export BINDU_COMMS_TOKEN=$(openssl rand -hex 32)` before `npm run dev`. UI needs `?token=<token>` in the URL (SSE can't send headers). | Off (single-user dev) |
+| **Webhook gate** — agents POSTing to `/webhooks/bindu/:agentId` must carry a bearer token | `inbox/server/index.ts` | `export BINDU_WEBHOOK_TOKEN=<token>` and configure the same value as `global_webhook_token` on the bindufy side. | Off |
+
+The first is **non-negotiable** once your personal agent is alive — it's how every bindufy peer in the world recognizes legitimate callers.
+
+The other two are **belt-and-suspenders** for multi-user or exposed deployments. Leave them off until you actually share the URL with a teammate or put the inbox behind a tunnel.
+
+---
+
+## Why three layers, not one
+
+Each layer fails safe in a way the others can't:
+
+<AccordionGroup>
+  <Accordion title="An attacker who steals a bearer token still can't impersonate a DID" icon="key">
+    The Ed25519 signature won't verify against the claimed key. Tokens are bearer credentials — anyone who has them can use them — but the signature ties the body to a specific private key the attacker doesn't have.
+  </Accordion>
+  <Accordion title="An attacker who forges a signature still can't reach the agent without a token" icon="shield-halved">
+    Hydra rejects unauthed callers at the middleware layer before the signature is even checked. Stealing a key isn't enough; you also need OAuth scope.
+  </Accordion>
+  <Accordion title="An attacker who breaks both still can't replay yesterday's request" icon="clock">
+    The timestamp nonce is part of the canonical body, so replaying a captured request gets rejected once it ages out of the window.
+  </Accordion>
+</AccordionGroup>
+
+The token lives in the header. The signature lives in the body. The timestamp lives in the signature. Each one rejects a class of attack the others are blind to.
+
+<Tip>
+Full breakdown lives in [Identity & Trust → Security Stack](/bindu/learn/authentication/security-stack). The inbox is the easiest way to *watch* the security stack in action — every row in the right rail is one trip through all three layers.
+</Tip>
+
+---
+
+## What you've verified
+
+<CardGroup cols={3}>
+  <Card title="Peer rejects no-auth" icon="ban">
+    `-32009` on a raw curl. The middleware is actually running.
+  </Card>
+  <Card title="Inbox can authenticate" icon="check">
+    Same peer, same body, accepted via `/api/compose`. The signing path works.
+  </Card>
+  <Card title="UI tells the truth" icon="eye">
+    The Verify tab re-runs the same signature check. The badge is grounded, not decorative.
+  </Card>
+</CardGroup>
+
+Next up: [Using the inbox](/bindu/inbox/using).
