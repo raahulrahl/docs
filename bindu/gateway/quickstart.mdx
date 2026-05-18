@@ -1,25 +1,22 @@
 ---
 title: "Quickstart"
-description: "Seven steps - one question, one agent, one streaming response."
+description: "Six steps - one question, one agent, one streaming response."
 ---
 
-This chapter has seven steps. Follow them in order.
+This chapter has six steps. Follow them in order.
 
 ---
 
 ## Step 1 - What you need
 
-You need three things before starting. You may already have them; skim and decide.
+You need two things before starting. You may already have them; skim and decide.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="Node.js 22+" icon="node-js">
     The gateway is TypeScript; we run it with `tsx`, no separate build step.
   </Card>
   <Card title="OpenRouter API key" icon="key">
     Paid proxy to dozens of models. The gateway uses it for the planner LLM.
-  </Card>
-  <Card title="Supabase project" icon="database">
-    Hosted Postgres (free tier). Stores conversation history between turns.
   </Card>
 </CardGroup>
 
@@ -32,13 +29,11 @@ You need three things before starting. You may already have them; skim and decid
   <Accordion title="Getting an OpenRouter key" icon="key">
     Sign up at [openrouter.ai](https://openrouter.ai), add a few dollars of credit, and copy the key from the *API* section. It looks like `sk-or-v1-<long random string>`.
   </Accordion>
-  <Accordion title="Getting Supabase credentials" icon="database">
-    Create a project at [supabase.com](https://supabase.com), then grab two values from *Project Settings → API*:
-
-    - **Project URL** (looks like `https://abcdef.supabase.co`)
-    - **Service role key** (starts with `eyJ...`, this is sensitive - don't paste it in chat apps).
-  </Accordion>
 </AccordionGroup>
+
+<Note>
+**No database required.** The gateway is **stateless** — it holds per-request state in memory for the lifetime of each `/plan` call and drops it when the call ends. The calling client owns durable history: pass prior turns in the `history` field and the latest compaction summary in `prior_summary` on the next call. Old releases required Supabase; that's gone.
+</Note>
 
 ---
 
@@ -67,24 +62,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ---
 
-## Step 3 - Apply the database schema
-
-The gateway expects two tables in your Supabase project. From the Supabase web UI, go to **SQL Editor**, then run the two files in order:
-
-<Steps>
-  <Step title="Run the initial migration">
-    `gateway/migrations/001_init.sql`
-  </Step>
-  <Step title="Run the compaction revert migration">
-    `gateway/migrations/002_compaction_revert.sql`
-  </Step>
-</Steps>
-
-These create `gateway_sessions`, `gateway_messages`, and `gateway_tasks` tables with row-level security policies appropriate for a service-role caller. You won't edit these tables directly - the gateway reads and writes them.
-
----
-
-## Step 4 - Configure the gateway
+## Step 3 - Configure the gateway
 
 Create `gateway/.env.local` from the template:
 
@@ -95,10 +73,6 @@ cp gateway/.env.example gateway/.env.local
 Open it in an editor. Fill in:
 
 ```bash gateway/.env.local
-# Supabase (session store)
-SUPABASE_URL=https://<your-project-id>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<your service role key, starts with "eyJ...">
-
 # One bearer token the caller must send to talk to the gateway.
 # Generate a strong one:
 #   openssl rand -base64 32 | tr -d '=' | tr '+/' '-_'
@@ -108,7 +82,7 @@ GATEWAY_API_KEY=<paste generated token>
 # The planner AI
 OPENROUTER_API_KEY=sk-or-v1-<your key>
 
-# Gateway listens here
+# Gateway listens here (these are optional — defaults shown)
 GATEWAY_PORT=3774
 GATEWAY_HOSTNAME=0.0.0.0
 ```
@@ -125,14 +99,18 @@ OPENROUTER_API_KEY=sk-or-v1-<same key>
 Think of `GATEWAY_API_KEY` like the password on a movie ticket booth. Whoever holds this string can ask the gateway to do work on their behalf. The gateway checks it on every request by hashing both sides and comparing the hashes in constant time (so neither a timing nor a length attack can recover the token). Don't paste it into chat apps or commit it to a public repo. Rotate it when you suspect it leaked.
 </Note>
 
+<Info>
+You may notice old `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` lines in `.env.example`. Leave them blank — the gateway no longer reads them. See [`gateway/src/config/loader.ts:110`](https://github.com/GetBindu/Bindu/blob/main/gateway/src/config/loader.ts#L110) for the explicit removal note in the code.
+</Info>
+
 ---
 
-## Step 5 - Start one agent
+## Step 4 - Start one agent
 
 Open a terminal. Start the joke agent - it's one Python file that listens on port 3773 and answers with jokes:
 
 ```bash
-python3 examples/gateway_test_fleet/joke_agent.py
+uv run python examples/gateway_test_fleet/joke_agent.py
 ```
 
 You'll see output like:
@@ -147,7 +125,7 @@ Leave that terminal running.
 
 ---
 
-## Step 6 - Start the gateway
+## Step 5 - Start the gateway
 
 In a **second** terminal:
 
@@ -159,18 +137,18 @@ npm run dev
 Expected output:
 
 ```
-[bindu-gateway] no DID identity configured (set BINDU_GATEWAY_DID_SEED...)
+[bindu-gateway] no DID identity configured (set BINDU_GATEWAY_DID_SEED, _AUTHOR, _NAME to enable did_signed peer auth)
 [bindu-gateway] listening on http://0.0.0.0:3774
-[bindu-gateway] session mode: stateful
+[bindu-gateway] session mode: stateless
 ```
 
 <Info>
-The *"no DID identity configured"* line is fine for now. The [DID signing chapter](/bindu/gateway/identity) turns on cryptographic signing. Leave this terminal running too.
+The *"no DID identity configured"* line is expected for now. The [DID signing chapter](/bindu/gateway/identity) turns on cryptographic signing. `session mode: stateless` is the only mode in the current gateway — the `mode` field is kept on the schema for forward-compat but `stateful` is rejected at boot. Leave this terminal running too.
 </Info>
 
 ---
 
-## Step 7 - Ask a question
+## Step 6 - Ask a question
 
 In a **third** terminal, load your gateway token into the shell so you don't have to copy-paste it every time:
 
@@ -245,14 +223,20 @@ What each event means, in the order they arrived:
 
 | # | Event | What it means |
 |---|---|---|
-| 1 | `session` | The gateway opened a conversation. `session_id` is the unique handle; you can pass it back later to resume. |
+| 1 | `session` | The gateway opened an in-memory session for this `/plan` call. `session_id` is a per-call handle; `external_session_id` echoes whatever the client sent (or `null`). Since the gateway is stateless, this id is *not* a resumption key — to give the planner context across requests, pass prior turns via the `history` field on each call. |
 | 2 | `plan` | The planner started its first turn. |
 | 3 | `task.started` | The planner decided to call the joke agent. `input: {input: "..."}` is what it's sending. |
-| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. |
+| 4 | `task.artifact` | The agent replied. The text inside `<remote_content>` is the real answer. That envelope is there so the planner (and you) remember this is *untrusted* data. The `verified` attribute is `unknown` here because we used `auth.type: "none"`; with `did_signed` it would be `yes` or `no`. |
 | 5 | `task.finished` | That call is complete. |
 | 6 | `text.delta` (many) | The planner is now writing its own final answer, streamed a word or two at a time. Concatenate them in order (they all share a `part_id`). |
 | 7 | `final` | Done. `stop_reason: "stop"` means "natural end". `usage` reports token counts for billing. |
 | 8 | `done` | Last event. Close the connection. |
+
+You may also see one more event on long conversations:
+
+| Event | When | Meaning |
+|---|---|---|
+| `compaction-summary` | Mid-stream, zero or one per call | The planner ran out of context window, compacted history into a summary. Persist the `summary` field client-side and ship it back as `prior_summary` on the next `/plan` call. |
 
 ---
 
@@ -267,12 +251,11 @@ flowchart LR
     end
 
     subgraph Gateway
-        B[Bindu Gateway]
+        B[Bindu Gateway<br/>in-memory state]
     end
 
     subgraph Services
         C[OpenRouter]
-        D[Supabase]
     end
 
     subgraph Agent
@@ -281,13 +264,12 @@ flowchart LR
 
     A -->|POST /plan| B
     B -->|SSE stream| A
-    B -->|Planner| C
-    B -->|Sessions| D
+    B -->|Planner LLM| C
     B -->|A2A| E
 ```
 
 <Tip>
-The gateway is a **coordinator**. It doesn't answer the question itself; it picks an agent, sends the question, gets the reply, writes a final summary using its own planner LLM.
+The gateway is a **coordinator**. It doesn't answer the question itself; it picks an agent, sends the question, gets the reply, writes a final summary using its own planner LLM. It also doesn't persist anything — when the `/plan` call ends, the session is gone.
 </Tip>
 
 If this is the moment the idea clicks - great. Next we'll add a second agent so the gateway has a real choice to make: **[Adding a second agent →](/bindu/gateway/multi-agent)**
@@ -301,7 +283,7 @@ If this is the moment the idea clicks - great. Next we'll add a second agent so 
   />
 
   <span className="brand-quote-text">
-    Gateway keeps context between requests -{" "}
-    <span className="brand-quote-highlight">stored in Supabase</span>.
+    Gateway is stateless -{" "}
+    <span className="brand-quote-highlight">the client owns history</span>.
   </span>
 </span>

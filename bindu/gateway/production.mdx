@@ -30,7 +30,7 @@ You've seen the gateway end-to-end. This page is the map of what's next.
 
 <AccordionGroup>
   <Accordion title="Run the full test matrix" icon="flask-vial">
-    The `gateway_test_fleet` example has 13 prebuilt test cases covering edge behaviors (empty question, wrong bearer token on a peer, timeout, ambiguous question, nonexistent skill):
+    The `gateway_test_fleet` example has 15 prebuilt test cases (`Q1`..`Q12` plus `Q_MULTIHOP`, `Q_INBOX_REPRO_A`, `Q_INBOX_REPRO_B`) covering edge behaviors — empty question, wrong bearer token on a peer, timeout, ambiguous question, nonexistent skill, multi-hop chains, inbox reproductions:
 
     ```bash
     ./examples/gateway_test_fleet/run_matrix.sh
@@ -44,11 +44,11 @@ You've seen the gateway end-to-end. This page is the map of what's next.
   </Accordion>
 
   <Accordion title="Add a new agent" icon="plus">
-    Copy `examples/joke_agent.py`, change the instructions, run it on port 3779, add it to a `/plan` request. Watch the planner pick it up without any gateway-side config change.
+    Copy `examples/gateway_test_fleet/joke_agent.py`, change the instructions, run it on port 3779, add it to a `/plan` request. Watch the planner pick it up without any gateway-side config change.
   </Accordion>
 
   <Accordion title="Edit the planner's system prompt" icon="wand-magic-sparkles">
-    Open `gateway/agents/planner.md` and tighten or loosen its instructions. Changes take effect on the next plan - no restart needed.
+    Open `gateway/agents/planner.md` and tighten or loosen its instructions. The agent registry is loaded once at boot and cached — Ctrl+C the gateway and `npm run dev` again to pick up your edits.
   </Accordion>
 </AccordionGroup>
 
