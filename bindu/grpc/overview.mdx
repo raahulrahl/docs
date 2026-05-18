@@ -127,7 +127,7 @@ The sidecar works because calls move in both directions. The SDK talks to the co
 | --- | --- |
 | `RegisterAgent` | "Here is my config, skills, and callback address. Turn me into a microservice." |
 | `Heartbeat` | "I am still alive." (every 30 seconds) |
-| `UnregisterAgent` | "I am shutting down. Clean up." |
+| `UnregisterAgent` | "I am shutting down. Clean up." Reserved for SDKs that implement graceful shutdown — the current TypeScript SDK does not call this; it relies on heartbeat timeout instead. |
 
 **AgentHandler** (lives in the SDK on a dynamic port) — the core calls this when work arrives:
 
@@ -153,7 +153,7 @@ From the outside, both models look the same. Inside, the transport path differs.
 | Language | Python only | Any language with gRPC |
 | DID, auth, x402 | Full support | Full support (identical) |
 | Skills | Loaded from filesystem | Sent as data during registration |
-| Streaming | Supported | Supported |
+| Streaming | Supported | Wire contract ready; not implemented in shipped SDKs (see below) |
 
 <Info>
   From the outside, there is no visible difference. The agent card looks the same. The
@@ -183,13 +183,18 @@ If you want to see these ideas in working code, here are three examples that eac
 The sidecar model already gives you full parity for core infrastructure. The current gaps are about transport security and edge-case resilience. None of these will affect you during local development, but they are worth knowing about before you deploy to production.
 
 <AccordionGroup>
-  <Accordion title="No TLS">
-    gRPC connections use `grpc.insecure_channel`. Traffic between the core and SDK is
-    unencrypted.
+  <Accordion title="mTLS supported, off by default">
+    The transport supports mTLS — when `MTLSAgentExtension` provides credentials,
+    [`start_grpc_server`](https://github.com/getbindu/Bindu/blob/main/bindu/grpc/server.py)
+    binds via `server.add_secure_port(...)` and
+    [`GrpcAgentClient`](https://github.com/getbindu/Bindu/blob/main/bindu/grpc/client.py)
+    builds the channel via `grpc.secure_channel(...)`. When credentials are not provided,
+    the server falls back to `add_insecure_port` and the client to `grpc.insecure_channel`.
 
-    This is acceptable for now because the core and SDK run on the same machine
-    (localhost). The SDK spawns the core as a child process — there is no network
-    exposure. TLS/mTLS support is planned for remote deployments.
+    By default, deployments run **without** mTLS credentials — same-host setups (SDK and
+    core on `localhost`) don't need them, and the upstream Hydra audience whitelisting for
+    step-ca-issued certificates hasn't shipped yet. The code path is wired; the operational
+    rollout is the gating piece. See `docs/MTLS_DEPLOYMENT_GUIDE.md` for the deployment story.
   </Accordion>
 
   <Accordion title="No Automatic Reconnection">
@@ -234,7 +239,7 @@ This is the complete picture of what works today and what is still on the roadma
 | Feature | Python Agents | gRPC Agents |
 | --- | --- | --- |
 | Unary responses | works | works |
-| Streaming responses | works | works |
+| Streaming responses | works | proto + `GrpcAgentClient` ready; TypeScript SDK returns `supports_streaming: false` |
 | DID identity | works | works |
 | x402 payments | works | works |
 | Skills | works | works |
@@ -242,7 +247,7 @@ This is the complete picture of what works today and what is still on the roadma
 | Health checks | works | works |
 | Multi-language | Python only | any language |
 | Latency overhead | 0ms | 1–5ms |
-| TLS | N/A (in-process) | not implemented |
+| mTLS | N/A (in-process) | code wired, off by default (see Limitations) |
 | Auto-reconnection | N/A (in-process) | not implemented |
 
 <Info>

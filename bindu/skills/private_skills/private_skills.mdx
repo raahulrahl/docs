@@ -60,23 +60,26 @@ second URL behind a two-layer gate.
 
 ```python
 config = {
-    "author": "you@example.com",
-    "name": "rx_interaction_agent",
+    "author": "acme.compliance@example.com",
+    "name": "acme_compliance_agent",
     "deployment": {"url": "http://localhost:3773"},
     "skills": [
         "skills/public-greet",
         "skills/public-status",
     ],
     "private_skills": [
-        "skills/contraindication-check",
-        "skills/renal-adjusted-dosing",
+        "skills/cbam-line-classify",
+        "skills/eudr-due-diligence",
     ],
     "allowed_dids": [
-        "did:bindu:partner-hospital-network:agent:abc123",
-        "did:bindu:partner-pharmacy-system:agent:def456",
+        "did:bindu:partner-bank:agent:abc123",
+        "did:bindu:partner-customs-broker:agent:def456",
     ],
 }
 ```
+
+This is exactly what `examples/private_skills_agent/acme_compliance_agent.py` ships
+with — copy it, swap in your own DIDs, and you're done.
 
 On disk, public and private skills look identical - each is a folder under
 `skills/` with a `skill.yaml`. The split is purely a config-level decision.
@@ -139,22 +142,26 @@ The route exists but refuses without auth.
 Server logs:
 
 ```
-WARN  private_catalog_access caller=did:bindu:somebody-else:agent:xyz
-                              ip=10.0.0.7
-                              result=denied reason=not_in_allowlist
+WARN  private_catalog_access caller=did:bindu:somebody-else:agent:xyz ip=10.0.0.7 result=denied reason=not_in_allowlist
 ```
 
 **Allowlisted partner:**
 
+The merged card mirrors the public agent card shape but includes
+`private_skills` in the `skills` array. Each entry is the minimal skill
+reference (`id`, `name`, `documentation_path`) that Bindu puts on the
+agent card; orchestrators follow the `documentation_path` to
+`/agent/skills/{id}` for the full metadata.
+
 ```json
 {
   "id": "...",
-  "name": "rx_interaction_agent",
+  "name": "acme_compliance_agent",
   "skills": [
-    {"id": "public-greet",       "name": "greet"},
-    {"id": "public-status",      "name": "status"},
-    {"id": "contraindication-check", "name": "contraindication-check"},
-    {"id": "renal-adjusted-dosing", "name": "renal-adjusted-dosing"}
+    {"id": "public-greet",          "name": "greet",                  "documentation_path": "http://.../agent/skills/public-greet"},
+    {"id": "public-status",         "name": "status",                 "documentation_path": "http://.../agent/skills/public-status"},
+    {"id": "cbam-line-classify",    "name": "cbam-line-classify",     "documentation_path": "http://.../agent/skills/cbam-line-classify"},
+    {"id": "eudr-due-diligence",    "name": "eudr-due-diligence",     "documentation_path": "http://.../agent/skills/eudr-due-diligence"}
   ]
 }
 ```
@@ -162,10 +169,12 @@ WARN  private_catalog_access caller=did:bindu:somebody-else:agent:xyz
 Audit log:
 
 ```
-INFO  private_catalog_access caller=did:bindu:partner-bank:agent:abc123
-                             ip=10.0.0.5
-                             result=granted
+INFO  private_catalog_access caller=did:bindu:partner-bank:agent:abc123 ip=10.0.0.5 result=granted
 ```
+
+The log line format is emitted verbatim by
+[`bindu/server/endpoints/private_agent_card.py`](../../../../bindu/server/endpoints/private_agent_card.py) —
+grep for `private_catalog_access` to see exactly who's been looking.
 
 ### 5. Manage partners over time
 
@@ -218,16 +227,16 @@ deployments under strict SOC2 controls, talk to us before shipping.
 
 ### Where to look in the code
 
-- Handler: [`bindu/server/endpoints/private_agent_card.py`](../bindu/server/endpoints/private_agent_card.py)
-- Config plumbing: [`bindu/penguin/bindufy.py`](../bindu/penguin/bindufy.py) (search `private_skills`)
-- Manifest fields: [`bindu/common/models.py`](../bindu/common/models.py) (`AgentManifest`)
-- Tests: [`tests/unit/server/endpoints/test_private_agent_card.py`](../tests/unit/server/endpoints/test_private_agent_card.py)
-- Runnable example: [`examples/private_skills_agent/`](../examples/private_skills_agent/)
+- Handler: [`bindu/server/endpoints/private_agent_card.py`](../../../../bindu/server/endpoints/private_agent_card.py) — the `private_agent_card_endpoint` function, with the 401/403 branches and the `private_catalog_access` log lines.
+- Config plumbing: [`bindu/penguin/bindufy.py`](../../../../bindu/penguin/bindufy.py) — search for `private_skills` and `allowed_dids`; both flow from the config dict into the `AgentManifest`.
+- Manifest fields: [`bindu/common/models.py`](../../../../bindu/common/models.py) — `AgentManifest.private_skills: list[Skill]` and `AgentManifest.allowed_dids: list[str]`.
+- Route registration: [`bindu/server/applications.py`](../../../../bindu/server/applications.py) — the `/agent/private.json` route is only registered when either `private_skills` or `allowed_dids` is set.
+- Tests: [`tests/unit/server/endpoints/test_private_agent_card.py`](../../../../tests/unit/server/endpoints/test_private_agent_card.py) — covers the 401, 403, and 200 branches with a stub middleware.
+- Runnable example: [`examples/private_skills_agent/`](../../../../examples/private_skills_agent/) — `acme_compliance_agent.py` plus four skill folders (two public, two private).
 
 ### Related
 
-- [SKILLS.md](./SKILLS.md) - the underlying skill system both public and private skills are built on.
-- [AUTHENTICATION.md](./AUTHENTICATION.md) - how the Hydra-based auth layer works.
+- [Skills overview](/bindu/skills/introduction/overview) — the underlying skill system both public and private skills are built on.
 
 <span className="brand-quote">
   <img

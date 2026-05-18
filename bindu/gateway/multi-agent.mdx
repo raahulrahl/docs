@@ -136,15 +136,18 @@ The SSE output is the same - three `task.started` events for research, math, poe
 
 ## What is the planner, actually?
 
-Inside the gateway, there's a single agent configuration file called `gateway/agents/planner.md`. It's a markdown file with some frontmatter:
+Inside the gateway, there's a single agent configuration file called `gateway/agents/planner.md`. It's a markdown file with YAML frontmatter — this is the real shape from the repo:
 
 ```yaml
 ---
 name: planner
+description: Planning gateway for multi-agent Bindu collaboration
+mode: primary
 model: openrouter/anthropic/claude-sonnet-4.6
+temperature: 0.3
 steps: 10
 permission:
-  ...
+  agent_call: ask
 ---
 
 # System prompt body - the planner's own instructions.
@@ -153,14 +156,14 @@ permission:
 The body is the system prompt. On each `/plan` request, the gateway does this:
 
 <Steps>
-  <Step title="Read the planner's system prompt.">
-    Loaded fresh from disk each request - no cache.
+  <Step title="Read the planner's system prompt from the cached agent registry.">
+    The registry is built once at boot by scanning `gateway/agents/*.md`. There's no per-request reload — see `gateway/src/agent/index.ts`.
   </Step>
   <Step title="Add the user's question as a new user message.">
-    Plus any history from the session, if resuming.
+    Plus any prior turns the client sent in `history` (the gateway is stateless, so history travels on the request).
   </Step>
   <Step title="Build the tool list from your agents[] catalog.">
-    One tool per `agent.skill` pair.
+    One tool per `agent.skill` pair, named `call_<agent>_<skill>`.
   </Step>
   <Step title="Hand all of that to OpenRouter with streamText().">
     Claude (or whatever model you picked) drives the loop.
@@ -172,9 +175,9 @@ The body is the system prompt. On each `/plan` request, the gateway does this:
 
 Inside OpenRouter, Claude runs its agentic loop - text → tool call → tool result → more text → another tool call → final text. The gateway's job is just to execute the tool calls against your real agents and plumb the results back.
 
-<Tip>
-Open `gateway/agents/planner.md` and read the body. That's the instructions the coordinator AI follows. You can edit it and the next plan will see the changes - the file is loaded on every request, not cached.
-</Tip>
+<Warning>
+**Edits to `gateway/agents/planner.md` require a gateway restart.** The agent registry is populated once at boot and cached for the lifetime of the process. If you tweak the system prompt and want it to take effect, Ctrl+C and `npm run dev` again.
+</Warning>
 
 Next up: teach the planner reusable patterns without editing its system prompt. **[Recipes →](/bindu/gateway/recipes)**
 

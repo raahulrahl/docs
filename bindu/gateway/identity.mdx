@@ -55,28 +55,35 @@ That's enough for the gateway to have an identity. It won't be *useful* yet - we
 
 ## Hydra - the registration server
 
-[Ory Hydra](https://www.ory.sh/hydra/) is an open-source OAuth 2.0 / OIDC server. The Bindu team runs one at `hydra-admin.getbindu.com` that any Bindu gateway or agent can register with.
+[Ory Hydra](https://www.ory.sh/hydra/) is an open-source OAuth 2.0 / OIDC server. You run your own Hydra (or share one with your peers) — there is no Bindu-hosted public Hydra. The gateway integrates with whichever Hydra you point it at.
 
 <Info>
-**How it works:** You register once at boot; the registry stores your DID + public key; agents that want to talk to you fetch your public key by DID and verify your signatures with it.
+**How it works:** the gateway registers itself as an OAuth client at boot using its DID as the `client_id` and a secret derived deterministically from the seed. The registry stores your DID + public key in the client's metadata; agents that want to verify your signatures fetch your `/.well-known/did.json`.
 </Info>
 
-Two more env vars:
+Two more env vars, pointing at your Hydra:
 
 ```bash gateway/.env.local
-BINDU_GATEWAY_HYDRA_ADMIN_URL=https://hydra-admin.getbindu.com
-BINDU_GATEWAY_HYDRA_TOKEN_URL=https://hydra.getbindu.com/oauth2/token
+BINDU_GATEWAY_HYDRA_ADMIN_URL=https://hydra-admin.<your-domain>
+BINDU_GATEWAY_HYDRA_TOKEN_URL=https://hydra.<your-domain>/oauth2/token
+# Optional, space-separated. Defaults to "openid offline agent:read agent:write"
+# BINDU_GATEWAY_HYDRA_SCOPE="openid offline agent:read agent:write"
 ```
+
+<Note>
+**Partial Hydra config fails fast.** Both URLs must be set together, or neither. If you set only one, the gateway aborts boot with the error `Partial Hydra config — set both or neither`.
+</Note>
 
 Restart `npm run dev`. You'll now see:
 
 ```
 [bindu-gateway] DID identity loaded: did:bindu:you_at_example_com:gateway:<uuid>
 [bindu-gateway] public key (base58): 6MkjQ2r...
-[bindu-gateway] registering with Hydra at https://hydra-admin.getbindu.com...
+[bindu-gateway] registering with Hydra at https://hydra-admin.<your-domain>...
 [bindu-gateway] Hydra registration confirmed for did:bindu:...
 [bindu-gateway] publishing DID document at /.well-known/did.json
 [bindu-gateway] listening on http://0.0.0.0:3774
+[bindu-gateway] session mode: stateless
 ```
 
 Three things just happened:
@@ -136,24 +143,24 @@ Re-fire. On the wire, three things change:
 
 <CardGroup cols={3}>
   <Card title="Body signed" icon="signature">
-    The gateway computes a canonical JSON representation of the body, signs it with its Ed25519 private key, and attaches the signature as `X-Bindu-Signature` (plus the DID in `X-Bindu-DID`).
+    The gateway serializes the JSON-RPC body with `JSON.stringify` (matching the Python reference agent's `json.dumps(payload, sort_keys=True)` byte-for-byte — see `gateway/src/bindu/identity/local.ts`) and signs those exact bytes with its Ed25519 private key.
+  </Card>
+  <Card title="Three signing headers attached" icon="file-shield">
+    `X-DID` (your gateway's DID), `X-DID-Signature` (base58 Ed25519 signature), and `X-DID-Timestamp` (unix seconds) go on every signed call.
   </Card>
   <Card title="OAuth token attached" icon="key">
-    `Authorization: Bearer <token>` - the agent introspects this against Hydra to confirm it's real and unexpired.
-  </Card>
-  <Card title="Audit trail recorded" icon="file-contract">
-    The signing result is written to Supabase on the task row: *"at time T, gateway signed body hash H to reach agent DID D."*
+    `Authorization: Bearer <token>` — the cached client-credentials token from Hydra. Auto-refreshed 30s before expiry.
   </Card>
 </CardGroup>
 
 On the receiving side, the agent:
 
 <Steps>
-  <Step title="Fetches the gateway's /.well-known/did.json.">
-    Or uses a cached DID→key mapping from a previous interaction.
+  <Step title="Resolves the caller's DID to a public key.">
+    Via the gateway's `/.well-known/did.json` or a cached DID→key mapping.
   </Step>
-  <Step title="Verifies the signature matches the body.">
-    Using the gateway's public key.
+  <Step title="Verifies the X-DID-Signature against the request body.">
+    Using the gateway's public key (`Ed25519VerificationKey2020`, base58-encoded in the DID document's `authentication` block).
   </Step>
   <Step title="Introspects the bearer token against Hydra.">
     Confirms it's real and unexpired.
@@ -162,6 +169,17 @@ On the receiving side, the agent:
     Otherwise returns HTTP 401.
   </Step>
 </Steps>
+
+<Tip>
+**Audit trail.** Each signed call's verification result is surfaced inline in the SSE stream — the `<remote_content>` envelope you saw in the quickstart carries a `verified` attribute with four possible values:
+
+- `"yes"` — the peer signed and the signature checked out.
+- `"no"` — at least one signed artifact failed verification. The task is also marked `failed`.
+- `"unsigned"` — verification ran but the peer attached no signature. Treat the body as unverified hearsay.
+- `"unknown"` — verification didn't run (e.g., no pinned DID, or DID document resolution failed).
+
+With `auth.type: "did_signed"` against a properly-configured peer, you'll see `verified="yes"` on every successful call.
+</Tip>
 
 <Warning>
 If any of those three checks fail - signature mismatch, unknown DID, invalid token - the agent returns HTTP 401 and the gateway surfaces that as `event: task.finished` with `state: failed` and a useful error message.
@@ -179,8 +197,8 @@ If any of those three checks fail - signature mismatch, unknown DID, invalid tok
     BINDU_GATEWAY_DID_SEED=<seed>
     BINDU_GATEWAY_AUTHOR=you@example.com
     BINDU_GATEWAY_NAME=gateway
-    BINDU_GATEWAY_HYDRA_ADMIN_URL=https://hydra-admin.getbindu.com
-    BINDU_GATEWAY_HYDRA_TOKEN_URL=https://hydra.getbindu.com/oauth2/token
+    BINDU_GATEWAY_HYDRA_ADMIN_URL=https://hydra-admin.<your-domain>
+    BINDU_GATEWAY_HYDRA_TOKEN_URL=https://hydra.<your-domain>/oauth2/token
     ```
 
     Request side:
@@ -196,7 +214,7 @@ If any of those three checks fail - signature mismatch, unknown DID, invalid tok
 
     **Config** - set only the DID env vars (seed, author, name), not the Hydra URLs. For each peer, pre-register your gateway's DID with *that peer's* Hydra (out of band) and obtain an access token. Store the tokens in env vars per peer.
 
-    **Request side** - tell the gateway which env var to read:
+    **Request side** - tell the gateway which env var to read with `tokenEnvVar`:
 
     ```json
     "auth": {
@@ -205,7 +223,7 @@ If any of those three checks fail - signature mismatch, unknown DID, invalid tok
     }
     ```
 
-    Use this when a peer insists on their own Hydra.
+    A peer-scoped `tokenEnvVar` wins over the auto provider, so you can run a hybrid setup: most peers on auto, a few on per-peer manual tokens.
   </Tab>
 </Tabs>
 

@@ -4,7 +4,15 @@ description: "Bindu-specific credit accounting that sits next to x402. Not part 
 ---
 
 
-The credit system enables centralized management of agent execution costs and resource allocation. This is a Bindu-specific extension for managing agent marketplace economics.
+The credit system is a Bindu-specific extension for managing agent marketplace economics — centralized accounting of agent execution costs, creator monetization, and trust-gated access.
+
+<Note>
+  **Implementation status (2026-05): types only, no runtime enforcement.**
+
+  `AgentExecutionCost`, `ExecutionRequest`, and `ExecutionResponse` ship as TypedDicts in [`bindu/common/protocol/types.py:873-916`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py) and are accepted on the wire, but there are **no JSON-RPC handlers** wired to debit or credit balances, no credit ledger storage, and no middleware that blocks execution on insufficient credits. For monetary gating that *is* live, use the x402 paywall — see [Payments](./payment).
+
+  The schemas below are stable; the orchestration around them is in design. Treat the flow diagrams as the target shape, not what runs today.
+</Note>
 
 ### AgentExecutionCost
 

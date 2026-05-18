@@ -35,7 +35,7 @@ bindufy(config, handler)
 uv run agent.py
 ```
 
-You should see a sunflower in your terminal and a DID that looks like `did:bindu:you@example.com:research_agent:<id>`. That's your agent. It's online.
+You should see a sunflower in your terminal and a DID that looks like `did:bindu:you_at_example_com:research_agent:<id>`. The `@` and `.` in your email get sanitized to `_at_` and `_` ([source](https://github.com/getbindu/Bindu/blob/main/bindu/extensions/did/did_agent_extension.py)) so the DID stays URL-safe. That's your agent. It's online.
 
 ## What just happened
 
@@ -43,7 +43,7 @@ Four things are doing work in those 15 lines. None of them are infrastructure yo
 
 **`agent`** is your brain. Agno here, but it could be LangChain, CrewAI, a bare OpenAI call, or your own loop. Bindu doesn't care — it never opens the box.
 
-**`config`** is the agent's passport. The `author` and `name` get baked into a [DID](/bindu/learn/did/overview) — a cryptographic identity nobody can fake. The `deployment.expose: True` flips on an FRP tunnel so the rest of the agent internet can reach your laptop without router config.
+**`config`** is the agent's passport. The `author` and `name` get baked into a [DID](/bindu/learn/did/overview) — a cryptographic identity nobody can fake. The `deployment.expose` key is **required** (not optional): pass `True` to launch an FRP tunnel and get a public URL, or `False` to stay on localhost.
 
 **`handler`** is the function the rest of the world will call. It gets a list of messages, returns a response. That's the entire contract.
 

@@ -82,14 +82,18 @@ Use this when the user's question has three distinct phases:
 
 ## Watching it load
 
-Restart the gateway (Ctrl+C in its terminal, `npm run dev` again). You'll see a new log line on boot:
+Restart the gateway (Ctrl+C in its terminal, `npm run dev` again). The loader scans `gateway/recipes/` once at boot and caches the result — there is no per-request reload. To confirm yours was picked up, hit `/health`:
+
+```bash
+curl -s http://localhost:3774/health | jq '.runtime.recipe_count'
+```
 
 ```
-[recipe] loaded 3 recipes
+3
 ```
 
 <Info>
-Three because two recipes shipped with the gateway by default - `multi-agent-research` and `payment-required-flow` - plus your new one.
+Three because two recipes ship with the gateway by default — `multi-agent-research` and `payment-required-flow` (see [`gateway/recipes/`](https://github.com/GetBindu/Bindu/tree/main/gateway/recipes)) — plus your new one. If the count didn't go up, double-check the file path and frontmatter.
 </Info>
 
 Now fire the same three-agent question from the previous chapter. In the SSE stream you should see an extra event early on:

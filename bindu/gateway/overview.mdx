@@ -116,7 +116,7 @@ Modern LLMs are surprisingly good at this. Anthropic calls it [tool use](https:/
     You give it a list of agents per request. The agents run wherever they run - your laptop, a cluster, a third-party service. The gateway just calls them.
   </Accordion>
   <Accordion title="It doesn't have opinions about your agents" icon="handshake">
-    As long as each agent speaks [A2A](https://github.com/GetBindu/Bindu) (a small JSON-RPC 2.0 protocol), the gateway can call it. The Bindu team authored A2A, and `bindufy()`-built agents speak it out of the box.
+    As long as each agent speaks the [A2A protocol](https://github.com/a2aproject/A2A) (a small JSON-RPC 2.0 spec authored by Google), the gateway can call it. Bindu implements A2A natively in both the Python core and the TypeScript gateway, so `bindufy()`-built agents speak it out of the box.
   </Accordion>
 </AccordionGroup>
 

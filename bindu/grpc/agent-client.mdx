@@ -297,15 +297,27 @@ Three steps: ensure connection, call the SDK, convert back. That is the entire b
 
 ```python
 class GrpcAgentClient:
-    def __init__(self, callback_address: str, timeout: float = 30.0, use_streaming: bool = False):
+    def __init__(
+        self,
+        callback_address: str,
+        timeout: float = 30.0,
+        use_streaming: bool = False,
+        channel_credentials: grpc.ChannelCredentials | None = None,
+    ) -> None:
         self._address = callback_address
         self._timeout = timeout
         self._use_streaming = use_streaming
-        self._channel = None  # lazy-initialized on first call
-        self._stub = None
+        self._channel_credentials = channel_credentials
+        self._channel: grpc.Channel | None = None   # lazy-initialized on first call
+        self._stub: agent_handler_pb2_grpc.AgentHandlerStub | None = None
+
+    def _ensure_connected(self) -> None:
+        # Built with `grpc.secure_channel` when channel_credentials is provided,
+        # otherwise `grpc.insecure_channel` for same-host SDK setups.
+        ...
 
     def __call__(self, messages, **kwargs):
-        self._ensure_connected()  # creates channel + stub on first use
+        self._ensure_connected()
 
         # 1. Convert Python dicts to protobuf
         proto_msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
@@ -331,17 +343,30 @@ class GrpcAgentClient:
         return response.content
 ```
 
+Source: [`bindu/grpc/client.py`](https://github.com/getbindu/Bindu/blob/main/bindu/grpc/client.py).
+
 ### When It's Created
 
 The bridge gets attached during registration. After this point, every task for the agent flows through it.
 
+From [`bindu/grpc/service.py`](https://github.com/getbindu/Bindu/blob/main/bindu/grpc/service.py):
+
 ```python
 # In BinduServiceImpl.RegisterAgent():
-grpc_client = GrpcAgentClient(request.grpc_callback_address)
+grpc_client = GrpcAgentClient(
+    callback_address=request.grpc_callback_address,
+    timeout=app_settings.grpc.handler_timeout,
+)
 
-# In create_manifest():
-manifest.run = grpc_client  # GrpcAgentClient IS the handler now
+# Then handed to _bindufy_core as the handler:
+manifest = _bindufy_core(
+    config=config,
+    handler_callable=grpc_client,   # ← becomes manifest.run inside create_manifest()
+    ...
+)
 ```
+
+After this point, `manifest.run` is the `GrpcAgentClient` instance. Everything in `ManifestWorker` / `ResultProcessor` / `ResponseDetector` then proceeds as if it were a normal Python handler.
 
 ### Connection Lifecycle
 
@@ -363,12 +388,16 @@ These are used during heartbeat processing and capability discovery.
 <Warning>
   Current limitations:
 
-  - Streaming — supported via `use_streaming=True` on `GrpcAgentClient`. The SDK's
-    `AgentHandler` must implement `HandleMessagesStream` to use it. The TypeScript SDK
-    currently returns `supports_streaming: false`.
-  - Reconnection — if the SDK crashes, the client does not retry. The agent must be
+  - **Streaming** — `use_streaming=True` on `GrpcAgentClient` calls `HandleMessagesStream`,
+    which is fine in the proto. No shipped SDK implements the server side yet — the
+    TypeScript SDK returns `supports_streaming: false` from `GetCapabilities`.
+  - **Reconnection** — if the SDK crashes, the client does not retry. The agent must be
     re-registered.
-  - TLS — uses insecure channels. Only safe on localhost or trusted networks.
+  - **mTLS** — the channel is built via `grpc.secure_channel` *when* `channel_credentials`
+    is provided (from `MTLSAgentExtension.build_grpc_channel_credentials`), otherwise it
+    falls back to `grpc.insecure_channel`. Default deployments don't supply credentials
+    yet — see [Overview → Limitations](/bindu/grpc/overview#known-limitations) for the
+    operational gating.
 </Warning>
 
 ---

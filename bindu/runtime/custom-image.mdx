@@ -24,6 +24,12 @@ the VM.
 
 ### 1. Write a Dockerfile
 
+Your image must start an agent that listens on **`0.0.0.0:3773`** —
+that's the port bindu's boxd proxy forwards public HTTPS traffic to
+(see [`BINDU_DEFAULT_PORT`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py)).
+You can either run the script directly or use the `bindu serve --script`
+shim (both end up calling `bindufy()` inside your file):
+
 ```dockerfile
 FROM python:3.12-slim
 
@@ -36,8 +42,10 @@ RUN pip install -r requirements.txt    # or: pip install -e .
 # Copy your agent code
 COPY . /app
 
-# Entrypoint: invoke the agent script via the bindu CLI
-CMD ["bindu", "serve", "--script", "/app/my_agent.py"]
+# Make sure your bindufy() config binds 0.0.0.0:3773. Then either:
+CMD ["python3", "/app/my_agent.py"]
+# ...or via the CLI shim (equivalent):
+# CMD ["bindu", "serve", "--script", "/app/my_agent.py"]
 ```
 
 ### 2. Build and push to a registry
@@ -53,15 +61,25 @@ bindu deploy my_agent.py \
     --image=ghcr.io/me/my-agent:v1.2.0
 ```
 
-When `--image` is set, bindu changes its behaviour in three ways:
+When `--image` is set, bindu changes its behaviour ([deploy() source](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py)):
 
-- **No source upload** - your folder stays on your machine.
-- **No `pip install` step** - deps are already baked into the image.
-- **Image `CMD` is the entrypoint** - whatever you put in `CMD` starts
-  the agent.
+- **No source upload** — your folder stays on your machine.
+- **No `pip install` step** — deps are already baked into the image.
+- **Image `CMD` is the entrypoint** — whatever you put in `CMD` starts
+  the agent. Bindu does **not** exec into the container after creation;
+  it only waits for `GET /health` on port 3773.
+- **`--env` is not injected.** A2 source mode merges `--env` flags into
+  the agent process at start time, but the A1 branch skips
+  `_start_agent` entirely — env values currently never reach your
+  container. Bake required env into the image, or read them from a
+  secret store inside the agent. Tracked as a known gap; once fixed
+  this section will move to "everything else is identical."
 
-Everything else - health checks, log streaming, on-exit lifecycle -
-is identical to A2.
+Everything else — health checks, log streaming via
+`/tmp/bindu-agent.log`, on-exit lifecycle — works as in A2, **provided
+your image writes its stdout/stderr to `/tmp/bindu-agent.log`** if you
+want `bindu logs <agent>` to work. (The default A2 mode does this for
+you via shell redirection; A1 images have to opt in.)
 
 ## You see that
 

@@ -4,7 +4,11 @@ description: "TrustLevel, identity providers, and how DID verification fits into
 ---
 
 
-Trust and identity management ensures secure agent operations through role-based access control and identity verification. Integrates with enterprise identity providers for centralized authentication.
+Trust and identity management ensures secure agent operations through role-based access control and identity verification. Bindu authenticates with [Ory Hydra](https://www.ory.sh/hydra/) (OAuth2/OIDC); enterprise IdPs (Keycloak, Azure AD, Okta, Auth0) federate into Hydra rather than appearing as direct provider values.
+
+<Note>
+  **Implementation status (2026-05).** The TypedDicts on this page (`KeycloakRole`, `AgentTrust`) ship in [`bindu/common/protocol/types.py`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py) and are accepted by the trust extension. The authorization-layer enforcement (the `require_permissions` flag in `bindu/auth/`) is being rebuilt on Ory Kratos; until that lands, role-based enforcement on RPC methods may not be wired up end-to-end. The `KeycloakRole` name is historical — the shape stays whether the federated IdP is Keycloak or another OIDC provider.
+</Note>
 
 ### KeycloakRole
 
@@ -103,10 +107,14 @@ class AgentTrust(TypedDict):
     """The allowed operations and their required trust levels."""
 ```
 
+<Note>
+  The `IdentityProvider` type alias only accepts `"hydra"` or `"custom"` today (see [types-and-enums](./types-and-enums)). Federation to Keycloak, Azure AD, Okta, or Auth0 is configured upstream of Hydra — at the trust layer the provider is still recorded as `"hydra"`.
+</Note>
+
 **Use Case: Trusted Data Processing Agent**
 ```json
 {
-  "identityProvider": "keycloak",
+  "identityProvider": "hydra",
   "inheritedRoles": [
     {
       "roleId": "660e8400-e29b-41d4-a716-446655440001",

@@ -6,6 +6,14 @@ description: "How two agents agree on price, latency, and SLA before doing work.
 
 Agent-to-agent negotiation enables autonomous agents to coordinate, negotiate terms, and reach agreements for collaborative task execution. This protocol extension allows agents to propose, counter-propose, accept, or reject collaboration terms in a structured manner.
 
+<Note>
+  **Implementation status (2026-05): types only, no runtime endpoints.**
+
+  `NegotiationProposal`, `NegotiationContext`, `NegotiationStatus`, and `NegotiationSessionStatus` exist as TypedDicts/enums in [`bindu/common/protocol/types.py`](https://github.com/getbindu/Bindu/blob/main/bindu/common/protocol/types.py), but there are **no JSON-RPC methods** for `negotiation/*` and no server handlers driving the state transitions. The schemas are stable enough to plan against; the dispatch logic is not yet wired up.
+
+  Agents that need ad-hoc coordination today can carry these payloads inside `DataPart` content on regular `message/send` calls — the structure is well-defined, the routing is just up to your application.
+</Note>
+
 ### NegotiationProposal
 
 A structured negotiation proposal exchanged between agents during the negotiation process.

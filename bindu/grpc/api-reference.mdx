@@ -113,9 +113,16 @@ Let's walk through each phase and look at the exact message shapes involved.
     }
     ```
 
-    The core validates config, generates agent ID using `SHA256` of `author+name`, creates
-    Ed25519 DID keys, sets up x402 payments, creates the manifest with `GrpcAgentClient`
-    as handler, and starts the HTTP/A2A server on the configured URL.
+    The core validates config, generates agent ID as `UUID(SHA256("{author}:{name}").hexdigest()[:32])`
+    ([`bindufy.py:74-76`](https://github.com/getbindu/Bindu/blob/main/bindu/penguin/bindufy.py#L74)),
+    creates Ed25519 DID keys, sets up x402 payments (when `execution_cost` is provided),
+    creates the manifest with `GrpcAgentClient` as the handler, and starts the HTTP/A2A
+    server on the configured URL.
+
+    The DID's `author` and `name` segments are sanitized (`@` → `_at_`, `.` → `_`, spaces → `_`,
+    lowercased) — see [`did_agent_extension.py:124`](https://github.com/getbindu/Bindu/blob/main/bindu/extensions/did/did_agent_extension.py#L124).
+    So `author = "Dev@Example.com"`, `name = "my-agent"` produces a DID like
+    `did:bindu:dev_at_example_com:my-agent:{agent_id}`.
   </Step>
 
   <Step title="Execute">

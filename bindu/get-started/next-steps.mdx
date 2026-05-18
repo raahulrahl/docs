@@ -53,8 +53,10 @@ Same DID, same A2A protocol, same payment rails. The language is your choice.
 The errors you'll hit are almost always one of these:
 
 - **`address already in use` on `:3773`** — another Bindu agent is already running. `lsof -ti:3773 | xargs kill`.
-- **`OPENAI_API_KEY not set`** — `.env` file isn't being loaded. Add `from dotenv import load_dotenv; load_dotenv()` at the top.
-- **`ConfigError: 'author' is a required field`** — you typoed the key. Re-read [Config reference](/bindu/get-started/config-reference).
+- **`OPENAI_API_KEY not set`** — `.env` file isn't being loaded. Add `from dotenv import load_dotenv; load_dotenv()` at the top of your script. (`env_file` appears in the `bindufy()` docstring but is not actually wired up — call `load_dotenv` yourself.)
+- **`ConfigError: 'author' is a required field in the agent configuration.`** — you typoed the key, or are missing one of `author` / `name` / `deployment.url` / `deployment.expose`. Re-read [Config reference](/bindu/get-started/config-reference).
+- **`ConfigError: 'deployment.url' must be a valid http(s) URL, got '...'`** — your URL is missing the scheme or netloc. `urlparse` rejects anything not `http://`/`https://` with a host.
+- **`DATABASE_URL environment variable is required when STORAGE_TYPE=postgres`** — you opted into Postgres without giving it a connection string. Either set `DATABASE_URL` or drop `STORAGE_TYPE=postgres` to fall back to memory.
 - **Tunnel not working** — `expose: True` needs outbound 443 open. Behind a corporate firewall this won't fly. Use `expose: False` and a real domain.
 
 Beyond that:

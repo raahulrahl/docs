@@ -182,19 +182,25 @@ class OpenIdConnectSecurityScheme(TypedDict):
 
 ### MutualTLSSecurityScheme
 
+<Warning>
+  **Implementation status (2026-05): schema only, transport not yet deployed.**
+
+  The `MutualTLSSecurityScheme` TypedDict ships and can be advertised in an agent card, but Bindu does **not yet terminate mTLS at the transport layer** in production. The supporting code (`bindu/extensions/mtls/` — `step_ca_client.py`, `cert_store.py`, `mtls_agent_extension.py`) targets a Smallstep `step-ca` certificate authority and is gated behind Hydra audience-whitelisting work that hasn't shipped. See `docs/MTLS_DEPLOYMENT_GUIDE.md` for the design. Until that lands, treat this scheme as forward-looking — safe to declare, not yet enforced.
+</Warning>
+
 **Schema:**
 ```python
 class MutualTLSSecurityScheme(TypedDict):
     """Mutual TLS security scheme for certificate-based authentication.
-    
+
     Uses client certificates for mutual authentication where both client
     and server verify each other's identity. Provides strong cryptographic
     authentication for high-security service-to-service communication.
     """
-    
+
     type: Required[Literal["mutualTLS"]]
     """The type of the security scheme. Always "mutualTLS"."""
-    
+
     description: NotRequired[str]
     """Human-readable description of the security scheme."""
 ```
@@ -241,7 +247,7 @@ The `type` field acts as a discriminator to determine which security scheme is b
 | **API Key** | Service-to-service, webhooks | Very Low | Low-Medium |
 | **OAuth2** | User authorization, delegated access | High | High |
 | **OpenID Connect** | Enterprise SSO, identity verification | Medium | High |
-| **Mutual TLS** | Zero-trust, high-security services | High | Very High |
+| **Mutual TLS** *(planned)* | Zero-trust, high-security services | High | Very High |
 
 **Decision Guide:**
 
@@ -250,7 +256,7 @@ The `type` field acts as a discriminator to determine which security scheme is b
 - **Users need to authorize agents?** → Use OAuth2 Authorization Code flow
 - **Service-to-service without users?** → Use OAuth2 Client Credentials or API Key
 - **Enterprise SSO integration?** → Use OpenID Connect
-- **Maximum security required?** → Use Mutual TLS with client certificates
+- **Maximum security required?** → Mutual TLS is the planned answer (see warning above); until it ships, layer OAuth2 client-credentials over TLS at the network edge
 - **Legacy system with Basic auth?** → Use HTTP Auth with Basic scheme
 
 **Security Best Practices:**

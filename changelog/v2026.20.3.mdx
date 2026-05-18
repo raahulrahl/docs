@@ -1,0 +1,136 @@
+---
+title: "v2026.20.3"
+description: "x402 v2 hardening, private skills gated by DID, multi-chain payments"
+date: "2026-05-13"
+---
+
+## Security and Correctness Pass, Two Features Along for the Ride
+
+This is mostly a security-and-correctness release. The x402 payment middleware was rewritten on top of the x402 SDK v2 — that single migration closes four payment-bypass bug classes (body-parse fail-open, replay, unverified signatures, skipped balance check) and clears every high-severity x402 entry from `bugs/known-issues.md`. Three additional server bug classes are closed too: malformed `context_id` no longer silently spawns new conversations, task cancel is now CAS-protected, and a new optional `auth.allowed_dids` admission allowlist gates which Hydra-registered DIDs can reach handlers at all.
+
+The two operator-facing features riding along: the x402 middleware is now extensible to any EVM chain (SKALE Europa ships as the worked example), and agents can expose a **second skill surface** — `private_skills` — gated by Hydra auth plus a DID allowlist, for operators whose skill descriptions are themselves the commercial product.
+
+The frontend drops parquetjs, which removes 130+ transitive packages and two unpatched Apache Thrift advisories. Roughly 90 Dependabot alerts get patched via lock refresh.
+
+---
+
+## What You Need to Change
+
+<Warning>
+**Malformed `context_id` is now a hard error.** A client that sends an invalid UUID for `context_id` will get JSON-RPC `-32602` ("Invalid params") instead of having a new conversation silently created for them. If you have clients relying on the old behavior, fix them to send valid UUIDs or omit `context_id` entirely.
+</Warning>
+
+<Warning>
+**x402 SDK major bump.** `x402` is now `>=2.3.0,<3` (was `==0.2.1`). If you customized the payment middleware, expect API drift.
+</Warning>
+
+---
+
+## Security
+
+### Four x402 Bug Classes Closed
+
+The old x402 middleware on `v0.2.1` carried four payment-bypass shapes. All four are now closed:
+
+| Bug | Before | After |
+|-----|--------|-------|
+| Body-parse fail-open | Bare `except Exception` swallowed JSON errors and fell through to the handler | Narrow `except (JSONDecodeError, UnicodeDecodeError)` returning HTTP 402 |
+| Replay | No nonce store; signed payloads replayable indefinitely | `(network, asset, nonce)` claimed via Redis SETNX before the facilitator round-trip (InMemoryNonceStore fallback for dev) |
+| Unverified signatures | Signature verification was a stub that never ran | Full EIP-712 recovery runs on the facilitator |
+| Balance check skipped | Fall-through allowed requests when the asset contract had no code on chain | Fall-through removed |
+
+Real-facilitator smoke confirms forged signatures are now rejected with `invalid_exact_evm_signature` before the handler runs. Bindu Core's high-severity count drops from 4 to 0.
+
+### DID Admission Control
+
+Before, any Hydra-registered DID could call any agent. In multi-tenant or shared-Hydra deployments, anyone with `hydra create oauth2-client` could mint a token for their own DID and burn your agent's compute budget.
+
+New `AuthSettings.allowed_dids: list[str] | None = None`. Default is `None` (admit all, behavior unchanged). When set, the Hydra middleware runs an allowlist check after signature verification and rejects unlisted DIDs with HTTP 403 before any handler runs.
+
+### Cancel Race Closed
+
+The `cancel_task` handler used to read state, compare to terminal states, then call `scheduler.cancel_task` with no atomic guarantee between the steps. A worker that completed mid-cancel left the handler cancelling an already-terminal task and returning a response that didn't match the actual final state.
+
+The Storage ABC gains `update_task_state_if(task_id, from_state, to_state) -> bool`. Postgres implements it as a conditional `UPDATE ... WHERE state = :from RETURNING id`; the in-memory backend implements it as a compare-and-swap with no inter-await yield. The cancel handler CAS-claims the transition before signaling the scheduler — on a miss it reloads and reports the actual post-race state.
+
+### Dependency Refresh
+
+Direct bumps and lock refreshes clear ~90 Dependabot alerts:
+
+- `pynacl` `==1.5.0` → `>=1.6.2,<2` (libsodium incomplete-disallowed-inputs)
+- `web3` `==7.13.0` → `>=7.15.0,<8` (SSRF via CCIP Read OffchainLookup)
+- `cryptography` `==44.0.2` → `>=46.0.5,<47`
+- `pypdf` `<6` → `>=6.10.2,<7` (clears 44 alerts via lock refresh)
+- `cdp-sdk` `==0.21.0` → `>=1.45.0,<2` (frees the cryptography pin)
+- Frontend: `ip-address` `^9.0.5` → `^10.1.1` (Address6 XSS); `cookie` `^0.7.0` override; `minimatch` `^9.0.7` override scoped to `typescript-estree`
+- TruffleHog pre-commit tightened to `--results=verified` so the scanner stays usable (signal-to-noise jumps from 7% to 100% on a historical scan)
+
+---
+
+## Headline Features
+
+### Operator-Extensible EVM Chains for x402
+
+x402 v2 ships built-in pricing for Base mainnet and Base Sepolia. Operators wanting SKALE / Polygon / Avalanche / anything else previously had to fork the SDK.
+
+New `X402Settings.extra_networks` config surface — a Pydantic dict keyed on a friendly chain slug, carrying CAIP-2, asset address, and EIP-712 domain metadata. Each entry registers a money parser scoped to its CAIP-2, so the SDK's built-in Base parser still wins for Base. **SKALE Europa ships as the default extra network**, matching `facilitator.x402.fi`'s advertised bridged-USDC asset (decimals=6, name="USDC", EIP-712 version="2") exactly.
+
+Add chains by extending the dict — no Bindu code change required.
+
+### Private Skill Catalogs Gated by DID Allowlist
+
+For operators whose skill catalogue *is* the commercial product (compliance, legal, regulated workflows), exposing skills publicly on `/.well-known/agent.json` leaks the product menu.
+
+Two new optional keys on `AgentManifest` — `private_skills` and `allowed_dids` — expose a second endpoint at `/agent/private.json`. The Hydra middleware fronts it like any non-public route; the handler adds an allowlist check that rejects authenticated-but-unlisted DIDs with HTTP 403. The route isn't registered when unused — opt-in only.
+
+This closes the IP-leak shape with auth gating rather than encryption-at-rest. The JWE/E2E option remains as a Phase 2 if a real customer demands "operator doesn't trust the server itself" semantics.
+
+---
+
+## Documentation Refresh
+
+- `README.md` slimmed to a transformers-style layout; leads with the Trade Compliance OS pitch
+- `docs/PAYMENT.md` rewritten in the teaching voice: end-to-end paywall walkthrough with success and failure paths against a mock facilitator
+- `docs/PRIVATE_SKILLS.md` — new, teaching-voice doc
+
+---
+
+## Performance Impact
+
+- x402 v2 middleware: replay short-circuits at the nonce store **before** any facilitator round-trip, so duplicate-payment requests are cheaper to reject than they were to accept under v0.2.1
+- Admission control: a Python `in` check on a list — operators with long allowlists may want a pattern-match variant in a future release; exact-match is shipping first because it covers the common case
+- CAS cancel: one extra `UPDATE` on Postgres, one extra dict read on in-memory storage. Both inside the existing request span
+- The Storage ABC change is additive — existing backends gain one new method but their hot paths are unchanged
+
+---
+
+## Testing
+
+- 993 unit tests passing, 3 skipped, 12 warnings, runtime ~3.3s. `ruff` clean. `ty`: 0 diagnostics.
+- 7 admission tests covering default admit-all, exact-match hits, misses, deny-all empty-list posture, missing `client_did`, and 403-doesn't-forward
+- 3 storage CAS tests (success, mismatch, missing task)
+- 2 cancel-race tests (CAS-success happy path; CAS-failure does NOT signal the scheduler)
+- 7 context-id tests covering all four `_parse_context_id` branches plus the `_create_error_response` code-override path
+- 1 regression test for `send_message` returning `-32602` on malformed `context_id`
+- 8 private-skills endpoint tests exercising the auth + allowlist gate end-to-end
+- 11 `extra_networks` tests covering schema validation, money parser registration, non-default decimals (WETH 18-decimals), and fall-through
+- 10 nonce-store tests covering key construction, replay rejection, TTL expiry, and concurrent claim races
+- 9 x402 middleware tests exercising the full v2 dispatch path with a mocked ResourceServer
+- 2 opt-in live-facilitator smoke tests confirming the shipped SKALE Europa default matches `facilitator.x402.fi`'s `/supported` response
+
+---
+
+## Known Issues
+
+- **`skale-facilitator-cert-expired`** (low, ops): the only public x402 facilitator advertising SKALE chains is `facilitator.x402.fi`, whose TLS certificate is currently expired. Bindu's defaults still point at Coinbase's facilitator; SKALE operators set `X402__FACILITATOR_URL` themselves and either accept the cert error or front the upstream with a reverse proxy. Not a Bindu code bug — recommended production posture is self-hosting `x402-facilitator`.
+- **`authz-scope-check-behind-optional-flag`** (medium, security): the scope-check flag (`auth.require_permissions`) defaults to `False` and authorization disappears when it's not flipped on. Deferred to the planned Ory Kratos migration rather than patched in place.
+- **`no-rate-limit-or-quota-per-caller`** (medium): no per-DID quota or body-size limit on the Starlette app. Operators exposing Bindu directly on the public internet should add their own rate limiting at the proxy until this lands natively.
+- Historical Auth0 `client_secret` values committed in October 2025 at `e28e3417` are still reachable via `git log` (removed from HEAD but the blob persists). Rotation is an operator action, not a code fix.
+
+---
+
+## Contributors
+
+Lead maintainer: **Raahul Dutta** (16 commits since 2026.20.2).
+
+Pair-programming assist: **Claude Opus 4.7 (1M context)** — co-author on every commit in this release.

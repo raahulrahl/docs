@@ -110,7 +110,21 @@ Call this every 30 seconds to signal liveness. Without it, the core has no way t
 Input: HeartbeatRequest { agent_id, timestamp }
 ```
 
-Together, `RegisterAgent` and `Heartbeat` are the minimum control plane for the sidecar.
+### UnregisterAgent
+
+Call this when your SDK process is shutting down cleanly, so the core can release the agent slot immediately instead of waiting for heartbeat timeout.
+
+```text
+Input: UnregisterAgentRequest { agent_id }
+```
+
+<Note>
+  The TypeScript reference SDK does **not** currently call `UnregisterAgent` — its `SIGINT`
+  handler only clears the heartbeat interval and force-shuts the gRPC server. New SDKs
+  should improve on this and invoke `UnregisterAgent` from their shutdown path.
+</Note>
+
+Together, `RegisterAgent`, `Heartbeat`, and `UnregisterAgent` are the control plane for the sidecar.
 
 ---
 
@@ -179,19 +193,26 @@ Skills live in the developer's project, not in the core. Your SDK is responsible
 
 <Steps>
   <Step title="For each skill path in config.skills">
-    Look for `skill.yaml` or `SKILL.md`.
+    Look for `skill.yaml` first, then fall back to `SKILL.md`.
   </Step>
 
   <Step title="Read the file content">
     Load the raw file data.
   </Step>
 
-  <Step title="Parse the metadata">
-    Extract fields from YAML frontmatter or YAML body.
+  <Step title="Extract metadata">
+    For YAML: parse the body and pull out `name` and `description` (the reference TypeScript SDK
+    extracts only these two fields client-side — the rest is left to the core to parse from `raw_content`).
+    For Markdown: send `raw_content` as-is with `format: "markdown"`; the reference TS SDK does **not**
+    parse YAML frontmatter out of `SKILL.md`. If your SDK wants to surface more metadata locally
+    (e.g. for logging), parse it yourself — the core treats `raw_content` as the source of truth.
   </Step>
 
   <Step title="Send as SkillDefinition">
-    `{ name, description, tags, input_modes, output_modes, version, author, raw_content, format }`
+    `{ name, description, tags, input_modes, output_modes, version, author, raw_content, format }`.
+    `tags`, `input_modes`, and `output_modes` default to sensible values (`[]`, `["text/plain"]`,
+    `["text/plain"]` in the TS SDK). Only `raw_content` and `format` are strictly required for
+    the core to fully reconstruct the skill.
   </Step>
 </Steps>
 

@@ -1,0 +1,153 @@
+---
+title: "v2026.20.7"
+description: "bindu-communication inbox, secured outbound A2A, stateless gateway, personal agent"
+date: "2026-05-17"
+---
+
+## A Real Inbox for Agent-to-Agent Traffic
+
+This release ships **bindu-communication**, an operator inbox for watching agent-to-agent traffic, together with the authentication and observability work that lets it talk to Hydra-protected peers end-to-end.
+
+Picture Gmail, but the senders are AI agents and every message is a signed JSON-RPC artifact. Three panes: folders on the left (Inbox / Sent / Drafts / Archive), thread list in the middle, thread view on the right. SQLite event store. Threads grouped by A2A `context_id` and stitched across outbound sends, agent webhooks, and gateway plan traces. Compose, reply-in-thread, autosaved drafts, read tracking, bulk select. Real-time SSE the moment an inbound webhook lands.
+
+Outbound calls are now JWT-bearer plus DID-signed using the operator's **personal agent** as the signing identity, so the same operator can compose against any peer that enforces `AUTH__ENABLED=true` without rolling tokens by hand.
+
+The gateway also got a stateless refactor (it no longer owns a session DB — the client carries history per `/plan` call) and a fix for AI SDK v6 tool-error chunks so peer failures surface in the trace instead of disappearing into a hanging task-started row.
+
+---
+
+## Before and After
+
+| Before | After |
+|--------|-------|
+| The bindu-communication scaffold was a visual prototype against mock data | Real product surface: SQLite event store, real-time SSE, threads grouped by `context_id`, compose flow, draft autosave, bulk actions |
+| Outbound from comms to a Hydra-protected peer returned JSON-RPC `-32009` inside HTTP 200 — a silent "200 with red X" | Comms mints short-lived Hydra access tokens via the personal agent's `client_credentials` grant, signs the body with the agent's Ed25519 key, attaches `X-DID` / `X-DID-Signature` / `X-DID-Timestamp` on every send |
+| Multi-agent plans through the gateway failed silently — comms declared `auth: { type: "none" }`, the gateway hit 403s, AI SDK v6 had no `tool-error` case, the planner LLM hallucinated explanations like "authentication is not available in this session" | Comms declares `auth: { type: "did_signed" }`; the gateway uses its own `BINDU_GATEWAY_DID_SEED` identity to mint tokens and sign peer calls; tool-error chunks update `ToolPart` state and publish `ToolCallEnd` with the error so the inbox renders failed rows with the error text inline |
+| Failed peer calls left a task-started row hanging forever | `task.finished {state: "failed", error}` reaches the inbox; the row goes to "failed" with the error body inline |
+| Gateway owned its own session DB, duplicating state the client already had | Gateway is stateless — the client posts `history` + `prior_summary` on every `/plan` call |
+| frontend/ SvelteKit POC sat unused alongside bindu-communication | frontend/ removed; bindu-communication is the only operator UI in tree |
+
+---
+
+## Personal Agent (New)
+
+A wizard in the inbox sidebar spawns a server-side bindufied agent under `~/.bindu/personal/`. The directory holds:
+
+```
+~/.bindu/personal/
+├── agent.py                              # auto-generated from persona.json
+├── persona.json                          # persona traits, interests, occupation
+├── .env                                  # 0600 — OPENROUTER_*, PIPEDREAM_*, AUTH__*, HYDRA__*
+└── .bindu/
+    ├── private.pem                       # 0600 — Ed25519 signing key
+    ├── public.pem
+    └── oauth_credentials.json            # Hydra OAuth client (secret derived from Ed25519 seed)
+```
+
+`agent.py` is `bindufy()` against OpenRouter, with in-process Pipedream Connect MCP wiring for Gmail / Notion added per connected account. Editing `persona.json` is the supported way to change the agent.
+
+The wizard handles spawn/stop. Stop is graceful; restart relaunches the same persona. The agent serves `/.well-known/agent.json` publicly (standard A2A discovery) and rejects unauth `message/send` (`AUTH__ENABLED=true`, Hydra introspection plus DID signature mandatory). **It is the operator's signing identity** for everything the comms server sends outbound — without it, sends fall back to `did:bindu:operator:local` and most peers will reject.
+
+---
+
+## Outbound Authentication, in Detail
+
+The comms server, on every send:
+
+1. Reads the personal agent's `oauth_credentials.json`
+2. Mints a short-lived Hydra access token via the `client_credentials` grant (cached, refreshed 60s before expiry)
+3. Signs the exact request body with the personal agent's Ed25519 private key
+4. base58-encodes the signature
+5. Attaches `X-DID` / `X-DID-Signature` / `X-DID-Timestamp` headers
+
+The `X-DID` value is derived from the OAuth `client_id` so it always matches the JWT `sub` the verifier checks against.
+
+---
+
+## Gateway Test Fleet
+
+Five example agents now run on dedicated ports with published skill metadata:
+
+| Agent | Port | Skill |
+|-------|------|-------|
+| `joke_agent` | 5773 | `tell_joke` |
+| `math_agent` | 5775 | `calculate` |
+| `poet_agent` | 5776 | `write_poem` |
+| `research_agent` | 5777 | `research` |
+| `bindu_docs_agent` | 5778 | `bindu_docs_qa` (was `faq_agent`) |
+
+`examples/gateway_test_fleet/hydra_smoke_test.sh` exercises the full auth path against a chosen agent (token mint + signed send) and prints a pass/fail summary. Useful as a one-shot health check after restarts or config changes.
+
+---
+
+## Operational Changes
+
+- **SSE auth in comms** now uses a `?token` query param (browsers can't set custom headers on `EventSource`), in addition to `Authorization: Bearer` for fetch-based clients.
+- The **webhook endpoint** validates the `agentId` path segment and optionally requires `BINDU_WEBHOOK_TOKEN`.
+- The **SSRF allowlist on the lifecycle webhook forwarder** was dropped — it was causing more friction than the security marginal it gained; webhooks are authenticated downstream by `AUTH__ENABLED` anyway.
+- Agent prompts on intermediate states (`input-required`, `payment-required`, `auth-required`) are now forwarded on the lifecycle webhook so the comms inbox renders the agent's question inline. Previously the operator only saw the state pill.
+- **UUID serialization** in the server fixed (was emitting non-RFC strings under certain task-transition orderings).
+- TinyTroupe references removed from the persona scaffolding — unused vendor code that was confusing new operators.
+
+---
+
+## Upgrade Notes
+
+<Steps>
+  <Step title="Run the personal agent wizard">
+    bindu-communication needs a running personal agent for outbound auth. Use the in-app wizard ("Sidebar → + → Personal agent") to set one up. Without it, sends fall back to `did:bindu:operator:local` and any peer with `AUTH__ENABLED=true` will reject with `-32009`.
+  </Step>
+  <Step title="Check your ports">
+    Default ports: `3773` (agents), `3774` (gateway), `3775` (comms UI), `3787` (comms API). Fleet agents have moved to `5773-5778`. If you had ad-hoc agents on `5775` or `5777` they now collide with `math_agent` / `research_agent` — pick a free port.
+  </Step>
+  <Step title="Don't wipe ~/.bindu/personal/ casually">
+    The comms server reads OAuth credentials from `~/.bindu/personal/.bindu/oauth_credentials.json`. If you wipe `~/.bindu/personal/` you must rerun the wizard before sends will authenticate.
+  </Step>
+  <Step title="If you used the old scaffold, drop the local DB">
+    If you connected to the previous bindu-communication scaffold while it was running on mock data, drop your local `bindu-communication/data/events.db` once — the schema added `thread_state`, `contexts`, and `personal_agent` tables.
+  </Step>
+</Steps>
+
+---
+
+## Files of Note
+
+**Comms server (TypeScript, Hono):**
+
+- `bindu-communication/server/index.ts` — ~600 lines added: SSE feed, outbound compose with Hydra+DID auth, `/api/plan` stream ingestion, webhook handler, personal-agent endpoints, thread state
+- `bindu-communication/server/personal-agent.ts` — spawn/stop, render `agent.py` from persona, register Hydra client
+- `bindu-communication/server/db.ts` — SQLite schema for events, agents, contexts, thread_state, personal_agent, settings
+
+**Comms UI (React 19 + React Router v7):**
+
+- `bindu-communication/src/lib/liveStream.ts` — webhook → `StreamEvent` mapper; gateway-event + outbound + plan-trace dispatch
+- `bindu-communication/src/lib/threads.ts` — `context_id` grouping + cross-lane stitching
+- `bindu-communication/src/components/*` — Sidebar, ThreadList, ThreadView, DetailRail, ComposeModal, PersonalAgentWizard, AddAgentModal, AgentInfoModal, SettingsModal
+
+**Gateway:**
+
+- `gateway/src/session/llm.ts` — `tool-error` chunk added to `StreamEvent` union; AI SDK chunk mapper handles the new case
+- `gateway/src/session/prompt.ts` — `tool-error` case in the switch updates `ToolPart` state and publishes `ToolCallEnd` with error
+- `gateway/src/comms-forwarder.ts` — forwards bus events to the comms `/webhooks` endpoint when `BINDU_COMMS_URL` is set
+- `gateway/src/api/plan-route.ts` — already knew how to read `ToolCallEnd.error` and emit `task.finished {state: "failed", error}`
+
+**Removed:**
+
+- `frontend/` — entire SvelteKit POC tree
+
+---
+
+## Known Issues
+
+- Plan-trace task-started rows render with `agent_did=null` in the counterparty position. The resolved DID from the fetched AgentCard is held in `observedByName` at the gateway boundary but is not threaded into the task-started SSE frame (only task-artifact / task-finished receive it via `findAgentDID`). Cosmetic; everything works.
+- Streaming responses are still not implemented for gRPC agents (see `docs/grpc/limitations.md`).
+- No mTLS in production yet. Transport stack is plaintext + OAuth2 + DID signatures; sufficient on a trusted network but not on the public internet. (Coming in v2026.21.1.)
+- Each multi-agent plan request spawns a fresh gateway process (`gateway-spawned-<port>`). Exits are cleaned up, but the per-plan isolation means no shared planner state across plans. This is by design for the dev surface; production deployments will run a single long-lived gateway.
+
+---
+
+## Contributors
+
+Lead maintainer: **Raahul Dutta** (45 commits since 2026.20.3).
+
+Pair-programming assist: **Claude Opus 4.7 (1M context)** — co-author on every commit in this release.

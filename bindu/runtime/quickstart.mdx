@@ -47,16 +47,21 @@ Three things, in order:
 ### 1. A boxd account and API key
 
 Go to [boxd.sh](https://boxd.sh), sign up, and grab an API key from the
-dashboard. It'll look something like `bxd_xxxxx...`. Keep it private -
-anyone with this key can spin up VMs that get charged to your account.
+dashboard. Keep it private — anyone with this key can spin up VMs that
+get charged to your account.
 
-Stash the key in your shell:
+Stash it in your shell. Bindu accepts either `BOXD_API_KEY` or
+`BOXD_TOKEN` ([see the check in `BoxdRuntimeProvider.deploy`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py)):
 
 ```bash
+# Option 1: paste the key from the dashboard
 export BOXD_API_KEY="<your-key-from-boxd-dashboard>"
+
+# Option 2: short-lived token from the boxd CLI
+export BOXD_TOKEN=$(boxd login --json | jq -r .token)
 ```
 
-If you'd rather not retype it every time, add that line to your
+If you'd rather not retype it every time, add the line to your
 `~/.zshrc` (or `~/.bashrc`).
 
 > **Note:** the free tier covers small experiments. The example we
@@ -142,7 +147,7 @@ bindu deploy agent.py --runtime=boxd --dry-run
 You should see something like:
 
 ```
-DRY RUN - nothing will be deployed.
+DRY RUN — nothing will be deployed.
 
   agent name:    runtime-boxd-example
   source root:   /Users/you/playground
@@ -152,9 +157,11 @@ DRY RUN - nothing will be deployed.
   disk:          20G
   auto_suspend:  0s
   on_exit:       suspend
-  bindu_version: local
   tarball:       4 files, 2.4 KB compressed
 ```
+
+The `bindu_version:` line only appears if you pass `--bindu-version`,
+and `env keys:` (values hidden) only appears if you pass `--env`.
 
 This is the *plan*. It tells you:
 
@@ -215,11 +222,13 @@ A few things to notice:
 Leave the deploy command running. Open another terminal for the next
 step.
 
-> **What just happened:** bindu zipped up your script,
-> told boxd "please make me a Linux VM with this code," waited for the
-> VM to boot, copied your code in, ran `pip install bindu`, started
-> your agent inside the VM, and hooked up a public HTTPS domain that
-> forwards to it. That's it.
+> **What just happened:** bindu tar+gzip'd your project, told boxd
+> "please make me a Linux VM," waited for it to boot, sha256-verified
+> the upload, extracted to `/home/boxd/app`, ran
+> `pip install --break-system-packages bindu` plus your `pyproject.toml`
+> /`requirements.txt`, started your agent as
+> `setsid nohup python3 /home/boxd/app/agent.py`, and polled `/health`
+> on the boxd-assigned public URL until it returned 200. That's it.
 
 ---
 
@@ -450,11 +459,16 @@ but your script crashed before serving. Run `bindu logs <name>` and look
 at the bottom for the actual Python error. Common cause: you imported a
 package that isn't in `pyproject.toml` (or `requirements.txt`).
 
-**"old code is running after redeploy"** - you edited the script, but
-when you redeployed, the old version is still serving. Almost always
-because the previous Python process didn't get killed cleanly inside
-the VM. Run `bindu shell <name>` and `pkill -f python3`, then
-redeploy.
+**"old code is running after redeploy"** - bindu tracks the in-VM agent
+PID at `/tmp/bindu-agent.pid` and on every redeploy sends SIGTERM, waits
+up to 5s, then SIGKILL before exec'ing the new process (see
+[`_start_agent`](https://github.com/getbindu/Bindu/blob/main/bindu/runtime/boxd_provider.py)).
+If you still see stale output, the upload itself was probably
+truncated — the deploy now sha256-verifies every `box.write_file` and
+retries up to 3 times on mismatch, so check the warning lines above
+the `✓ ... serving at` banner. As a last resort, `bindu shell <name>`,
+`cat /tmp/bindu-agent.pid` vs `pgrep python3`, and kill the stale PID
+manually.
 
 **"my agent works locally but fails inside the VM with `ModuleNotFoundError`"**
 - the VM only installs the deps it can see. If your dep isn't in a
@@ -478,16 +492,16 @@ data/
 
 ## Where to go next
 
-- **[boxd.md](boxd.md)** - every `bindu deploy` flag spelled out in
-  detail. Read this when you start needing finer control (bigger VMs,
-  custom images, etc.).
-- **[custom-image.md](custom-image.md)** - for when your dep can't be
-  `pip install`-ed and you need a pre-baked Docker image.
-- **[README.md](README.md)** - runtime providers overview and the
+- **[Boxd runtime reference](/bindu/runtime/box)** - every `bindu deploy`
+  flag spelled out in detail. Read this when you start needing finer
+  control (bigger VMs, custom images, etc.).
+- **[Custom image (A1 mode)](/bindu/runtime/custom-image)** - for when
+  your dep can't be `pip install`-ed and you need a pre-baked Docker
+  image.
+- **[Overview](/bindu/runtime/overview)** - runtime providers and the
   reasoning behind the design.
-- **[boxd's own docs](https://docs.boxd.sh)** - for understanding the
-  microVM platform itself: pricing, regions, the Python SDK we're using
-  under the hood.
+- **[boxd's own docs](https://docs.boxd.sh)** - the microVM platform
+  itself: pricing, regions, the Python SDK we're using under the hood.
 
 ## What you have now
 You've now got a complete loop: write a script, deploy it, talk to it,
