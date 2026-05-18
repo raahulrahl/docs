@@ -1,30 +1,17 @@
 ---
 title: "Scheduler"
-description: "Queue and distribute tasks across agent workers"
+description: "The queue between an HTTP request and the actual work, so two simultaneous callers don't stall each other."
 ---
 
-A single-threaded agent that processes one task at a time is a bottleneck waiting to happen. The moment two requests arrive simultaneously, one of them waits. The moment a task takes longer than expected, everything behind it stalls.
+Two requests hit your agent at the same time. Both want a 30-second answer. Without a scheduler, the second caller waits 30 seconds for the first one to finish, then 30 more for their own. A single-threaded agent is a queue of one — and queues of one are how production starts melting.
 
-The scheduler decouples task submission from task execution. Clients get an immediate response. Workers pick up tasks when they are ready. The queue absorbs bursts without dropping work.
+The scheduler sits between the HTTP layer and the worker that actually runs your handler. Submission is non-blocking — the caller gets a `task_id` immediately. Workers pull tasks from the queue and execute them in parallel. The agent stops being a bottleneck and starts being a service.
 
-## Why the Scheduler Matters
-
-In production, agents need to handle concurrent requests, survive restarts mid-task, and scale across multiple workers without losing work. That requires a queue between the HTTP layer and the execution layer.
-
-| Without a scheduler | With Bindu scheduler |
-| --- | --- |
-| Tasks execute synchronously in the request thread | Tasks are queued and executed asynchronously |
-| Concurrent requests block each other | Workers process tasks in parallel |
-| A restart loses in-flight tasks | Redis-backed queue survives restarts |
-| Scaling requires custom coordination | Multiple workers share a single queue |
-| Fine for local scripts | Required for production agents |
-
-That is the shift: the scheduler makes task execution independent of task submission, so the agent can scale without changing any application code.
+In memory for local dev, Redis for production. Same `bindufy(config, handler)` either way; you just flip two environment variables.
 
 <Note>
-  Bindu defaults to an in-memory scheduler for local development. Switch to Redis for
-  production. The scheduler backend is configured in `agent_config.json` — your agent
-  code does not change.
+  Single process? In-memory is fine. Multiple processes or restart-survival required?
+  Switch to Redis with two env vars. Details below.
 </Note>
 
 ## How the Bindu Scheduler Works
@@ -81,41 +68,27 @@ Bindu supports two scheduler backends:
 
 ## Configuration
 
-The scheduler is configured in `agent_config.json`. Switching backends requires no changes to your agent code.
+Scheduler backends are picked via environment variables. Same pattern as [Storage](/bindu/learn/storage/overview) — connection strings don't belong in a Python dict that ends up in git.
 
-### Memory (Development)
-
-```json
-{
-  "scheduler": {
-    "type": "memory"
-  }
-}
-```
-
-The in-memory scheduler uses an asyncio queue inside the agent process. It is fast and requires no external dependencies, but tasks are lost if the process stops.
-
-### Redis (Production)
-
-```json
-{
-  "scheduler": {
-    "type": "redis",
-    "url": "redis://localhost:6379/0"
-  }
-}
-```
-
-Or via environment variable:
+### Memory (development)
 
 ```bash
-SCHEDULER__TYPE=redis
-SCHEDULER__URL=redis://localhost:6379/0
+# Default — no env vars needed.
+SCHEDULER_TYPE=memory
+```
+
+The in-memory scheduler uses an asyncio queue inside the agent process. Fast, zero setup, and tasks are gone if the process stops. Good for `uv run agent.py` while you're building.
+
+### Redis (production)
+
+```bash
+SCHEDULER_TYPE=redis
+REDIS_URL=redis://localhost:6379/0
 ```
 
 <Note>
-  The `SCHEDULER__URL` environment variable takes precedence over `agent_config.json`.
-  Use environment variables in production to keep connection strings out of config files.
+  Put both in `.env` for local development; pull them from your orchestrator's secret
+  manager in production. The `config` dict your agent code uses stays clean.
 </Note>
 
 ---
@@ -178,10 +151,10 @@ With Redis, you can also run multiple agent instances pointing at the same queue
 
 ```bash
 # Instance 1
-SCHEDULER__URL=redis://redis:6379/0 uv run python main.py
+REDIS_URL=redis://redis:6379/0 uv run python main.py
 
 # Instance 2 (same Redis, same queue)
-SCHEDULER__URL=redis://redis:6379/0 uv run python main.py
+REDIS_URL=redis://redis:6379/0 uv run python main.py
 ```
 
 Both instances compete for tasks from the same queue. Redis ensures each task is delivered to exactly one worker.
@@ -201,45 +174,30 @@ docker run -d \
   redis:7-alpine
 ```
 
-### Environment Variables
+### Environment variables
 
 ```bash
-SCHEDULER__TYPE=redis
-SCHEDULER__URL=redis://localhost:6379/0
+SCHEDULER_TYPE=redis
+REDIS_URL=redis://localhost:6379/0
 ```
 
-### With Authentication
+### With authentication
 
 ```bash
-SCHEDULER__URL=redis://:your-password@localhost:6379/0
+REDIS_URL=redis://:your-password@localhost:6379/0
 ```
 
 ---
 
 ## Combining Storage and Scheduler
 
-In production, you typically run both PostgreSQL and Redis together:
-
-```json
-{
-  "storage": {
-    "type": "postgres",
-    "url": "postgresql://bindu:secret@localhost:5432/bindu"
-  },
-  "scheduler": {
-    "type": "redis",
-    "url": "redis://localhost:6379/0"
-  }
-}
-```
-
-Or with environment variables:
+In production, you typically run both Postgres and Redis together:
 
 ```bash
-STORAGE__TYPE=postgres
-STORAGE__URL=postgresql://bindu:secret@localhost:5432/bindu
-SCHEDULER__TYPE=redis
-SCHEDULER__URL=redis://localhost:6379/0
+STORAGE_TYPE=postgres
+DATABASE_URL=postgresql://bindu:secret@localhost:5432/bindu
+SCHEDULER_TYPE=redis
+REDIS_URL=redis://localhost:6379/0
 ```
 
 The queue holds task IDs. The database holds task data. Workers read from both. This separation means the queue stays lean and fast while the database handles the heavy state.
@@ -277,9 +235,9 @@ The queue holds task IDs. The database holds task data. Workers read from both. 
 ## Security Best Practices
 
 <CardGroup cols={2}>
-  <Card title="Use Environment Variables" icon="lock">
-    Keep Redis connection strings out of `agent_config.json`. Use `SCHEDULER__URL`
-    as an environment variable and exclude it from version control.
+  <Card title="Use environment variables" icon="lock">
+    Redis connection strings don't belong in a Python dict that ends up in git. Use
+    `REDIS_URL` in `.env` or your orchestrator's secret manager.
   </Card>
   <Card title="Enable Redis Auth" icon="shield-check">
     In production, configure Redis with a password and use TLS if the connection
@@ -292,7 +250,7 @@ The queue holds task IDs. The database holds task data. Workers read from both. 
 ## Related
 
 - [Storage](/bindu/learn/storage/overview)
-- [Architecture](/bindu/concepts/architecture)
+- [Architecture](/bindu/concepts/task-first-and-architecture)
 - [Observability](/bindu/learn/observability/overview)
 
 <span className="brand-quote">

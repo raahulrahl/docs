@@ -1,0 +1,60 @@
+---
+title: "Protocol reference"
+description: "Every type, enum, and message Bindu speaks. Split by topic so you don't have to scroll past 4,000 lines to find the one you need."
+---
+
+This section is the type-level truth. If you want to know what a `Task` looks like on the wire, what states it can be in, or what an `AgentCard` actually contains, the answer is on one of the pages below.
+
+## What Bindu speaks
+
+Bindu follows two open protocols and adds a handful of its own extensions.
+
+| Protocol | Version | What it covers |
+|---|---|---|
+| **[A2A](https://github.com/a2aproject/A2A) (Agent-to-Agent)** | v0.3.0 | The base layer — messages, tasks, agent cards, push notifications. Everything you need for one agent to call another. |
+| **[AP2](https://github.com/google-agentic-commerce/AP2) (Agent Protocol 2)** | v0.1.0 | Payment mandates and the trust framework that lets agents transact without a human in the loop. |
+| **Bindu extensions** | — | Negotiation, credit accounting, trust levels. Marked `<NotPartOfA2A>` everywhere they appear. |
+
+If you only read one page, read [Tasks and lifecycle](/bindu/protocol/tasks) — task state is the spine the rest of the protocol hangs off.
+
+## Pages
+
+<CardGroup cols={2}>
+  <Card title="Types and enums" href="/bindu/protocol/types-and-enums">
+    TaskState, TrustLevel, NegotiationStatus, IdentityProvider. The vocabulary.
+  </Card>
+  <Card title="Messages and parts" href="/bindu/protocol/messages-and-parts">
+    TextPart, FilePart, DataPart, Message vs Artifact — the shapes content can take.
+  </Card>
+  <Card title="Tasks and lifecycle" href="/bindu/protocol/tasks">
+    The Task object, its status, and how it moves between states.
+  </Card>
+  <Card title="Context management" href="/bindu/protocol/context">
+    ContextId, history sessions, multi-turn conversations.
+  </Card>
+  <Card title="Agent negotiation" href="/bindu/protocol/negotiation">
+    Price, latency, SLA agreed up front. Bindu-specific.
+  </Card>
+  <Card title="Security and authentication" href="/bindu/protocol/security">
+    Auth schemes and how agents prove they're allowed.
+  </Card>
+  <Card title="Push notifications" href="/bindu/protocol/notifications">
+    Webhook on task state change. Stop polling.
+  </Card>
+  <Card title="Payment and mandates" href="/bindu/protocol/payment">
+    AP2 payment models and the mandate trust framework.
+  </Card>
+  <Card title="Credit system" href="/bindu/protocol/credit">
+    Bindu's credit accounting layer next to x402.
+  </Card>
+  <Card title="Trust and identity" href="/bindu/protocol/trust">
+    TrustLevel, IdentityProvider, DID verification.
+  </Card>
+  <Card title="Agent card and discovery" href="/bindu/protocol/agent-card">
+    AgentCard, AgentCapabilities, AgentInterface. How clients find you.
+  </Card>
+</CardGroup>
+
+<Note>
+This is a reference, not a tutorial. If you're trying to build an agent for the first time, go to [Your first agent](/bindu/get-started/your-first-agent) instead — you won't need most of this until you're three steps deeper.
+</Note>

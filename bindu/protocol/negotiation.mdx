@@ -1,0 +1,203 @@
+---
+title: "Agent negotiation"
+description: "How two agents agree on price, latency, and SLA before doing work. Bindu-specific extension."
+---
+
+
+Agent-to-agent negotiation enables autonomous agents to coordinate, negotiate terms, and reach agreements for collaborative task execution. This protocol extension allows agents to propose, counter-propose, accept, or reject collaboration terms in a structured manner.
+
+### NegotiationProposal
+
+A structured negotiation proposal exchanged between agents during the negotiation process.
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class NegotiationProposal(TypedDict):
+    """Structured negotiation proposal exchanged between agents."""
+
+    proposal_id: Required[UUID]
+    """The ID of the proposal."""
+
+    from_agent: Required[UUID]
+    """The ID of the agent making the proposal."""
+
+    to_agent: Required[UUID]
+    """The ID of the agent receiving the proposal."""
+
+    terms: Required[Dict[str, Any]]
+    """The terms of the proposal."""
+
+    timestamp: Required[str]
+    """The timestamp of the proposal."""
+
+    status: Required[NegotiationStatus]
+    """The status of the proposal."""
+```
+
+**Example: Task Delegation Proposal**
+```json
+{
+  "proposalId": "550e8400-e29b-41d4-a716-446655440000",
+  "fromAgent": "did:example:agent-1",
+  "toAgent": "did:example:agent-2",
+  "terms": {
+    "taskType": "data-processing",
+    "maxDurationMinutes": 30,
+    "costCredits": 100,
+    "priority": "high",
+    "deliverables": ["processed_data.csv", "analysis_report.pdf"]
+  },
+  "timestamp": "2025-10-31T10:00:00Z",
+  "status": "proposed"
+}
+```
+
+**What it's for:** Enables agents to formally propose collaboration terms including task specifications, resource requirements, costs, and expected deliverables. Proposals can be accepted, rejected, or countered by the receiving agent.
+
+---
+
+### NegotiationContext
+
+Context details for managing the complete lifecycle of agent-to-agent negotiations, including all participants and proposals.
+
+**Schema:**
+```python
+@pydantic.with_config(ConfigDict(alias_generator=to_camel))
+class NegotiationContext(TypedDict):
+    """Context details for agent-to-agent negotiations."""
+
+    context_id: Required[UUID]
+    """The ID of the context."""
+
+    status: Required[NegotiationStatus]
+    """The status of the context."""
+
+    participants: Required[List[str]]
+    """The participants in the context."""
+
+    proposals: Required[List[NegotiationProposal]]
+    """The proposals in the context."""
+```
+
+**Example: Multi-Agent Negotiation Session**
+```json
+{
+  "contextId": "c295ea44-7543-4f78-b524-7a38915ad6e4",
+  "status": "ongoing",
+  "participants": [
+    "did:example:agent-coordinator",
+    "did:example:agent-processor",
+    "did:example:agent-validator"
+  ],
+  "proposals": [
+    {
+      "proposalId": "550e8400-e29b-41d4-a716-446655440000",
+      "fromAgent": "did:example:agent-coordinator",
+      "toAgent": "did:example:agent-processor",
+      "terms": {
+        "taskType": "data-processing",
+        "maxDurationMinutes": 30,
+        "costCredits": 100
+      },
+      "timestamp": "2025-10-31T10:00:00Z",
+      "status": "accepted"
+    },
+    {
+      "proposalId": "661f9511-f3ac-52e5-b827-557766551111",
+      "fromAgent": "did:example:agent-coordinator",
+      "toAgent": "did:example:agent-validator",
+      "terms": {
+        "taskType": "validation",
+        "maxDurationMinutes": 15,
+        "costCredits": 50
+      },
+      "timestamp": "2025-10-31T10:05:00Z",
+      "status": "proposed"
+    }
+  ]
+}
+```
+
+**What it's for:** Tracks the complete negotiation session between multiple agents, maintaining all proposals, counter-proposals, and the current negotiation status. Enables complex multi-party negotiations for collaborative task execution.
+
+---
+
+### Negotiation Flow Pattern
+
+Understanding how agents negotiate and reach agreements:
+
+**Basic Negotiation Flow:**
+```mermaid
+sequenceDiagram
+    participant AgentA as Agent A
+    participant AgentB as Agent B
+
+    AgentA->>AgentA: Identify need for collaboration
+    AgentA->>AgentA: Create NegotiationContext
+    
+    AgentA->>AgentB: Send NegotiationProposal
+    Note over AgentB: Status: proposed
+    
+    AgentB->>AgentB: Evaluate proposal
+    
+    alt Accept
+        AgentB->>AgentA: Accept (status: accepted)
+        Note over AgentA,AgentB: Task execution begins
+    else Reject
+        AgentB->>AgentA: Reject (status: rejected)
+        Note over AgentA,AgentB: Negotiation ends
+    else Counter
+        AgentB->>AgentA: Counter (status: countered)
+        Note over AgentA: Evaluate counter-proposal
+        AgentA->>AgentB: Response (accept/reject/counter)
+    end
+```
+
+**Multi-Agent Negotiation Flow:**
+```mermaid
+sequenceDiagram
+    participant Coord as Coordinator
+    participant AgentA as Agent A
+    participant AgentB as Agent B
+    participant AgentC as Agent C
+
+    Coord->>Coord: Initiate NegotiationContext
+    Note over Coord: Identify required specialists
+    
+    par Parallel negotiation tracks
+        Coord->>AgentA: Send Proposal
+        Coord->>AgentB: Send Proposal
+        Coord->>AgentC: Send Proposal
+    end
+    
+    par Independent responses
+        AgentA-->>Coord: Accept
+        AgentB-->>Coord: Counter-proposal
+        AgentC-->>Coord: Reject
+    end
+    
+    Coord->>Coord: Evaluate responses
+    Note over Coord: Adjust terms based on feedback
+    
+    Coord->>AgentB: Send counter-proposal
+    AgentB-->>Coord: Accept
+    
+    Note over Coord,AgentC: All required agents accepted
+    Note over Coord,AgentC: Collaborative task execution begins
+```
+
+**Negotiation Statuses (Individual Proposals):**
+- **`proposed`** - Initial offer made, awaiting response
+- **`accepted`** - Offer accepted, ready to proceed
+- **`rejected`** - Offer declined, negotiation path closed
+- **`countered`** - Counter-offer made, negotiation continues
+
+**Session Statuses (Overall Context):**
+- **`initiated`** - Negotiation session started
+- **`ongoing`** - Active negotiation in progress
+- **`completed`** - Agreement reached, all parties aligned
+- **`rejected`** - Negotiation failed, no agreement possible
+
+---
+

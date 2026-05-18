@@ -98,15 +98,41 @@
                 "expanded": true,
                 "pages": [
                   "bindu/introduction/what-is-bindu",
-                  "bindu/introduction/bindu-consolidated-guide",
-                  "bindu/create-bindu-agent/configuration"
+                  "bindu/how-to/install",
+                  "bindu/get-started/your-first-agent",
+                  "bindu/get-started/config-reference",
+                  "bindu/get-started/next-steps"
+                ]
+              },
+              {
+                "group": "Create Bindu Agent",
+                "pages": [
+                  "bindu/create-bindu-agent/overview",
+                  "bindu/create-bindu-agent/configuration",
+                  "bindu/create-bindu-agent/deploy"
                 ]
               },
               {
                 "group": "Architecture",
                 "pages": [
-                  "bindu/concepts/task-first-and-architecture",
-                  "bindu/concepts/protocol"
+                  "bindu/concepts/task-first-and-architecture"
+                ]
+              },
+              {
+                "group": "Protocol Reference",
+                "pages": [
+                  "bindu/protocol/overview",
+                  "bindu/protocol/types-and-enums",
+                  "bindu/protocol/messages-and-parts",
+                  "bindu/protocol/tasks",
+                  "bindu/protocol/context",
+                  "bindu/protocol/agent-card",
+                  "bindu/protocol/security",
+                  "bindu/protocol/trust",
+                  "bindu/protocol/notifications",
+                  "bindu/protocol/negotiation",
+                  "bindu/protocol/payment",
+                  "bindu/protocol/credit"
                 ]
               },
               {
@@ -389,5 +415,35 @@
     "posthog": {
       "apiKey": "phc_hPgtdQyn5k1zZpvMl4uhYkzCAoGpJETZbmV67MtI2FQ"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/bindu/introduction/bindu-consolidated-guide",
+      "destination": "/bindu/get-started/your-first-agent"
+    },
+    {
+      "source": "/bindu/introduction/join-the-internet-agents",
+      "destination": "/bindu/get-started/your-first-agent"
+    },
+    {
+      "source": "/bindu/introduction/key-concepts",
+      "destination": "/bindu/introduction/what-is-bindu"
+    },
+    {
+      "source": "/bindu/introduction/getting-help",
+      "destination": "/bindu/get-started/next-steps"
+    },
+    {
+      "source": "/bindu/concepts/architecture",
+      "destination": "/bindu/concepts/task-first-and-architecture"
+    },
+    {
+      "source": "/bindu/concepts/task-first-pattern",
+      "destination": "/bindu/concepts/task-first-and-architecture"
+    },
+    {
+      "source": "/bindu/concepts/protocol",
+      "destination": "/bindu/protocol/overview"
+    }
+  ]
 }

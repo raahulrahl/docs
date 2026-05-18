@@ -1,0 +1,88 @@
+---
+title: "Types and enums"
+description: "TypeAlias and Enum definitions: TaskState, TrustLevel, NegotiationStatus, IdentityProvider, and the rest."
+---
+
+
+Protocol types use TypeAlias definitions for enums to ensure type safety and clear state management.
+
+### TaskState
+
+Defines all possible states a task can be in during its lifecycle:
+
+**Standard A2A States:**
+- `submitted` - Task has been submitted and is awaiting execution
+- `working` - Agent is actively working on the task
+- `input-required` - Task is paused, waiting for user input
+- `completed` - Task has been successfully completed
+- `canceled` - Task has been canceled by the user
+- `failed` - Task failed due to an error during execution
+- `rejected` - Task was rejected by the agent and was not started
+- `auth-required` - Task requires authentication to proceed
+
+**Bindu Extensions** `<NotPartOfA2A>`:
+- `payment-required` - Task requires payment to proceed
+- `unknown` - Task is in an unknown or indeterminate state
+- `trust-verification-required` - Task requires trust verification to proceed
+- `pending` - Task is pending execution
+- `suspended` - Task is suspended and not currently running
+- `resumed` - Task is resumed and currently running
+- `negotiation-bid-submitted` - Task is submitted for negotiation
+- `negotiation-bid-lost` - Task bid was lost in negotiation
+- `negotiation-bid-won` - Task bid was won in negotiation
+
+### NegotiationStatus `<NotPartOfA2A>`
+
+Defines the status of individual negotiation proposals:
+
+- `proposed` - Negotiation is proposed
+- `accepted` - Negotiation is accepted
+- `rejected` - Negotiation is rejected
+- `countered` - Counter-offer made
+
+### NegotiationSessionStatus `<NotPartOfA2A>`
+
+Defines the overall status of a negotiation session:
+
+- `initiated` - Negotiation session is initiated
+- `ongoing` - Negotiation session is ongoing
+- `completed` - Negotiation session is completed
+- `rejected` - Negotiation session is rejected
+
+### TrustLevel `<NotPartOfA2A>`
+
+Defines role-based trust levels for agent authorization (ordered by permission level):
+
+- `super_admin` - Highest level access, all operations permitted
+- `admin` - Admin operations, minimal risk
+- `manager` - Management operations, elevated permissions
+- `operator` - System operations, moderate risk
+- `editor` - Edit operations, moderate risk
+- `analyst` - Standard operations
+- `auditor` - Sensitive operations (read-only)
+- `support` - Support operations, troubleshooting access
+- `viewer` - View-only access, minimal permissions
+- `guest` - Limited access, read-only operations
+
+### IdentityProvider `<NotPartOfA2A>`
+
+Supported authentication identity providers:
+
+- `keycloak` - Keycloak identity provider
+- `azure_ad` - Azure AD identity provider
+- `okta` - Okta identity provider
+- `auth0` - Auth0 identity provider
+- `custom` - Custom identity provider
+
+### Data Key Constants `<NotPartOfA2A>`
+
+Standard keys for structured data in DataPart objects:
+
+- `CONTACT_ADDRESS_DATA_KEY` = `"contact_picker.ContactAddress"`
+- `PAYMENT_METHOD_DATA_DATA_KEY` = `"payment_request.PaymentMethodData"`
+- `CART_MANDATE_DATA_KEY` = `"ap2.mandates.CartMandate"`
+- `INTENT_MANDATE_DATA_KEY` = `"ap2.mandates.IntentMandate"`
+- `PAYMENT_MANDATE_DATA_KEY` = `"ap2.mandates.PaymentMandate"`
+
+These constants are used to identify specific data types within the protocol's DataPart structure.
+

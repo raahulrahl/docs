@@ -1,0 +1,95 @@
+---
+title: "Your first agent"
+description: "Copy 15 lines of Python, run it, watch your agent come online with a DID, an A2A endpoint, and a tunnel to the public internet."
+---
+
+Here's the deal. You've got `bindu` installed and an `OPENAI_API_KEY` lying around. The block below is the whole thing — copy it into `agent.py`, run it, and 60 seconds later you have a live agent at `http://localhost:3773`.
+
+```python
+import os
+from bindu.penguin.bindufy import bindufy
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.tools.duckduckgo import DuckDuckGoTools
+
+agent = Agent(
+    instructions="You are a research assistant.",
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[DuckDuckGoTools()],
+)
+
+config = {
+    "author": "you@example.com",
+    "name": "research_agent",
+    "description": "Research assistant with web search.",
+    "deployment": {"url": "http://localhost:3773", "expose": True},
+}
+
+def handler(messages: list[dict[str, str]]):
+    return agent.run(input=messages)
+
+bindufy(config, handler)
+```
+
+```bash
+uv run agent.py
+```
+
+You should see a sunflower in your terminal and a DID that looks like `did:bindu:you@example.com:research_agent:<id>`. That's your agent. It's online.
+
+## What just happened
+
+Four things are doing work in those 15 lines. None of them are infrastructure you had to write.
+
+**`agent`** is your brain. Agno here, but it could be LangChain, CrewAI, a bare OpenAI call, or your own loop. Bindu doesn't care — it never opens the box.
+
+**`config`** is the agent's passport. The `author` and `name` get baked into a [DID](/bindu/learn/did/overview) — a cryptographic identity nobody can fake. The `deployment.expose: True` flips on an FRP tunnel so the rest of the agent internet can reach your laptop without router config.
+
+**`handler`** is the function the rest of the world will call. It gets a list of messages, returns a response. That's the entire contract.
+
+**`bindufy(config, handler)`** wires it all up. Behind it: A2A JSON-RPC routing, DID key generation, Ed25519 signatures on every response, OAuth2 scopes, x402 payment hooks, an A2A-compliant HTTP server on `:3773`, a public tunnel, and an agent card at `/.well-known/agent.json` so other agents can discover you. You did not write any of that. You're welcome.
+
+## Try it
+
+Open another terminal and send your agent a message:
+
+```bash
+curl -X POST http://localhost:3773/ \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "1",
+    "params": {
+      "message": {
+        "role": "user",
+        "kind": "message",
+        "parts": [{"kind": "text", "text": "What is x402?"}],
+        "messageId": "m1",
+        "contextId": "c1",
+        "taskId": "t1"
+      }
+    }
+  }'
+```
+
+You get back a `taskId`. Poll `tasks/get` with it until `state` hits `completed`, and the answer comes out with a DID signature attached. Anyone on the network can verify it really came from your agent.
+
+## Make it yours
+
+Three things you can change in under a minute:
+
+1. **Swap the prompt.** Change `instructions=` to whatever your agent actually does. Restart.
+2. **Swap the model.** Replace `OpenAIChat(id="gpt-4o")` with `OpenRouter(id="openai/gpt-oss-120b")`, set `OPENROUTER_API_KEY` in `.env`. Done — every agent built on Bindu in the wild is on something like this.
+3. **Add a tool.** Pile more into `tools=[...]`. The agent will figure out when to call them.
+
+## What's next
+
+You have a working agent. The interesting stuff starts when you give it a real job and connect it to others.
+
+- **[Config reference](/bindu/get-started/config-reference)** — every key in that `config` dict, what it does, what env var overrides it.
+- **[Skills](/bindu/skills/introduction/overview)** — declare what your agent can do so other agents can find it without guessing.
+- **[Gateway](/bindu/gateway/overview)** — point a planner at a fleet of agents and let it route work between them.
+- **[Examples](/examples/beginner/echo-agent)** — 30+ agents in this repo doing real things. CSV analysis, PDF Q&A, cybersecurity newsletters, multi-agent swarms.
+
+One sunflower at a time. Welcome to the agent internet.

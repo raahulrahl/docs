@@ -1,192 +1,66 @@
 ---
-title: "Install & Setup"
-description: "Install Bindu with uv or pip and set up a local development environment"
+title: "Install"
+description: "Get Bindu into your environment in 30 seconds. uv is the short path; pip works too."
 ---
 
-The install step should be boring. You should be able to get Bindu into your environment, verify that it works, and move on to building the agent.
+The install step should be boring. Two commands, no surprises.
 
-## Why This Matters
-
-The first setup step sets the tone for the rest of the experience. If installation is messy, everything after it gets harder. If it is clean, you get to the part that actually matters much faster.
-
-<Note>
-This page covers two install paths: `uv` if you want the shortest route, and `pip` if you prefer a standard virtual environment workflow.
-</Note>
-
-## How To Install Bindu
-
-You can install Bindu with `uv` or `pip`. `uv` is the recommended path.
-
-### Using `uv` (Recommended)
+## The short path: `uv`
 
 ```bash
 uv add bindu
 ```
 
-<CardGroup cols={2}>
-  <Card title="Recommended Path" icon="rocket">
-    `uv` is the shortest way to add Bindu and keep dependency management simple.
-  </Card>
-  <Card title="Standard Path" icon="package">
-    If your workflow already uses `pip` and virtual environments, that still works fine.
-  </Card>
-</CardGroup>
-
-### The Setup Flow
-
-```mermaid
-sequenceDiagram
-    participant Developer
-    participant Env as Virtual Environment
-    participant Installer as uv / pip
-    participant Bindu
-
-    Developer->>Installer: Choose uv or pip
-    alt uv
-        Installer->>Bindu: uv add bindu
-    else pip
-        Developer->>Env: Create virtual environment
-        Developer->>Env: Activate environment
-        Installer->>Bindu: pip install -U bindu
-    end
-    Bindu-->>Developer: Bindu installed and ready
-```
-
-<Steps>
-  <Step title="Use uv">
-    If you already use `uv`, install Bindu directly:
-
-    ```bash
-    uv add bindu
-    ```
-  </Step>
-
-  <Step title="Use pip">
-    If you want a traditional virtual environment setup, create one first and then install Bindu.
-
-    <CodeGroup>
-      ```bash Mac
-      python3 -m venv ~/.venvs/bindu
-      source ~/.venvs/bindu/bin/activate
-      pip install -U bindu
-      ```
-
-      ```bash Windows
-      python3 -m venv binduenv
-      binduenv/scripts/activate
-      pip install -U bindu
-      ```
-    </CodeGroup>
-  </Step>
-
-  <Step title="Fix Common Installer Issues">
-    If installation fails, update `pip` and retry:
-
-    ```bash
-    python -m pip install --upgrade pip
-    ```
-  </Step>
-</Steps>
-
----
-
-## Contributing
-
-If you want to work on Bindu itself, set up the development environment from the repository.
+That's it. If you don't have `uv` yet:
 
 ```bash
-# Clone the repository
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Restart your shell, then `uv add bindu`. You need Python 3.12 or newer.
+
+## The pip path
+
+If you'd rather use a standard venv:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -U bindu
+```
+
+If `pip install` fails, the usual culprit is an old pip. Run `python -m pip install --upgrade pip` and retry.
+
+## API keys
+
+To run anything interesting you'll need a key for at least one LLM provider:
+
+```bash
+# Pick one — agents in the examples folder use these
+OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-...
+MINIMAX_API_KEY=...
+```
+
+Put them in a `.env` file at the project root. The examples all use `python-dotenv` to load it.
+
+## Verify it worked
+
+```bash
+uv run python -c "import bindu; print(bindu.__version__)"
+```
+
+You should see a version like `0.3.x`. If you do, head to [Your first agent](/bindu/get-started/your-first-agent).
+
+## Hacking on Bindu itself
+
+Different goal — you want to contribute to the framework, not just use it:
+
+```bash
 git clone https://github.com/getbindu/Bindu.git
 cd Bindu
-
-# Install development dependencies with uv
-uv sync
-
-# Install pre-commit hooks
+uv sync --dev
 pre-commit run --all-files
 ```
 
-Each command has a specific job:
-
-- `git clone` gets the source locally
-- `cd Bindu` moves into the repository
-- `uv sync` installs the development dependencies
-- `pre-commit run --all-files` runs the configured code-quality checks
-
-<Note>
-See our [Contributing Guidelines](https://github.com/getbindu/Bindu/blob/main/.github/contributing.md) for more details.
-</Note>
-
-## Practical Notes
-
-<AccordionGroup>
-  <Accordion title="When should I use uv?">
-    Use `uv` if you want the recommended path and a shorter setup flow:
-
-    ```bash
-    uv add bindu
-    ```
-  </Accordion>
-
-  <Accordion title="When should I use pip?">
-    Use `pip` if your local workflow already depends on a standard Python virtual environment.
-
-    <CodeGroup>
-      ```bash Mac
-      python3 -m venv ~/.venvs/bindu
-      source ~/.venvs/bindu/bin/activate
-      pip install -U bindu
-      ```
-
-      ```bash Windows
-      python3 -m venv binduenv
-      binduenv/scripts/activate
-      pip install -U bindu
-      ```
-    </CodeGroup>
-  </Accordion>
-
-  <Accordion title="What should I do if pip fails?">
-    Update `pip` first and try again:
-
-    ```bash
-    python -m pip install --upgrade pip
-    ```
-  </Accordion>
-
-  <Accordion title="How do I set up the repo for development?">
-    Clone the repository, sync dependencies, and run the pre-commit checks:
-
-    ```bash
-    git clone https://github.com/getbindu/Bindu.git
-    cd Bindu
-    uv sync
-    pre-commit run --all-files
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Related
-
-- /bindu/introduction/what-is-bindu
-- /bindu/introduction/join-the-internet-agents
-- https://github.com/getbindu/Bindu/blob/main/.github/contributing.md
-
----
-
-<span className="brand-quote">
-  <img
-    src="/logo/light.svg"
-    alt="Sunflower Logo"
-    width="32"
-    className="clean-icon"
-  />
-
-  <span className="brand-quote-text">
-    Bindu keeps the first step{" "}
-    <span className="brand-quote-highlight">
-      simple enough to start fast
-    </span>
-    , so you can spend your time building agents instead of babysitting setup.
-  </span>
-</span>
+The full contributor guide lives at [`.github/contributing.md`](https://github.com/getbindu/Bindu/blob/main/.github/contributing.md). Most of the day-to-day chat happens on [Discord](https://discord.gg/3w5zuYUuwt) — come say hi.
