@@ -1,0 +1,831 @@
+---
+title: "3.15 Gateway Test Fleet"
+description: "Five tiny agents + a 13-case test matrix that exercises the Bindu Gateway planner end-to-end"
+---
+
+Five tiny single-file agents running on local ports plus a 13-case test matrix that POSTs to the Bindu Gateway's `/plan` endpoint and grades the SSE stream. This is the reproducible setup [`docs/GATEWAY.md`](https://github.com/GetBindu/Bindu/blob/main/docs/GATEWAY.md) uses for its walkthrough — each agent is deliberately narrow so the planner has to pick the right one for each query.
+
+## Fleet overview
+
+| Agent | Port | Skill id | What it does |
+| --- | --- | --- | --- |
+| `joke_agent` | 3773 | `tell_joke` | Tells short jokes. Declines anything off-topic. |
+| `math_agent` | 3775 | `solve_math` | Solves math problems step-by-step. |
+| `poet_agent` | 3776 | `write_poem` | Writes 4-line poems. Hydra auth enabled. |
+| `research_agent` | 3777 | `web_research` | Web search + cited summaries via DuckDuckGo. |
+| `faq_agent` (Bindu docs) | 3778 | `bindu_docs_qa` | Answers Bindu doc questions with citations. Hydra auth enabled. |
+
+Gateway sits at `3774`. All agents run `openai/gpt-4o-mini` via OpenRouter.
+
+## Code
+
+### joke_agent.py
+
+```python
+"""Joke Agent — port 5773.
+
+Part of the gateway_test_fleet: five single-file agents deliberately
+narrow in scope so the gateway's planner has to pick the right one for
+each query. This one tells jokes.
+
+Narrow instructions are intentional. We want the planner to fail cleanly
+when asked to do something off-topic (e.g. "solve an equation") — not to
+helpfully attempt the off-topic request and muddy the test signal.
+
+Port: 5xxx range is reserved for agents (3xxx is infra — comms UI on
+3775, comms-api on 3787, gateway on 3774). Fleet map: 5773 joke_agent,
+5775 math, 5776 poet, 5777 research, 5778 bindu_docs.
+
+Environment:
+    OPENROUTER_API_KEY — required (examples/.env)
+    BINDU_PORT         — optional override (default 5773)
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+# Load .env BEFORE importing bindu — `bindu.settings:app_settings = Settings()`
+# is constructed at module-import time, so any MTLS__/AUTH__/HYDRA__ vars set
+# by a later load_dotenv land in os.environ but never reach the singleton.
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+from agno.agent import Agent  # noqa: E402
+from agno.models.openrouter import OpenRouter  # noqa: E402
+
+from bindu.penguin.bindufy import bindufy  # noqa: E402
+
+PORT = int(os.getenv("BINDU_PORT", "5773"))
+
+agent = Agent(
+    instructions=(
+        "You are a joke-teller. You ONLY tell jokes. If the user asks "
+        "anything that is not a joke request, politely say you only tell "
+        "jokes and suggest a topic you could joke about instead."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-4o-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Return a joke (or decline politely)."""
+    return agent.run(input=messages).content
+
+
+config = {
+    "author": "gateway_test_fleet@getbindu.com",
+    "name": "joke_agent",
+    "description": "Tells jokes on request. Declines anything else.",
+    "deployment": {
+        # https + 127.0.0.1: matches what bindu actually serves when
+        # MTLS__ENABLED=true (peers fetching /.well-known/agent.json
+        # would otherwise see http://localhost and fail to reach back).
+        "url": f"https://127.0.0.1:{PORT}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/joke_agent",
+    "skills": [
+        {
+            "id": "tell_joke",
+            "name": "Tell a joke",
+            "description": (
+                "Return a short, lighthearted joke on any topic the "
+                "user requests. Declines politely for off-limits "
+                "subjects (e.g., medical, legal, sensitive)."
+            ),
+            "tags": ["humor", "joke", "entertainment"],
+            "examples": ["Tell me a programmer joke", "Make me laugh"],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/plain"],
+        }
+    ],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+### math_agent.py
+
+```python
+"""Math Agent — port 5775.
+
+Part of the gateway_test_fleet. Solves math problems step-by-step,
+refuses non-math requests. Narrow scope is deliberate: the gateway's
+planner must distinguish this agent's competence from the others in
+the fleet when routing queries.
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+from agno.agent import Agent  # noqa: E402
+from agno.models.openrouter import OpenRouter  # noqa: E402
+
+from bindu.penguin.bindufy import bindufy  # noqa: E402
+
+PORT = int(os.getenv("BINDU_PORT", "5775"))
+
+agent = Agent(
+    instructions=(
+        "You are a math problem solver. You ONLY answer math questions "
+        "(arithmetic, algebra, calculus, geometry, statistics). Show "
+        "your work step by step. If the user asks anything non-math, "
+        "politely decline and say you only handle math problems."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-4o-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Solve math problems step-by-step."""
+    return agent.run(input=messages).content
+
+
+config = {
+    "author": "gateway_test_fleet@getbindu.com",
+    "name": "math_agent",
+    "description": "Solves math problems step-by-step. Declines anything else.",
+    "deployment": {
+        "url": f"https://127.0.0.1:{PORT}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/math_agent",
+    "skills": [
+        {
+            "id": "solve_math",
+            "name": "Solve math problems",
+            "description": (
+                "Solve arithmetic, algebra, calculus, and word "
+                "problems step-by-step. Shows the working, not just "
+                "the answer."
+            ),
+            "tags": ["math", "arithmetic", "algebra", "calculus"],
+            "examples": [
+                "What's 17 * 23?",
+                "Solve x^2 + 4x + 3 = 0",
+                "Differentiate sin(x)*cos(x)",
+            ],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/markdown"],
+        }
+    ],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+### poet_agent.py
+
+```python
+"""Poet Agent — port 5776.
+
+Part of the gateway_test_fleet. Writes short poems (4-line max) on a
+given topic. Narrow scope so the planner has to pick it specifically
+when the user wants creative verse.
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+# Per-agent override: this agent demos Hydra-protected calls even when
+# the shared examples/.env keeps AUTH__ENABLED=false for the rest of the
+# fleet. Set BEFORE load_dotenv — python-dotenv defaults to
+# override=False, so already-set env vars survive.
+os.environ["AUTH__ENABLED"] = "true"
+os.environ.setdefault("AUTH__PROVIDER", "hydra")
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+from agno.agent import Agent  # noqa: E402
+from agno.models.openrouter import OpenRouter  # noqa: E402
+
+from bindu.penguin.bindufy import bindufy  # noqa: E402
+
+PORT = int(os.getenv("BINDU_PORT", "5776"))
+
+agent = Agent(
+    instructions=(
+        "You are a poet. You ONLY write short poems (maximum 4 lines) "
+        "on topics the user suggests. If the user asks for anything "
+        "that is not a poem request, politely decline and say you only "
+        "write poems."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-4o-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Write a short poem (or decline politely)."""
+    return agent.run(input=messages).content
+
+
+config = {
+    "author": "gateway_test_fleet@getbindu.com",
+    "name": "poet_agent",
+    "description": "Writes short poems (max 4 lines). Declines anything else.",
+    "deployment": {
+        "url": f"https://127.0.0.1:{PORT}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/poet_agent",
+    "skills": [
+        {
+            "id": "write_poem",
+            "name": "Write a short poem",
+            "description": (
+                "Compose a short poem (haiku, limerick, free verse, "
+                "etc.) on a requested topic and style. Declines "
+                "politely for sensitive subjects."
+            ),
+            "tags": ["poetry", "creative", "writing"],
+            "examples": [
+                "Write a haiku about autumn",
+                "Free verse about loneliness",
+            ],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/plain"],
+        }
+    ],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+### research_agent.py
+
+```python
+"""Research Agent — port 5777.
+
+Part of the gateway_test_fleet. Adapted from examples/beginner/
+agno_simple_example.py to run on a distinct port with the fleet's
+author tag. Uses DuckDuckGo for web search.
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+from agno.agent import Agent  # noqa: E402
+from agno.models.openrouter import OpenRouter  # noqa: E402
+from agno.tools.duckduckgo import DuckDuckGoTools  # noqa: E402
+
+from bindu.penguin.bindufy import bindufy  # noqa: E402
+
+PORT = int(os.getenv("BINDU_PORT", "5777"))
+
+agent = Agent(
+    instructions=(
+        "You are a research assistant that finds and summarizes "
+        "information. Use web search to back up your answers and cite "
+        "the sources you used."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-4o-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+    tools=[DuckDuckGoTools()],
+)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Run the agent against the conversation history."""
+    return agent.run(input=messages).content
+
+
+config = {
+    "author": "gateway_test_fleet@getbindu.com",
+    "name": "research_agent",
+    "description": "Researches topics via web search and summarizes findings.",
+    "deployment": {
+        "url": f"https://127.0.0.1:{PORT}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/research_agent",
+    "skills": [
+        {
+            "id": "web_research",
+            "name": "Web research",
+            "description": (
+                "Investigate an open-ended question by searching the "
+                "web, synthesize the findings into a structured "
+                "Markdown answer with citations. Use for current "
+                "events, comparative analysis, or topics outside "
+                "general training data."
+            ),
+            "tags": ["research", "web-search", "synthesis"],
+            "examples": [
+                "Compare Postgres vs MySQL in 2026",
+                "Latest news on x402 protocol adoption",
+            ],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/markdown"],
+        }
+    ],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+### faq_agent.py
+
+```python
+"""FAQ Agent — port 5778.
+
+Part of the gateway_test_fleet. Adapted from examples/beginner/
+faq_agent.py. Answers questions about the Bindu documentation using
+web search, formatted as Markdown with citations.
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+# Per-agent override: this agent demos Hydra-protected calls even when
+# the shared examples/.env keeps AUTH__ENABLED=false for the rest of the
+# fleet. Set BEFORE load_dotenv — python-dotenv defaults to
+# override=False, so already-set env vars survive.
+os.environ["AUTH__ENABLED"] = "true"
+os.environ.setdefault("AUTH__PROVIDER", "hydra")
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+from agno.agent import Agent  # noqa: E402
+from agno.models.openrouter import OpenRouter  # noqa: E402
+from agno.tools.duckduckgo import DuckDuckGoTools  # noqa: E402
+
+from bindu.penguin.bindufy import bindufy  # noqa: E402
+
+PORT = int(os.getenv("BINDU_PORT", "5778"))
+
+agent = Agent(
+    name="Bindu Docs Agent",
+    instructions=(
+        "You are an expert assistant for the Bindu framework. Search "
+        "the Bindu documentation (docs.getbindu.com) to answer the "
+        "user's question.\n\n"
+        "Formatting rules:\n"
+        "- Return your answer in CLEAN Markdown.\n"
+        "- Use '##' for main headers and bullet points for lists.\n"
+        "- Do NOT wrap the whole response in a JSON code block.\n"
+        "- End with a '### Sources' section listing the links you used."
+    ),
+    model=OpenRouter(
+        id="openai/gpt-4o-mini",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    ),
+    tools=[DuckDuckGoTools()],
+    markdown=True,
+)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Run the Docs Q&A agent against the conversation history."""
+    return agent.run(input=messages).content
+
+
+config = {
+    "author": "gateway_test_fleet@getbindu.com",
+    "name": "bindu_docs_agent",
+    "description": "Answers Bindu documentation questions with cited sources.",
+    "deployment": {
+        "url": f"https://127.0.0.1:{PORT}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/bindu_docs_agent",
+    "skills": [
+        {
+            "id": "bindu_docs_qa",
+            "name": "Bindu docs Q&A",
+            "description": (
+                "Answer questions about the Bindu framework, A2A "
+                "protocol, agent lifecycle, DIDs, x402 payments, and "
+                "related topics by searching docs.getbindu.com. Returns "
+                "Markdown with a Sources section."
+            ),
+            "tags": ["docs", "bindu", "qa", "framework"],
+            "examples": [
+                "What is Bindu?",
+                "How does the task lifecycle work?",
+                "Explain reference_task_ids",
+            ],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/markdown"],
+        }
+    ],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+## Fleet scripts
+
+### start_fleet.sh
+
+Boots all five agents under `uv run`, each on its assigned port. Inherits `examples/.env`, writes pid files to `pids/<agent>.pid`, and tails each agent's `/health` endpoint to harvest its DID. The DIDs land in a sibling `.fleet.env` you `source` into your shell.
+
+```bash
+#!/usr/bin/env bash
+# Start all five agents in the background.
+
+set -euo pipefail
+
+FLEET_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${FLEET_DIR}/../.." && pwd)"
+LOG_DIR="${FLEET_DIR}/logs"
+PID_DIR="${FLEET_DIR}/pids"
+
+mkdir -p "${LOG_DIR}" "${PID_DIR}"
+
+AGENTS=(
+  "joke_agent:3773"
+  "math_agent:3775"
+  "poet_agent:3776"
+  "research_agent:3777"
+  "faq_agent:3778"
+)
+
+start_one() {
+  local name="$1" port="$2"
+  local pidfile="${PID_DIR}/${name}.pid"
+  local logfile="${LOG_DIR}/${name}.log"
+
+  if [[ -f "${pidfile}" ]]; then
+    local old_pid
+    old_pid="$(cat "${pidfile}")"
+    if ps -p "${old_pid}" >/dev/null 2>&1; then
+      echo "  [${name}] already running (pid=${old_pid}) — skip"
+      return
+    fi
+    rm -f "${pidfile}"
+  fi
+
+  if lsof -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "  [${name}] port ${port} already bound — refusing to start"
+    return 1
+  fi
+
+  echo "  [${name}] starting on port ${port}..."
+  (
+    cd "${ROOT_DIR}"
+    BINDU_PORT="${port}" nohup uv run python \
+      "examples/gateway_test_fleet/${name}.py" \
+      > "${logfile}" 2>&1 &
+    echo $! > "${pidfile}"
+  )
+  sleep 1
+  if ! ps -p "$(cat "${pidfile}")" >/dev/null 2>&1; then
+    echo "  [${name}] FAILED to start — last lines of log:"
+    tail -n 20 "${logfile}" | sed 's/^/    /'
+    return 1
+  fi
+  echo "  [${name}] started, pid=$(cat "${pidfile}"), log=${logfile}"
+}
+
+echo "Starting gateway_test_fleet (5 agents)..."
+for entry in "${AGENTS[@]}"; do
+  name="${entry%:*}"
+  port="${entry#*:}"
+  start_one "${name}" "${port}" || true
+done
+
+# Poll each agent's /health for its DID and write a sourceable .fleet.env
+FLEET_ENV="${FLEET_DIR}/.fleet.env"
+# … (DID harvest + .fleet.env generation; see source for full body)
+```
+
+`BINDU_PORT` overrides the port baked into each Python file — that's why operational ports are `3xxx` even though the Python docstrings reference the `5xxx` defaults.
+
+### stop_fleet.sh
+
+```bash
+#!/usr/bin/env bash
+# Stop every agent started by start_fleet.sh.
+# Reads pid files, SIGTERM, wait 5s, SIGKILL if still alive.
+
+set -euo pipefail
+
+FLEET_DIR="$(cd "$(dirname "$0")" && pwd)"
+PID_DIR="${FLEET_DIR}/pids"
+
+shopt -s nullglob
+pidfiles=( "${PID_DIR}"/*.pid )
+shopt -u nullglob
+
+for pidfile in "${pidfiles[@]}"; do
+  name="$(basename "${pidfile}" .pid)"
+  pid="$(cat "${pidfile}" 2>/dev/null || true)"
+  if ! ps -p "${pid}" >/dev/null 2>&1; then
+    rm -f "${pidfile}"
+    continue
+  fi
+  echo "  [${name}] stopping pid ${pid}..."
+  kill -TERM "${pid}" 2>/dev/null || true
+
+  for _ in 1 2 3 4 5; do
+    sleep 1
+    ps -p "${pid}" >/dev/null 2>&1 || break
+  done
+  if ps -p "${pid}" >/dev/null 2>&1; then
+    kill -KILL "${pid}" 2>/dev/null || true
+  fi
+  rm -f "${pidfile}"
+done
+
+echo "Fleet stopped."
+```
+
+### run_matrix.sh
+
+The 13-case query matrix. Each case is a bash function that prints a JSON body; the runner POSTs to `${GATEWAY_URL}/plan` (default `http://localhost:3774`), captures the SSE stream into `logs/<case_id>.sse`, and grades it on the presence of `plan`/`final`/`done`/`error` events.
+
+```bash
+#!/usr/bin/env bash
+# Query matrix runner. Hits POST /plan on the gateway with a series of
+# curated queries; grades each on plan/final/done/error markers.
+
+set -euo pipefail
+
+FLEET_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="${FLEET_DIR}/logs"
+mkdir -p "${LOG_DIR}"
+
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:3774}"
+GATEWAY_API_KEY="${GATEWAY_API_KEY:-dev-key-change-me}"
+
+JOKE_URL="http://localhost:3773"
+MATH_URL="http://localhost:3775"
+POET_URL="http://localhost:3776"
+RESEARCH_URL="http://localhost:3777"
+FAQ_URL="http://localhost:3778"
+
+AUTH_BLOCK='"auth": { "type": "did_signed" }'
+
+case_Q1() {
+  cat <<EOF
+{
+  "question": "Tell me a joke about databases.",
+  "agents": [
+    { "name": "joke", "endpoint": "${JOKE_URL}", ${AUTH_BLOCK},
+      "skills": [{ "id": "tell_joke", "description": "Tell a joke" }] }
+  ]
+}
+EOF
+}
+
+# … Q2 through Q12, Q_MULTIHOP, Q_INBOX_REPRO_A/B/C all in the same shape.
+# Q_MULTIHOP forces research → math → poet in order:
+case_Q_MULTIHOP() {
+  cat <<EOF
+{
+  "question": "First research the current approximate population of Tokyo (cite the source). Then compute what exactly 0.5% of that population is. Finally write a 4-line poem celebrating that number of people. Do all three steps in order.",
+  "agents": [
+    { "name": "research", "endpoint": "${RESEARCH_URL}", ${AUTH_BLOCK},
+      "skills": [{ "id": "web_research", "description": "Web search and summarize a factual question with sources" }] },
+    { "name": "math",     "endpoint": "${MATH_URL}",     ${AUTH_BLOCK},
+      "skills": [{ "id": "solve", "description": "Solve math problems step-by-step" }] },
+    { "name": "poet",     "endpoint": "${POET_URL}",     ${AUTH_BLOCK},
+      "skills": [{ "id": "write_poem", "description": "Write a short (max 4-line) poem on the given topic" }] }
+  ],
+  "preferences": { "max_steps": 10 }
+}
+EOF
+}
+
+ALL_CASES=(Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8 Q9 Q10 Q11 Q12 Q_MULTIHOP Q_INBOX_REPRO_A Q_INBOX_REPRO_B)
+EXPECT_400=("Q6")
+
+run_case() {
+  local cid="$1"
+  local body_func="case_${cid}"
+  local body; body="$("${body_func}")"
+  local out="${LOG_DIR}/${cid}.sse"
+  local status_file="${LOG_DIR}/${cid}.status"
+
+  local http_code
+  http_code=$(curl -sN --max-time 90 \
+    -o "${out}" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${GATEWAY_API_KEY}" \
+    -H "Accept: text/event-stream" \
+    -X POST "${GATEWAY_URL}/plan" \
+    -d "${body}" || true)
+  echo "${http_code}" > "${status_file}"
+
+  # Grade on SSE markers
+  local has_plan has_final has_done has_error
+  has_plan=$(grep -c '^event: plan' "${out}" || true)
+  has_final=$(grep -c '^event: final' "${out}" || true)
+  has_done=$(grep -c '^event: done' "${out}" || true)
+  has_error=$(grep -c '^event: error' "${out}" || true)
+
+  echo "  plan=${has_plan}  final=${has_final}  done=${has_done}  error=${has_error}"
+}
+```
+
+See the source for the full set of case bodies (Q2–Q12, the inbox-repro cases, and the `run_dup_check` idempotency probe).
+
+## How It Works
+
+**Per-agent registration.** Each agent declares its skills in `config["skills"]` and `bindufy()` registers it with the local Bindu runtime. With `AUTH__ENABLED=true`, the agent also auto-registers its DID with Hydra on first boot and persists OAuth client credentials under `<cwd>/.bindu/oauth_credentials.json`. The `start_fleet.sh` script polls `/health` after boot to extract each agent's DID and exports them to `.fleet.env`.
+
+**Gateway planning.** The gateway's `POST /plan` endpoint accepts a `question`, an `agents` roster (each entry has `endpoint`, `auth`, and `skills`), and optional `preferences` (`timeout_ms`, `max_steps`, `session_id`). It returns an SSE stream emitting these events in order: `session`, `plan`, `task.started` (one per agent step), `task.finished`, `final`, `done` — or `error` on failure.
+
+**The 13-case test matrix.** Each case exercises a different failure mode or routing scenario:
+
+- **Q1–Q2**: single-agent routing. Q1 is a perfect match for the joke agent; Q2 deliberately mismatches (asks for math but offers only a joke agent — should produce a polite decline, not an error).
+- **Q3, Q_MULTIHOP**: multi-step chains. Q_MULTIHOP forces `research → math → poet` in order, each consuming the previous artifact.
+- **Q4**: ambiguity — "make me smile" could route to joke or poet.
+- **Q5–Q6**: gibberish and empty inputs. Q6 must be rejected at the API boundary with HTTP 400 (listed in `EXPECT_400`).
+- **Q7**: unreachable peer (endpoint at `localhost:39999`) — planner must surface the connect error, not hang.
+- **Q8**: bad auth (bogus bearer token) — planner must surface the 401 cleanly.
+- **Q9**: missing skill (`nonexistent_skill` on the joke agent).
+- **Q10**: timeout test with `preferences.timeout_ms = 30000`.
+- **Q11**: large payload (~10KB of lorem ipsum context) — verifies no silent truncation.
+- **Q12**: full-roster planning — all five agents available, one factual question routed correctly.
+- **Q_INBOX_REPRO_A**: regression for a real inbox bug — single compound message that needs two agents.
+- **Q_INBOX_REPRO_B**: turn-2 routing under multi-recipient roster. Turn 1 was math; turn 2 must re-route to joke alone.
+- **Q_INBOX_REPRO_C**: duplicate-submit idempotency. Fires the same body twice in parallel via `run_dup_check`. Currently fails — `/plan` has no idempotency layer yet. Excluded from `ALL_CASES` so the matrix stays green; run it explicitly.
+
+**Auth.** All cases pass `"auth": { "type": "did_signed" }` per agent — peer calls from the gateway sign each body with Ed25519 over a canonical `{body, did, timestamp}` payload (base58-encoded). The full round-trip — Hydra bearer + DID signature — is independently smoke-tested by `hydra_smoke_test.sh`.
+
+## Dependencies / Setup
+
+```bash
+export OPENROUTER_API_KEY=<get one at https://openrouter.ai/keys>
+uv sync --extra agents
+```
+
+The fleet expects:
+
+- The **Bindu Gateway** running on `localhost:3774` (with `GATEWAY_API_KEY=dev-key-change-me` in dev — override with the env var if yours differs).
+- A reachable Hydra at the URL configured in `examples/.env` (only required for `poet_agent`, `faq_agent`, and `did_signed` auth).
+- `examples/.env` with `OPENROUTER_API_KEY` set. Set `AUTH__ENABLED=true` there to flip the whole fleet into Hydra-protected mode; leave it false for the open-port path.
+
+## Run
+
+```bash
+# Boot all five agents in the background (idempotent — skips agents
+# whose pid file points at a live process).
+./examples/gateway_test_fleet/start_fleet.sh
+
+# Source the auto-generated DIDs into your shell.
+source ./examples/gateway_test_fleet/.fleet.env
+
+# Run the full matrix.
+./examples/gateway_test_fleet/run_matrix.sh
+
+# Run a single case by id.
+./examples/gateway_test_fleet/run_matrix.sh Q_MULTIHOP
+
+# Run the duplicate-submit idempotency probe (expected to fail today).
+./examples/gateway_test_fleet/run_matrix.sh dup-check
+
+# Tear down.
+./examples/gateway_test_fleet/stop_fleet.sh
+```
+
+Per-case artifacts land under `examples/gateway_test_fleet/logs/`:
+
+- `logs/<case_id>.sse` — raw Server-Sent Events stream
+- `logs/<case_id>.status` — HTTP status code
+- `logs/<agent>.log` — stdout/stderr for each agent process
+
+For an auth-only sanity check independent of the matrix, run `hydra_smoke_test.sh` — it walks through public endpoint (`200`), protected endpoint without bearer (`401`), fetching a Hydra token via `client_credentials`, DID-signing the body, and a successful POST with bearer + signature.
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Q1 request body to POST /plan">
+```json
+{
+  "question": "Tell me a joke about databases.",
+  "agents": [
+    {
+      "name": "joke",
+      "endpoint": "http://localhost:3773",
+      "auth": { "type": "did_signed" },
+      "skills": [
+        { "id": "tell_joke", "description": "Tell a joke" }
+      ]
+    }
+  ]
+}
+```
+  </Accordion>
+
+  <Accordion title="Q1 SSE response (raw stream)">
+```
+event: session
+data: {"session_id":"5e9d0f7c-2c0e-4b6a-9d9f-3a5d2c6f8e10"}
+
+event: plan
+data: {"steps":[{"agent":"joke","skill":"tell_joke","input":"Tell me a joke about databases."}]}
+
+event: task.started
+data: {"agent":"joke","task_id":"a7f3..."}
+
+event: task.finished
+data: {"agent":"joke","output":"Why don't databases ever get lost? Because they always follow the index!"}
+
+event: final
+data: {"answer":"Why don't databases ever get lost? Because they always follow the index!"}
+
+event: done
+data: {}
+```
+  </Accordion>
+
+  <Accordion title="Q1 final plan (stripped JSON)">
+```json
+{
+  "session_id": "5e9d0f7c-2c0e-4b6a-9d9f-3a5d2c6f8e10",
+  "plan": {
+    "steps": [
+      {
+        "agent": "joke",
+        "skill": "tell_joke",
+        "input": "Tell me a joke about databases."
+      }
+    ]
+  },
+  "final": "Why don't databases ever get lost? Because they always follow the index!"
+}
+```
+  </Accordion>
+
+  <Accordion title="Talk to one agent directly (auth off)">
+```bash
+curl -sS http://localhost:3773/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "00000000-0000-0000-0000-000000000004",
+    "params": {
+      "message": {
+        "role": "user",
+        "parts": [{ "kind": "text", "text": "tell me a joke about cats" }],
+        "kind": "message",
+        "messageId": "00000000-0000-0000-0000-000000000001",
+        "contextId": "00000000-0000-0000-0000-000000000002",
+        "taskId":    "00000000-0000-0000-0000-000000000003"
+      },
+      "configuration": { "acceptedOutputModes": ["application/json"] }
+    }
+  }'
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and point it at the gateway on `localhost:3774` to drive the fleet from the UI.

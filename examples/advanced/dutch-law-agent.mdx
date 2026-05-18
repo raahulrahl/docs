@@ -1,0 +1,574 @@
+---
+title: "3.11 Dutch Law Research Agent"
+description: "Citation-grounded Dutch legal research over the BWB statute corpus via the Ansvar Dutch-Law-MCP server"
+---
+
+Citation-grounded Dutch legal research over the BWB statute corpus via the Ansvar Dutch-Law-MCP server.
+
+## Code
+
+Create `bindu_agent.py` with the code below, or save it directly from your editor.
+
+```python
+"""Bindu wrapper for the Dutch-law research agent.
+
+Exposes the Agno + Dutch-Law-MCP agent (built in `agent.py`) as a
+Bindu-native A2A endpoint:
+  • DID-based identity (deterministic from author + name)
+  • JSON-RPC 2.0 on http://localhost:3773
+  • `/.well-known/agent.json` agent card with the dutch-law-research skill
+  • mTLS / OAuth2 / x402 extension points wired through bindufy()
+
+Run:
+    uv run python bindu_agent.py
+
+Then probe (in another shell):
+    curl -s http://localhost:3773/.well-known/agent.json | jq .
+    curl -s http://localhost:3773/health
+    curl -s -X POST http://localhost:3773 \\
+      -H 'Content-Type: application/json' \\
+      -d '{"jsonrpc":"2.0","id":1,"method":"message/send",
+           "params":{"message":{"role":"user",
+           "parts":[{"kind":"text","text":"Wat zegt art. 6:162 BW?"}]}}}'
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from bindu.penguin.bindufy import bindufy
+
+from agent import build_agent, build_server_params
+from agno.tools.mcp import MCPTools
+
+
+# ---------------------------------------------------------------------------
+# Persistent MCP connection
+# ---------------------------------------------------------------------------
+# `bindufy` runs each request as an `await handler(messages)` coroutine on a
+# single event loop. Spawning the Dutch-Law-MCP server per request adds ~1-2s
+# of node-startup overhead and forces SQLite to re-open the 130 MB DB. We
+# instead lazy-init `MCPTools` once on the first request and keep the stdio
+# subprocess + SQLite handle alive for the agent's lifetime.
+#
+# `MCPTools.__aenter__()` opens an anyio task group bound to the task that
+# called it. Subsequent agent.arun() calls run as child tasks and dispatch
+# tool calls through the same session, which is the supported pattern.
+# ---------------------------------------------------------------------------
+
+_mcp_tools: MCPTools | None = None
+_agent = None
+_init_lock = asyncio.Lock()
+
+
+async def _ensure_agent():
+    global _mcp_tools, _agent
+    if _agent is not None:
+        return _agent
+    async with _init_lock:
+        if _agent is None:
+            _mcp_tools = MCPTools(server_params=build_server_params())
+            await _mcp_tools.__aenter__()
+            _agent = build_agent(_mcp_tools)
+    return _agent
+
+
+# ---------------------------------------------------------------------------
+# Handler
+# ---------------------------------------------------------------------------
+# bindufy validates the handler has a single param literally named
+# `messages`. The framework passes the latest user-message string (not a
+# list) — see bindu/penguin/manifest.py::_resolve_params.
+# ---------------------------------------------------------------------------
+
+
+async def handler(messages: str) -> str:
+    agent = await _ensure_agent()
+    result = await agent.arun(input=messages)
+    # Agno >=1.7 returns a RunOutput with `.content`; fall back to str().
+    content = getattr(result, "content", None) or getattr(result, "response", None)
+    return content if isinstance(content, str) else str(result)
+
+
+# ---------------------------------------------------------------------------
+# Agent manifest
+# ---------------------------------------------------------------------------
+
+config = {
+    "author": "bindu.builder@getbindu.com",
+    "name": "dutch_law_agent",
+    "description": (
+        "Citation-grounded Dutch legal research. Answers questions in Dutch "
+        "or English against 3,251 Dutch statutes (BWB) with verbatim "
+        "provision text from wetten.overheid.nl. Backed by the Ansvar "
+        "dutch-legal-citations MCP (18 tools). Research only — not legal "
+        "advice."
+    ),
+    "version": "0.1.0",
+    "deployment": {
+        "url": f"http://localhost:{os.environ.get('BINDU_PORT', '3773')}",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "skills": ["skills/dutch-law-research"],
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+The Bindu wrapper imports `build_agent` and `build_server_params` from a sibling `agent.py` that wires the Agno `Agent` to the `dutch-legal-citations` MCP server over stdio. Create `agent.py` alongside `bindu_agent.py`:
+
+```python
+"""Dutch-law research agent — Agno + MCPTools + Ansvar Dutch-Law-MCP.
+
+Spawns the `dutch-legal-citations` MCP server over stdio, attaches the 15
+tools to an Agno Agent, and starts an interactive CLI. Patterned after the
+Agno MCP demo (https://docs.agno.com/examples/agent-os/advanced-demo/mcp-demo)
+with the system-prompt structure adapted from `prompt.py`.
+
+Run:
+    cp .env.example .env  # set OPENAI_API_KEY
+    uv sync
+    uv run python agent.py                          # interactive
+    uv run python agent.py "your question here"     # one-shot
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+from mcp import StdioServerParameters
+
+from agno.agent import Agent
+from agno.models.base import Model
+from agno.models.openai import OpenAIChat
+from agno.models.openrouter import OpenRouter
+from agno.tools.mcp import MCPTools
+
+from prompt import SYSTEM_PROMPT
+
+
+def build_model() -> Model:
+    """Pick the model backend from env.
+
+    - LLM_PROVIDER=openrouter  → agno.models.openrouter.OpenRouter
+                                 (uses OPENROUTER_API_KEY, base
+                                 https://openrouter.ai/api/v1).
+    - LLM_PROVIDER=openai (default) → agno.models.openai.OpenAIChat
+                                      (uses OPENAI_API_KEY).
+
+    If LLM_PROVIDER is unset but OPENROUTER_API_KEY is and OPENAI_API_KEY
+    is not, OpenRouter is selected automatically.
+    """
+    explicit = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    has_or = bool(os.environ.get("OPENROUTER_API_KEY"))
+    has_oai = bool(os.environ.get("OPENAI_API_KEY"))
+    provider = explicit or ("openrouter" if has_or and not has_oai else "openai")
+
+    if provider == "openrouter":
+        model_id = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o")
+        return OpenRouter(id=model_id)
+    if provider == "openai":
+        return OpenAIChat(id=os.environ.get("OPENAI_MODEL", "gpt-4o"))
+    raise ValueError(
+        f"unknown LLM_PROVIDER={provider!r}. Use 'openai' or 'openrouter'."
+    )
+
+load_dotenv()
+
+
+def resolve_mcp_entry() -> Path:
+    """Resolve the absolute path to the built MCP server entrypoint.
+
+    Defaults to `../Dutch-law-mcp/dist/index.js` relative to this file,
+    matching the layout used in this repo's `examples/` tree.
+    """
+    raw = os.environ.get("DUTCH_LAW_MCP_ENTRY", "../Dutch-law-mcp/dist/index.js")
+    entry = Path(raw)
+    if not entry.is_absolute():
+        entry = (Path(__file__).parent / entry).resolve()
+    if not entry.exists():
+        raise FileNotFoundError(
+            f"Dutch-Law-MCP entry not found at {entry}. "
+            f"Build it with: cd {entry.parent.parent} && "
+            f"npm install --ignore-scripts && npm run build"
+        )
+    return entry
+
+
+def _clear_stale_lock(entry: Path) -> None:
+    """Clear `@ansvar/mcp-sqlite`'s lock directory if a prior run crashed."""
+    import shutil
+
+    candidates: list[Path] = [entry.parent.parent / "data" / "database.db"]
+    if db_override := os.environ.get("DUTCH_LAW_DB_PATH"):
+        candidates.append(Path(db_override))
+    for db in candidates:
+        lock = db.with_suffix(db.suffix + ".lock")
+        if lock.is_dir():
+            shutil.rmtree(lock, ignore_errors=True)
+
+
+def build_server_params() -> StdioServerParameters:
+    entry = resolve_mcp_entry()
+    _clear_stale_lock(entry)
+    env = {"PATH": os.environ.get("PATH", "")}
+    if db_path := os.environ.get("DUTCH_LAW_DB_PATH"):
+        env["DUTCH_LAW_DB_PATH"] = db_path
+    return StdioServerParameters(command="node", args=[str(entry)], env=env)
+
+
+def build_agent(mcp_tools: MCPTools) -> Agent:
+    return Agent(
+        name="Lex-NL",
+        model=build_model(),
+        tools=[mcp_tools],
+        instructions=SYSTEM_PROMPT,
+        markdown=True,
+    )
+```
+
+And the Windsurf-style XML-tagged system prompt in `prompt.py`:
+
+```python
+"""System prompt for the Dutch Law research agent."""
+
+SYSTEM_PROMPT = """\
+You are Lex-NL, a Dutch legal research assistant built on the Agno agent \
+framework. You operate over a verified, government-sourced corpus of Dutch \
+law via the `dutch-legal-citations` MCP server (Ansvar Systems). You are \
+NOT a lawyer; you are a research tool that returns citation-grounded \
+answers from primary sources only.
+
+<corpus>
+Source: wetten.overheid.nl (BWB — Basiswettenbestand), rechtspraak.nl \
+(case law), overheid.nl (Kamerstukken), eur-lex.europa.eu (EU metadata).
+Coverage: 3,251 Dutch statutes, 77,531 provisions.
+Provenance: every provision is returned verbatim from SQLite FTS5 — zero \
+LLM paraphrase. If a tool returns no result, say so; do not fabricate.
+</corpus>
+
+<tool_calling>
+1. Only call a tool when necessary. NEVER make redundant calls.
+2. If you state you will call a tool, call it as your next action.
+3. Always follow the tool schema exactly. Never invent BWB-IDs.
+4. Pick the narrowest tool: search_legislation, get_provision,
+   validate_citation, check_currency, build_legal_stance, format_citation,
+   get_eu_basis, get_dutch_implementations, get_provision_at_date,
+   list_sources.
+</tool_calling>
+
+<legal_research_method>
+1. Ground every legal claim in a tool result. If a tool returns nothing,
+   say so verbatim — do NOT fall back on general knowledge.
+2. Quote operative text VERBATIM from the tool output.
+3. Always cite as: `Statute (BWB-ID) artikel X`.
+4. For amendment/repeal questions, run `check_currency` first.
+</legal_research_method>
+
+<safety_and_disclaimers>
+THIS IS A RESEARCH TOOL, NOT LEGAL ADVICE. Municipal and provincial law
+are out of scope. Recommend a qualified Dutch advocaat for any "what
+should I do" question.
+</safety_and_disclaimers>
+"""
+```
+
+The shipped prompt in `prompt.py` is longer (full Windsurf-style sections for `<user_information>`, `<citation_format>`, `<communication_style>`). Read the file in the source repo for the exact text.
+
+## Skill Configuration
+
+Create `skills/dutch-law-research/skill.yaml`:
+
+```yaml
+# Dutch Law Research Skill
+# Citation-grounded research over Dutch federal law (rijkswetgeving)
+
+# Basic Metadata
+id: dutch-law-research-v1
+name: dutch-law-research
+version: 1.0.0
+author: bindu.builder@getbindu.com
+
+# Description
+description: |
+  Verified, citation-grounded research over Dutch federal law. Answers
+  questions in Dutch or English using the Ansvar dutch-legal-citations
+  MCP server (BWB corpus: 3,251 statutes, 77,531 provisions).
+
+  Every legal claim is grounded in a verbatim quote from
+  wetten.overheid.nl with a BWB-ID citation. The agent uses 18 MCP tools:
+  search_legislation, get_provision, validate_citation, check_currency,
+  build_legal_stance, get_eu_basis, and others.
+
+  Out of scope: municipal (gemeentelijk) and provincial (provinciaal)
+  legislation, full EU case-law text, and any matter that requires legal
+  advice (the agent will redirect the user to a qualified Dutch advocaat).
+
+# Tags and Modes
+tags:
+  - legal
+  - dutch-law
+  - nederlands-recht
+  - citation
+  - compliance
+  - bwb
+  - wetten-overheid
+  - eu-law
+  - gdpr
+  - avg
+
+input_modes:
+  - text/plain
+
+output_modes:
+  - text/plain
+  - text/markdown
+
+# Example Queries
+examples:
+  - "Wat zegt artikel 6:162 BW over onrechtmatige daad?"
+  - "Is artikel 24 van de Mededingingswet nog van kracht?"
+  - "Valideer de citatie 'art. 6:162 BW'."
+  - "Welke EU-richtlijnen worden door de AVG geïmplementeerd?"
+  - "Bouw een juridisch standpunt op over privacyrecht in Nederland."
+  - "What does Burgerlijk Wetboek Boek 6 say about contractual liability?"
+  - "Find Dutch provisions about trade secrets."
+  - "Geef de Grondwet artikel 1."
+  - "Wat is het EU-fundament van AVG art. 5?"
+  - "Welke Nederlandse wet implementeert de ePrivacy-richtlijn?"
+
+# Detailed Capabilities
+capabilities_detail:
+
+  legislation_search:
+    supported: true
+    backed_by_tool: search_legislation
+    features:
+      - fts5_full_text_search
+      - bm25_ranking
+      - statute_scoped_search
+      - status_filter_in_force_amended_repealed
+      - historical_as_of_date
+
+  provision_retrieval:
+    supported: true
+    backed_by_tool: get_provision
+    features:
+      - exact_text_verbatim
+      - bwb_id_lookup
+      - article_and_lid_resolution
+
+  citation_validation:
+    supported: true
+    backed_by_tool: validate_citation
+    features:
+      - statute_format_check
+      - case_law_ecli_check
+      - kamerstuk_check
+      - eu_directive_regulation_check
+
+  currency_check:
+    supported: true
+    backed_by_tool: check_currency
+    features:
+      - in_force_status
+      - amendment_history
+      - repeal_status
+
+  eu_bridge:
+    supported: true
+    backed_by_tools:
+      - get_eu_basis
+      - get_dutch_implementations
+      - search_eu_implementations
+      - get_provision_eu_basis
+      - validate_eu_compliance
+    features:
+      - dutch_to_eu_lookup
+      - eu_to_dutch_lookup
+      - celex_resolution
+
+  multi_source_stance:
+    supported: true
+    backed_by_tool: build_legal_stance
+    features:
+      - aggregate_statutes_and_case_law
+      - cross_reference_eu
+
+# Out-of-scope (refuse without tool call)
+out_of_scope:
+  - Municipal (gemeentelijk) ordinances and APVs
+  - Provincial (provinciaal) legislation
+  - Full text of EU directives or CJEU case law
+  - Legal advice (research only — agent will redirect to a qualified advocaat)
+
+# Data provenance
+data_sources:
+  - name: wetten.overheid.nl
+    role: primary statute corpus (BWB API)
+    authority: Ministerie van Justitie en Veiligheid
+  - name: rechtspraak.nl
+    role: case law (premium)
+  - name: overheid.nl
+    role: Kamerstukken and preparatory works (premium)
+  - name: eur-lex.europa.eu
+    role: EU metadata for cross-references
+
+# Disclaimer
+disclaimer: |
+  This is a research tool, NOT legal advice. Always verify critical
+  citations against wetten.overheid.nl before relying on them in
+  professional legal work.
+```
+
+## How It Works
+
+**MCP Integration (stdio transport)**
+- `Dutch-Law-MCP` server is a Node process built from a sibling `../Dutch-law-mcp/` folder
+- Launched via `mcp.StdioServerParameters(command="node", args=["dist/index.js"])`
+- `MCPTools` opens the subprocess once on the first request and keeps the stdio session warm — avoids ~1-2s node startup per call and the 130 MB SQLite re-open
+- 15+ tools exposed: `search_legislation`, `get_provision`, `validate_citation`, `check_currency`, `build_legal_stance`, `get_eu_basis`, `get_dutch_implementations`, `get_provision_at_date`, `list_sources`, and EU-bridge tools
+
+**Windsurf-style XML-tagged prompt**
+- Identity header + tagged sections: `<user_information>`, `<corpus>`, `<tool_calling>`, `<legal_research_method>`, `<citation_format>`, `<safety_and_disclaimers>`, `<communication_style>`
+- Mirrors the operator-style prompt structure used by Windsurf / Cascade
+- Tool-selection guide is embedded in `<tool_calling>` so the model picks the narrowest tool for each query shape
+- Worked examples show the expected call-then-quote pattern
+
+**Citation discipline**
+- Every legal claim must be backed by a tool result — no fallback to general knowledge of Dutch law
+- Operative provision text is quoted verbatim from the tool output (zero LLM paraphrase)
+- Citation format: `Statute (BWB-ID) artikel X` — e.g. `Burgerlijk Wetboek Boek 6 (BWBR0005289) art. 6:162`
+- EU references use CELEX style: `Verordening (EU) 2016/679 (GDPR) art. 5`
+- If a statute has been amended or repealed, `check_currency` is run before the agent relies on it
+
+**Persistent agent (Bindu A2A mode)**
+- `_ensure_agent()` lazy-initializes the `MCPTools` connection and `Agent` once under an `asyncio.Lock`
+- Subsequent A2A `message/send` requests reuse the same warm MCP session
+- Async `handler(messages)` calls `agent.arun(input=messages)` and unwraps `RunOutput.content`
+
+## Dependencies
+
+```bash
+uv init
+uv add bindu agno openai python-dotenv mcp rich
+```
+
+The MCP server itself is a separate Node project. Build it once in a sibling folder:
+
+```bash
+cd ../Dutch-law-mcp
+npm install --ignore-scripts
+npm run build
+mkdir -p data
+curl -fSL https://github.com/Ansvar-Systems/Dutch-law-mcp/releases/download/v1.2.2/database.db.gz \
+  | gunzip > data/database.db
+```
+
+## Environment Setup
+
+Create `.env` file:
+```bash
+# Pick one: OPENAI_API_KEY or OPENROUTER_API_KEY
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
+
+# Or use OpenRouter (auto-selected if only this is set)
+# LLM_PROVIDER=openrouter
+# OPENROUTER_API_KEY=sk-or-v1-...
+# OPENROUTER_MODEL=openai/gpt-4o
+
+# Path to the built MCP server entry point
+DUTCH_LAW_MCP_ENTRY=../Dutch-law-mcp/dist/index.js
+
+# Optional: explicit DB path override
+# DUTCH_LAW_DB_PATH=../Dutch-law-mcp/data/database.db
+```
+
+## Run
+
+```bash
+uv run python bindu_agent.py
+```
+
+Try:
+
+- "Wat zegt artikel 6:162 BW over onrechtmatige daad?"
+- "Is de Mededingingswet art. 24 nog van kracht?"
+- "What EU directive is the basis for AVG art. 5?"
+- "Valideer de citatie 'art. 6:162 BW'."
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Message Send Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Wat zegt artikel 6:162 BW over onrechtmatige daad?"
+        }
+      ]
+    },
+    "skillId": "dutch-law-research-v1",
+    "configuration": {
+      "acceptedOutputModes": ["text/markdown"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="Task get Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "9f11c870-5616-49ad-b187-d93cbb100003"
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100004"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and try to chat with the Dutch law research agent.

@@ -1,0 +1,256 @@
+---
+title: "1.12 Echo Agent Behind Paywall"
+description: "Minimal echo agent gated by an x402 paywall on Base Sepolia"
+---
+
+The simplest possible x402-paywalled agent. Same echo handler as the basic echo agent, but the `message/send` method is gated: the server returns HTTP 402 with payment requirements until the caller pays the configured amount (`$0.0001` USDC in the example below) on Base Sepolia.
+
+## Code
+
+Create `echo_agent_behind_paywall.py` with the code below, or save it directly from your editor.
+
+```python
+"""Echo Testing Agent
+
+A minimal Bindu agent for testing connectivity.
+Echoes back user input to verify the system is working.
+
+Features:
+- Simple echo functionality
+- No external dependencies
+- Perfect for testing Bindu installation
+- Lightweight and fast
+
+Usage:
+    python echo_simple_agent.py
+
+Environment:
+    No environment variables required
+"""
+
+from bindu.penguin.bindufy import bindufy
+
+
+def handler(messages):
+    """Handle incoming messages by echoing back the user's latest input.
+
+    Args:
+        messages: List of message dictionaries containing conversation history.
+
+    Returns:
+        List containing a single assistant message with the user's content.
+    """
+    # Reply with the user's latest input
+    return [{"role": "assistant", "content": messages[-1]["content"]}]
+
+
+config = {
+    "author": "gaurikasethi88@gmail.com",
+    "name": "echo_agent",
+    "description": "A basic echo agent for quick testing.",
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"]
+    },
+    "skills": ["skills/question-answering", "skills/pdf-processing"],
+    "execution_cost": {
+    "amount": "$0.0001",
+    "token": "USDC",
+    "network": "base-sepolia",
+    "pay_to_address": "0x2654bb8B272f117c514aAc3d4032B1795366BA5d",
+    "protected_methods": [
+      "message/send"
+    ]
+  },
+}
+
+bindufy(config, handler)
+
+# if you want to use tunnel to expose your agent to the internet, use the following command
+#bindufy(config, handler, launch=True)
+```
+
+## How It Works
+
+**Handler**
+- Same echo logic as the basic echo agent — returns the user's latest message back
+- No model call, no external dependencies
+
+**x402 paywall block**
+- `execution_cost` in the config declares the price and chain
+- `amount`: `$0.0001` charged per request
+- `token`: `USDC`
+- `network`: `base-sepolia` (testnet — use the Circle faucet for test USDC)
+- `pay_to_address`: receiving wallet for the payment
+- `protected_methods`: list of A2A methods that require payment; here only `message/send`
+
+**The 402 response cycle**
+- Caller sends `message/send` with no payment header
+- Server returns **HTTP 402 Payment Required** with x402 `paymentRequirements` describing the price, network, token, and `payTo` address
+- Caller signs an x402 payment (EIP-3009 transfer authorization on Base Sepolia) and resends the request with the `X-PAYMENT` header
+- Server verifies the signed payment, executes the handler, and returns the JSON-RPC result
+
+**Testing it**
+- Fund a Base Sepolia wallet with test USDC from the [Circle USDC faucet](https://faucet.circle.com/)
+- Use an x402-aware client to handle the 402 → sign → retry loop automatically
+- `tasks/get` is not in `protected_methods`, so it remains free
+
+## Dependencies
+
+```bash
+uv init
+uv add bindu
+```
+
+## Environment Setup
+
+No environment variables required for the server. The caller needs a funded Base Sepolia wallet with test USDC.
+
+## Run
+
+```bash
+uv run echo_agent_behind_paywall.py
+```
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Message Send Request (no payment)">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Repeat after me: hello paywall"
+        }
+      ]
+    },
+    "configuration": {
+      "acceptedOutputModes": ["application/json"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="402 Payment Required Response">
+```json
+{
+  "x402Version": 1,
+  "error": "X-PAYMENT header is required",
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "base-sepolia",
+      "maxAmountRequired": "100",
+      "resource": "http://localhost:3773/",
+      "description": "Payment required for message/send",
+      "mimeType": "application/json",
+      "payTo": "0x2654bb8B272f117c514aAc3d4032B1795366BA5d",
+      "maxTimeoutSeconds": 60,
+      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "extra": {
+        "name": "USDC",
+        "version": "2"
+      }
+    }
+  ]
+}
+```
+  </Accordion>
+
+  <Accordion title="Message Send Request (with X-PAYMENT header)">
+```http
+POST / HTTP/1.1
+Host: localhost:3773
+Content-Type: application/json
+X-PAYMENT: <base64-encoded-x402-payment-payload>
+
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Repeat after me: hello paywall"
+        }
+      ]
+    },
+    "configuration": {
+      "acceptedOutputModes": ["application/json"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="Successful Response (after payment)">
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003",
+  "result": {
+    "id": "9f11c870-5616-49ad-b187-d93cbb100003",
+    "status": { "state": "completed" },
+    "artifacts": [
+      {
+        "parts": [
+          { "kind": "text", "text": "Repeat after me: hello paywall" }
+        ]
+      }
+    ]
+  }
+}
+```
+  </Accordion>
+
+  <Accordion title="Task get Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "9f11c870-5616-49ad-b187-d93cbb100003"
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100004"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and try to chat with the echo paywall agent.

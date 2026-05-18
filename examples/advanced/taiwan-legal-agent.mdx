@@ -1,0 +1,459 @@
+---
+title: "3.12 Taiwan Legal Research Agent"
+description: "MCP-grounded Taiwan (ROC) legal research over 司法院 judgments, 全國法規資料庫 regulations, and 憲法法庭 interpretations"
+---
+
+MCP-grounded Taiwan (ROC) legal research over 司法院 judgments, 全國法規資料庫 regulations, and 憲法法庭 interpretations. Every answer is backed by a live tool call against an official Taiwan government source.
+
+## Code
+
+Create `bindu_agent.py` with the code below, or save it directly from your editor.
+
+```python
+"""Lex Taiwan exposed as a Bindu A2A agent.
+
+Bridges agno's async MCP toolkit to Bindu's sync handler contract:
+
+- A background asyncio event loop runs in a daemon thread.
+- The MCP stdio connection is opened ONCE on that loop at module load,
+  so the Taiwan legal MCP server starts a single time and stays warm
+  across every A2A `message/send` request.
+- The sync handler that Bindu invokes hops onto the background loop
+  with `run_coroutine_threadsafe(...)` and waits for the result.
+
+Run with:
+    .venv/bin/python bindu_agent.py
+"""
+
+from __future__ import annotations
+
+import asyncio
+import atexit
+import os
+import threading
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from agno.tools.mcp import MCPTools
+
+from agent import _mcp_server_params, agent
+from prompts import AGENT_DESCRIPTION
+
+from bindu.penguin.bindufy import bindufy
+
+
+HERE = Path(__file__).parent.resolve()
+
+
+# --- Background event loop ---------------------------------------------------
+# Bindu's handler contract is sync, but agno + MCPTools are async-only.
+# We run a dedicated asyncio loop in a daemon thread and marshal each
+# handler call onto it. This also lets us keep ONE MCP connection alive
+# across requests instead of fork-restarting the stdio server every time.
+
+_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
+_mcp_tools: MCPTools | None = None
+_ready = threading.Event()
+
+
+def _run_loop() -> None:
+    asyncio.set_event_loop(_loop)
+    _loop.run_forever()
+
+
+_loop_thread = threading.Thread(target=_run_loop, name="lex-taiwan-loop", daemon=True)
+_loop_thread.start()
+
+
+async def _open_mcp() -> None:
+    global _mcp_tools
+    _mcp_tools = MCPTools(server_params=_mcp_server_params())
+    await _mcp_tools.connect()
+    agent.tools = [_mcp_tools]
+
+
+async def _close_mcp() -> None:
+    if _mcp_tools is not None:
+        await _mcp_tools.close()
+
+
+asyncio.run_coroutine_threadsafe(_open_mcp(), _loop).result()
+_ready.set()
+
+
+def _shutdown() -> None:
+    if not _loop.is_running():
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_close_mcp(), _loop).result(timeout=5)
+    except Exception:
+        pass
+    _loop.call_soon_threadsafe(_loop.stop)
+
+
+atexit.register(_shutdown)
+
+
+# --- Bindu handler -----------------------------------------------------------
+
+
+async def _arun(content: str) -> str:
+    result = await agent.arun(content)
+    return result.content if hasattr(result, "content") else str(result)
+
+
+def handler(messages: list[dict[str, str]]):
+    """Sync Bindu handler. Hops the prompt onto the background loop."""
+    if not messages:
+        return (
+            "Ask a Taiwan legal question — judgments (司法院裁判書), "
+            "regulations (全國法規資料庫), or constitutional court "
+            "interpretations (憲法法庭). I cite primary sources for every answer."
+        )
+
+    last = messages[-1]
+    content = last.get("content", "") if isinstance(last, dict) else str(last)
+    if not content.strip():
+        return "Empty message — please send a question."
+
+    _ready.wait(timeout=30)
+    future = asyncio.run_coroutine_threadsafe(_arun(content), _loop)
+    return future.result()
+
+
+# --- Bindu config ------------------------------------------------------------
+
+config = {
+    "author": os.getenv("BINDU_AGENT_AUTHOR", "bindu.builder@getbindu.com"),
+    "name": os.getenv("BINDU_AGENT_NAME", "lex-taiwan"),
+    "description": AGENT_DESCRIPTION,
+    "deployment": {
+        "url": os.getenv("BINDU_AGENT_URL", "http://localhost:3773"),
+        "expose": True,
+        "cors_origins": ["http://localhost:5173", "http://localhost:3775"],
+    },
+    "capabilities": {"streaming": False},
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+The Bindu wrapper imports the agent and MCP launch params from `agent.py`. Create `agent.py` alongside `bindu_agent.py`:
+
+```python
+"""Lex Taiwan — agno agent wired to the mcp-taiwan-legal-db MCP server."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from agno.agent import Agent
+from agno.db.sqlite import SqliteDb
+from agno.models.openrouter import OpenRouter
+from agno.os import AgentOS
+from agno.tools.mcp import MCPTools
+from fastapi import FastAPI
+from mcp import StdioServerParameters
+
+from prompts import AGENT_DESCRIPTION, AGENT_NAME, SYSTEM_PROMPT
+
+HERE = Path(__file__).parent.resolve()
+DB_PATH = HERE / "tmp" / "lex_taiwan.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _mcp_server_params() -> StdioServerParameters:
+    """Build the stdio launch command for the Taiwan legal MCP server."""
+    entry_point = shutil.which("mcp-taiwan-legal-db") or str(
+        HERE / ".venv" / "bin" / "mcp-taiwan-legal-db"
+    )
+    if Path(entry_point).exists():
+        return StdioServerParameters(command=entry_point, args=[])
+    return StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "mcp_server.server"],
+    )
+
+
+def _build_model():
+    """Pick the LLM via OpenRouter.
+
+    Defaults to Claude Sonnet 4.5 — strong on tool use + Traditional Chinese.
+    Override with BINDU_AGENT_MODEL (any OpenRouter model id).
+    """
+    model_id = os.getenv("BINDU_AGENT_MODEL", "anthropic/claude-sonnet-4.5")
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is not set. Add it to your .env (see .env.example)."
+        )
+    return OpenRouter(
+        id=model_id,
+        api_key=api_key,
+        max_tokens=int(os.getenv("BINDU_AGENT_MAX_TOKENS", "4096")),
+    )
+
+
+def build_agent() -> Agent:
+    """Create the agent shell. Tools are attached at MCP-connect time."""
+    return Agent(
+        name=AGENT_NAME,
+        description=AGENT_DESCRIPTION,
+        instructions=SYSTEM_PROMPT,
+        model=_build_model(),
+        db=SqliteDb(db_file=str(DB_PATH)),
+        update_memory_on_run=True,
+        enable_session_summaries=True,
+        add_history_to_context=True,
+        num_history_runs=3,
+        add_datetime_to_context=True,
+        markdown=True,
+    )
+
+
+# Module-level agent + MCP handle so `AgentOS` can find it
+agent: Agent = build_agent()
+mcp_tools: MCPTools | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage the MCP stdio connection for the FastAPI server lifetime."""
+    global mcp_tools
+
+    mcp_tools = MCPTools(server_params=_mcp_server_params())
+    await mcp_tools.connect()
+    agent.tools = [mcp_tools]
+    try:
+        yield
+    finally:
+        await mcp_tools.close()
+
+
+agent_os = AgentOS(
+    description="Lex Taiwan — Taiwan legal research agent (judgments + regulations + 憲法法庭).",
+    agents=[agent],
+    lifespan=lifespan,
+)
+app = agent_os.get_app()
+
+
+if __name__ == "__main__":
+    agent_os.serve(app="agent:app", reload=False)
+```
+
+The Windsurf-style XML-tagged prompt lives in `prompts.py`:
+
+```python
+"""System prompt for the Taiwan Legal Research Agent."""
+
+from textwrap import dedent
+
+AGENT_NAME = "Lex Taiwan"
+AGENT_DESCRIPTION = (
+    "An agentic Taiwan legal research assistant: judgments, regulations, "
+    "and constitutional court interpretations, sourced live from the "
+    "司法院, 全國法規資料庫, and 憲法法庭."
+)
+
+
+SYSTEM_PROMPT = dedent(
+    """\
+    You are Lex Taiwan, a powerful agentic AI legal-research assistant for Taiwan (ROC) law.
+    You operate on an MCP-first paradigm: every authoritative answer must be backed by a tool call against an official Taiwan government source — never your training memory.
+
+    <tool_calling>
+    1. Only call tools when they are necessary to ground the answer in a primary source.
+    2. If you state that you will look something up, immediately issue the tool call as your next action.
+    3. Always follow each tool's parameter schema exactly. Never invent fields.
+    4. Never call tools that are not listed in <available_tools>. The MCP surface is fixed at 8 tools.
+    5. Before each tool call, write ONE short sentence explaining why.
+    6. Chain tools in the obvious order: search → get.
+    7. Prefer the cheapest precise call. A known 案號 is a precise call; a keyword sweep is not.
+    8. Batch independent lookups in parallel.
+    9. If a tool returns an error or empty result, inspect the message before retrying.
+    10. NEVER fabricate a JID, a pcode, a 釋字 number, or a citation.
+    </tool_calling>
+
+    <available_tools>
+    Judgments (司法院裁判書):
+    - `search_judgments(keyword?, case_word?, case_number?, year_from?, year_to?, court?, case_type?, main_text?)`
+    - `get_judgment(jid? | url?)`
+
+    Regulations (全國法規資料庫):
+    - `get_pcode(law_name)`
+    - `query_regulation(pcode? | law_name?, article_no?, mode?)`
+    - `search_regulations(keyword)`
+
+    Constitutional Court (憲法法庭):
+    - `search_interpretations(keyword)`
+    - `get_interpretation(id, reasoning_keyword?)`
+    - `get_citations(id, include_context?)`
+    </available_tools>
+
+    <citation_format>
+    - Judgment: `<court> <year>年度<案號字><案號>號 (<date>)` + JID.
+    - Regulation article: `《<法規名稱>》第 <條> 條<項?><款?>`.
+    - Constitutional interpretation: `司法院釋字第 <N> 號解釋` or
+      `憲法法庭 <year> 年憲判字第 <N> 號判決`.
+    Always end the answer with a `### Sources` section.
+    </citation_format>
+    """
+)
+```
+
+The shipped `prompts.py` is longer (full `<user_information>`, `<legal_research_method>`, `<handling_uncertainty>`, `<communication_style>` sections plus a tool-selection cheat sheet). Read it in the source repo for the exact text.
+
+## How It Works
+
+**MCP-first grounding rule**
+- The system prompt enforces a hard constraint: every authoritative answer must be backed by a live tool call against an official Taiwan source — never the model's training memory
+- General procedural questions ("what is a 釋字?") may be answered without a tool call; anything that names a specific statute, judgment, or interpretation must hit the MCP
+- The 8-tool MCP surface (`mcp-taiwan-legal-db`) is enumerated inside `<available_tools>` so the model can't drift to a fabricated tool name
+
+**MCP integration (stdio transport, kept warm)**
+- The `mcp-taiwan-legal-db` server is launched as a stdio subprocess via `StdioServerParameters`
+- `bindu_agent.py` opens the MCP connection ONCE on module import and keeps it alive across every A2A request — no fork-per-request overhead
+- Bindu's handler contract is sync, but agno + `MCPTools` are async-only. A daemon thread runs a dedicated `asyncio` loop; the sync handler hops onto it with `run_coroutine_threadsafe(...)` and waits for the result
+- `atexit` closes the MCP session cleanly on shutdown
+- Backed by 司法院 (judgments), 全國法規資料庫 (regulations), and 憲法法庭 (constitutional court) — proxied through `httpx`, with an optional Playwright fallback for 司法院's F5 WAF
+
+**Citation discipline**
+- Judgments cite the JID (e.g. `最高法院 114 年度台上字第 3753 號民事判決 (2025-11-12)`)
+- Regulations cite 法規名稱 + 條 (e.g. `《民法》第 184 條第 1 項前段`)
+- Constitutional interpretations cite 釋字 / 憲判字 number + date (e.g. `司法院釋字第 748 號解釋`)
+- Quote Chinese using 「」 quotation marks; long quotes go on a new line
+- Every answer ends with a `### Sources` section listing each tool-call-derived source with citation, relevance, and a permalink when one was returned
+
+**Tool-selection heuristics**
+- Known 案號 (case_word + case_number + year) → `search_judgments` with structured filters (fast HTTP GET), then `get_judgment(jid)`
+- Known 法規名稱 → `get_pcode` first, then `query_regulation(pcode, article_no)` — beats `search_regulations` keyword sweep
+- Constitutional questions → `search_interpretations` then `get_interpretation`, with `get_citations` for doctrinal lineage
+- Default research order: pull the controlling statute first, then leading case law, then any 釋字 / 憲判字 that touches constitutional rights
+- Cross-check 修法沿革 against any case decided under an older version of the statute
+
+**Persistent agent state**
+- `agno.db.sqlite.SqliteDb` at `tmp/lex_taiwan.db` provides session memory
+- `update_memory_on_run`, `enable_session_summaries`, and `add_history_to_context` with `num_history_runs=3` give multi-turn continuity
+- `add_datetime_to_context` lets the model reason about freshness ("cases from 2024 onwards")
+
+## Dependencies
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python \
+  bindu agno openai anthropic sqlalchemy aiosqlite fastapi "uvicorn[standard]" \
+  python-dotenv mcp mcp-taiwan-legal-db
+```
+
+The MCP server `mcp-taiwan-legal-db` is published on PyPI — installing it provides the `mcp-taiwan-legal-db` entry-point binary that `_mcp_server_params()` launches over stdio.
+
+Optional (only needed if 司法院's F5 WAF starts blocking):
+
+```bash
+.venv/bin/playwright install chromium
+```
+
+## Environment Setup
+
+Create `.env` file:
+```bash
+# OpenRouter API key. Get one at https://openrouter.ai/keys
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Optional: override the model id. Any OpenRouter model id works.
+# Default: anthropic/claude-sonnet-4.5 (strong tool use + zh-TW)
+# BINDU_AGENT_MODEL=anthropic/claude-sonnet-4.5
+
+# Optional: max tokens per response (default 4096).
+# BINDU_AGENT_MAX_TOKENS=4096
+
+# Optional: display name in the Bindu agent card (default: lex-taiwan).
+# BINDU_AGENT_NAME=lex-taiwan
+```
+
+## Run
+
+```bash
+set -a; source .env; set +a
+.venv/bin/python bindu_agent.py
+```
+
+Try:
+
+- "民法第 184 條的現行條文是什麼？"
+- "釋字 748 的解釋文核心是什麼？列出至少一個被它引用的更早釋字。"
+- "Find Supreme Court cases about 預售屋 遲延交屋 from 2024 onwards."
+- "釋字 748 的解釋日期？一句話。"
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Message Send Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "民法第 184 條的現行條文是什麼？"
+        }
+      ]
+    },
+    "configuration": {
+      "acceptedOutputModes": ["text/markdown"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="Task get Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "9f11c870-5616-49ad-b187-d93cbb100003"
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100004"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and try to chat with the Taiwan legal research agent.

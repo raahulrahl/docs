@@ -1,0 +1,334 @@
+---
+title: "2.12 Notte Browser Agent"
+description: "Real-browser automation agent powered by Notte — navigates JS-rendered pages, fills forms, solves captchas, and uses proxies"
+---
+
+Real-browser automation agent powered by Notte — navigates JS-rendered pages, fills forms, solves captchas, and uses proxies.
+
+## Code
+
+Create `notte-browser-agent.py` with the code below, or save it directly from your editor.
+
+```python
+"""Notte Browser Agent (Bindu example).
+
+Wraps the Notte SDK's built-in Agent + Session as a Bindu microservice.
+Notte provides the browser runtime (cloud Chromium, stealth, captcha solving,
+proxies, Vault-backed auth) and the agent loop that turns a natural-language
+task into structured Pydantic output. `bindufy(...)` exposes that as a
+Bindu-native agent with DID identity, A2A protocol, and skill routing.
+
+Unlike most Bindu examples, there is no separate "LLM + tools" layer here —
+Notte IS the agent. The handler simply forwards the user message to
+`client.Agent(...).run(task=...)`.
+
+Usage:
+    python notte_browser_agent.py
+
+Environment:
+    Requires NOTTE_API_KEY in .env (https://console.notte.cc to obtain one).
+
+Docs:
+    - Notte SDK:            https://github.com/nottelabs/notte
+    - Notte docs:           https://docs.notte.cc
+    - Agent Skill (Claude): https://github.com/nottelabs/agent-skill-notte
+"""
+
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from bindu.penguin.bindufy import bindufy
+from notte_sdk import NotteClient
+
+# A single, long-lived Notte client. Session lifetime is scoped per request
+# inside the handler so every A2A call gets an isolated browser context.
+client = NotteClient()
+
+# Sensible default model. Escalate to anthropic/claude-sonnet-4-5 or
+# openai/gpt-4.1 for harder multi-step flows via NOTTE_REASONING_MODEL.
+REASONING_MODEL = os.getenv("NOTTE_REASONING_MODEL", "gemini/gemini-2.5-flash")
+MAX_STEPS = int(os.getenv("NOTTE_MAX_STEPS", "15"))
+SOLVE_CAPTCHAS = os.getenv("NOTTE_SOLVE_CAPTCHAS", "false").lower() == "true"
+USE_PROXIES = os.getenv("NOTTE_USE_PROXIES", "false").lower() == "true"
+
+# Bindu agent configuration
+config = {
+    "author": "bindu.builder@getbindu.com",
+    "name": "notte_browser_agent",
+    "description": (
+        "Real-browser web automation agent powered by Notte. Navigates JS-rendered "
+        "pages, fills forms, handles auth, solves captchas, and returns Pydantic-"
+        "validated structured output."
+    ),
+    "deployment": {
+        "url": os.getenv("BINDU_DEPLOYMENT_URL", "http://localhost:3773"),
+        "expose": True,
+        "cors_origins": ["http://localhost:5173"],
+    },
+    "skills": ["skills/notte-browser-skill"],
+}
+
+
+def handler(messages: list[dict[str, str]]) -> str:
+    """Run the latest user message as a Notte browser task.
+
+    Args:
+        messages: A2A message history; we use the latest user turn as the task.
+
+    Returns:
+        The agent's final answer as a string (JSON if the caller asked for
+        structured output, free text otherwise).
+    """
+    if not messages:
+        return (
+            "Please provide a browser task. Example: 'Go to news.ycombinator.com "
+            "and return the top 5 posts as JSON with title, url, and points.'"
+        )
+
+    latest_user = next(
+        (
+            m
+            for m in reversed(messages)
+            if isinstance(m, dict) and m.get("role") == "user"
+        ),
+        None,
+    )
+    if latest_user is None:
+        return "No user message found — please send a task as a user-role message."
+    task = latest_user.get("content", "")
+    if not isinstance(task, str) or not task.strip():
+        return "Empty task — please describe the browser action you want."
+
+    with client.Session(
+        solve_captchas=SOLVE_CAPTCHAS,
+        proxies=USE_PROXIES,
+    ) as session:
+        agent = client.Agent(
+            session=session,
+            reasoning_model=REASONING_MODEL,
+            max_steps=MAX_STEPS,
+        )
+        response = agent.run(task=task)
+
+    answer = getattr(response, "answer", None)
+    if answer is None:
+        return "Notte agent returned no answer — try raising NOTTE_MAX_STEPS or a stronger NOTTE_REASONING_MODEL."
+    return answer
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+## Skill Configuration
+
+Create `skills/notte-browser-skill/skill.yaml`:
+
+```yaml
+id: notte-browser-skill
+name: notte-browser-skill
+version: 1.0.0
+author: bindu.builder@getbindu.com
+description: |
+  Real-browser automation skill powered by Notte. Navigates JavaScript-rendered
+  pages, fills forms, clicks through multi-step flows, solves captchas, and
+  routes through proxies. Use whenever the task needs a real browser (not just
+  HTTP) — dynamic pages, e-commerce flows, or extraction from pages that won't
+  respond to `requests` / `curl`.
+
+tags:
+  - browser-automation
+  - web-agent
+  - web-scraping
+  - form-filling
+  - captcha
+  - proxies
+
+input_modes:
+  - application/json
+
+output_modes:
+  - application/json
+  - text/plain
+
+examples:
+  - "Go to news.ycombinator.com and return the top 5 posts as JSON with title, url, points, author"
+  - "Search 'air force 1' on nike.com, solve any captcha, and return the current price and availability"
+  - "Fill the contact form at https://example.com/contact with name=Jane, email=jane@ex.com, submit, and confirm the success state"
+
+capabilities_detail:
+  real_browser:
+    supported: true
+    description: "Runs a Chromium-based Notte cloud session — JavaScript renders, forms submit, cookies persist. Local or alternate-browser runtimes require passing cdp_url / extra params to client.Session()."
+  multi_step_workflows:
+    supported: true
+    description: "Natural-language task routed through a Notte agent with configurable max_steps and reasoning_model"
+  captcha_solving:
+    supported: true
+    description: "Set NOTTE_SOLVE_CAPTCHAS=true to enable automatic captcha resolution on the Session"
+  proxies:
+    supported: true
+    description: "Set NOTTE_USE_PROXIES=true to route traffic through Notte's managed proxies"
+
+assessment:
+  keywords:
+    - browser
+    - navigate
+    - click
+    - fill
+    - form
+    - login
+    - captcha
+    - proxy
+    - dynamic
+    - javascript
+    - spa
+    - multi-step
+    - checkout
+    - booking
+
+  specializations:
+    - domain: dynamic_page_extraction
+      confidence_boost: 0.3
+    - domain: multi_step_web_workflows
+      confidence_boost: 0.3
+    - domain: e_commerce_checkout
+      confidence_boost: 0.25
+
+  anti_patterns:
+    - "static html fetch"
+    - "public json api"
+    - "offline file processing"
+    - "pdf text extraction without a browser"
+    - "database query"
+```
+
+## How It Works
+
+**Notte SDK configuration**
+- `NotteClient()`: a single long-lived client read from `NOTTE_API_KEY` in the environment.
+- `client.Session(solve_captchas=..., proxies=...)`: a context-managed browser session, scoped per request so every A2A call gets an isolated Chromium context with its own cookies and fingerprint.
+- `client.Agent(session, reasoning_model, max_steps)`: the agent loop on top of the session.
+  - `reasoning_model` (`NOTTE_REASONING_MODEL`, default `gemini/gemini-2.5-flash`) — LiteLLM model id; escalate to `anthropic/claude-sonnet-4-5` or `openai/gpt-4.1` for harder multi-step flows.
+  - `max_steps` (`NOTTE_MAX_STEPS`, default `15`) — per-task step budget.
+- `NOTTE_SOLVE_CAPTCHAS=true` flips on Notte's built-in captcha solver for the session.
+- `NOTTE_USE_PROXIES=true` routes traffic through Notte's managed proxy pool, which helps with rate-limited or geo-blocked targets.
+
+**Bridging the bindu message → Notte task**
+- The handler walks `messages` in reverse to find the latest `role == "user"` entry and pulls its `content` string. That string becomes the `task` argument to `agent.run(...)` — there's no prompt construction, no tool catalog wiring, no system prompt to author. Notte is the agent.
+- Empty histories, missing user turns, and empty content all return helpful error strings rather than raising.
+
+**What `agent.run()` returns**
+- A response object whose `.answer` attribute is a single string. If the task asks for structured output ("...as JSON with keys X, Y") the string is JSON; otherwise it's free text.
+- The handler returns `response.answer` as-is — no schema enforcement on the Bindu side. If `.answer` is `None`, the handler returns a hint to raise `NOTTE_MAX_STEPS` or use a stronger reasoning model.
+
+**Why use it**
+- The headless browser runs in Notte's cloud, not on your machine. JavaScript renders, forms submit, captchas can be solved, and proxies are available — all without you wiring Playwright, Selenium, or a captcha provider.
+
+## Dependencies
+
+```bash
+uv init
+uv add bindu python-dotenv notte-sdk
+```
+
+`notte-sdk` isn't bundled with Bindu's `agents` extra — install it explicitly or boot fails on `AuthenticationError`.
+
+## Environment Setup
+
+Create `.env` file:
+```bash
+# Notte API key — get one at https://console.notte.cc
+NOTTE_API_KEY=your_notte_api_key
+
+# Optional tuning
+NOTTE_REASONING_MODEL=gemini/gemini-2.5-flash
+NOTTE_MAX_STEPS=15
+NOTTE_SOLVE_CAPTCHAS=false
+NOTTE_USE_PROXIES=false
+
+# Optional Bindu deployment override
+BINDU_DEPLOYMENT_URL=http://localhost:3773
+```
+
+## Run
+
+```bash
+uv run notte-browser-agent.py
+```
+
+**Examples:**
+
+- "Find the cheapest flight from SF to LA on Google Flights for next Monday"
+- "Go to news.ycombinator.com and return the top 5 posts as JSON with title, url, and points"
+- "Search 'air force 1' on nike.com, solve any captcha, and return the current price and availability"
+- "Fill the contact form at https://example.com/contact with name=Jane, email=jane@ex.com, submit, and confirm the success state"
+
+Expect 10–30s per task for multi-step flows. Each request gets its own browser context.
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Message Send Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Find the cheapest flight from SF to LA on Google Flights for next Monday and return the airline, departure time, and price as JSON."
+        }
+      ]
+    },
+    "skillId": "notte-browser-skill",
+    "configuration": {
+      "acceptedOutputModes": ["application/json"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="Task get Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "9f11c870-5616-49ad-b187-d93cbb100003"
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100004"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and try to chat with the Notte browser agent.

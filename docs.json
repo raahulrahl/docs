@@ -222,7 +222,8 @@
               "examples/beginner/premium-research-assistant",
               "examples/beginner/dspy-agent",
               "examples/beginner/motivational-agent",
-              "examples/beginner/minimax-research-agent"
+              "examples/beginner/minimax-research-agent",
+              "examples/beginner/echo-paywall-agent"
             ]
           },
           {
@@ -238,7 +239,8 @@
               "examples/specialized/speech-to-text-agent",
               "examples/specialized/web-scraping-agent",
               "examples/specialized/medical-research-agent",
-              "examples/specialized/pdf-research-agent"
+              "examples/specialized/pdf-research-agent",
+              "examples/specialized/notte-browser-agent"
             ]
           },
           {
@@ -253,7 +255,12 @@
               "examples/advanced/typescript-openai-agent",
               "examples/advanced/quiz-generator-agent",
               "examples/advanced/multilingual-collab-agent-v2",
-              "examples/advanced/hermes-agent"
+              "examples/advanced/hermes-agent",
+              "examples/advanced/dutch-law-agent",
+              "examples/advanced/taiwan-legal-agent",
+              "examples/advanced/runtime-boxd-agent",
+              "examples/advanced/private-skills-agent",
+              "examples/advanced/gateway-test-fleet"
             ]
           }
         ]

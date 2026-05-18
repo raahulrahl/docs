@@ -1,0 +1,320 @@
+---
+title: "3.14 Private Skills Agent"
+description: "Two-tier skill discovery: public skills appear on the well-known card, private skills only surface to allowlisted partner DIDs"
+---
+
+Two-tier skill discovery: public skills appear on the well-known card, private skills only surface to allowlisted partner DIDs.
+
+## Code
+
+Create `acme-compliance-agent.py` with the code below, or save it directly from your editor.
+
+```python
+"""ACME Compliance — example of an agent with private skills.
+
+This example exists to show the shape of the `private_skills` +
+`allowed_dids` config. It does NOT call an LLM; the handler is a
+deliberately boring echo so you can run it without any API key.
+
+What the example demonstrates:
+
+  GET /.well-known/agent.json    → "greet" and "status" only
+                                   (the public catalog)
+  GET /agent/private.json        → 401 without auth
+                                   → 403 with auth but non-allowlisted DID
+                                   → 200 with merged catalog when DID is
+                                     on the allowlist (greet + status +
+                                     cbam-line-classify + eudr-due-diligence)
+
+Run it:
+
+    $ uv run python examples/private_skills_agent/acme_compliance_agent.py
+
+Then hit it with curl:
+
+    $ curl -s http://localhost:3773/.well-known/agent.json | jq .skills
+
+    $ curl -s -o /dev/null -w "%{http_code}\\n" http://localhost:3773/agent/private.json
+    401
+
+(For the 200 case you need a Hydra-issued bearer + DID signature; see
+docs/AUTHENTICATION.md. The unit tests in
+tests/unit/server/endpoints/test_private_agent_card.py cover the
+authenticated branch with a stub middleware.)
+"""
+
+from bindu.penguin.bindufy import bindufy
+
+
+def handler(messages):
+    """Echo the last message back. The point of the example is the
+    PAYWALL shape on /agent/private.json, not what the handler does."""
+    last = messages[-1].get("content", "") if messages else ""
+    return f"acme_compliance_agent: received '{last}'"
+
+
+config = {
+    "author": "acme.compliance@example.com",
+    "name": "acme_compliance_agent",
+    "description": (
+        "ACME Compliance — demo agent for the private-skills surface. "
+        "Public catalog shows generic 'greet' + 'status'; the real product "
+        "(CBAM / EUDR) lives behind /agent/private.json."
+    ),
+    "deployment": {
+        "url": "http://localhost:3773",
+        "expose": False,
+    },
+    "skills": [
+        "skills/public-greet",
+        "skills/public-status",
+    ],
+    # ─── The new bit ──────────────────────────────────────────────
+    "private_skills": [
+        "skills/cbam-line-classify",
+        "skills/eudr-due-diligence",
+    ],
+    "allowed_dids": [
+        # Replace with the actual DIDs of your partner agents.
+        # Each entry here is a partner that gets to see the full
+        # /agent/private.json response.
+        "did:bindu:partner-bank:agent:abc123",
+        "did:bindu:partner-customs-broker:agent:def456",
+    ],
+    # ──────────────────────────────────────────────────────────────
+    "storage": {"type": "memory"},
+    "scheduler": {"type": "memory"},
+    "debug_mode": False,
+}
+
+
+if __name__ == "__main__":
+    bindufy(config, handler)
+```
+
+## Skill Configuration
+
+Create `skills/public-greet/skill.yaml` (advertised on the public catalog):
+
+```yaml
+id: public-greet
+name: greet
+version: 1.0.0
+author: acme.compliance@example.com
+description: |
+  Public-facing greeting skill. Available to anyone who hits the agent.
+  Used to confirm the agent is alive and reachable.
+tags:
+  - public
+  - introduction
+input_modes:
+  - application/json
+output_modes:
+  - text/plain
+examples:
+  - "hi"
+  - "are you there?"
+```
+
+Create `skills/cbam-line-classify/skill.yaml` (only visible to allowlisted DIDs):
+
+```yaml
+id: cbam-line-classify
+name: cbam-line-classify
+version: 1.0.0
+author: acme.compliance@example.com
+description: |
+  PROPRIETARY — visible only to allowlisted partner DIDs.
+
+  Classify HS codes for steel imports into the EU under CBAM transitional
+  rules. Produces line-item embedded-emission estimates from supplier mill
+  certificates plus our internal cross-reference of EU-published emission
+  factors and supplier-historical tonnage data.
+
+  This skill represents the agent's core commercial value. Exposing it in
+  the public catalog (/.well-known/agent.json) would let competitors
+  reverse-engineer our product surface. Hence it lives in `private_skills`
+  and only flows through /agent/private.json to DIDs on the allowlist.
+tags:
+  - private
+  - compliance
+  - cbam
+  - eu
+  - steel
+input_modes:
+  - application/json
+output_modes:
+  - application/json
+examples:
+  - "Classify this batch of steel imports under CBAM"
+  - "What's the embedded carbon estimate for these line items?"
+```
+
+The other two manifests (`skills/public-status/skill.yaml` and `skills/eudr-due-diligence/skill.yaml`) follow the same shape — public ones go into `skills`, private ones into `private_skills`.
+
+## How It Works
+
+**Two-tier skill catalog**
+- `skills`: skills listed here go on `GET /.well-known/agent.json`, the unauthenticated public agent card every Bindu discovery client reads.
+- `private_skills`: identical manifest shape, but these only appear on `GET /agent/private.json`. The public card never mentions them.
+- The private endpoint returns the **merged** catalog (public + private) when authorized, so allowlisted partners see the full product surface in one call.
+
+**Allowlist enforcement**
+- `allowed_dids`: a list of partner agent DIDs (`did:bindu:org:agent:id`). Only callers whose request is signed by one of these DIDs get a 200 on `/agent/private.json`.
+- No token at all → `401`.
+- Valid token but DID not on the allowlist → `403`.
+- Valid token + allowlisted DID → `200` with the merged catalog.
+- The gate runs on the agent card endpoint, not on `message/send`. To gate the handler itself by caller DID, inspect the request context inside `handler` and short-circuit.
+
+**`expose=False` for B2B endpoints**
+- The example sets `deployment.expose = False` so the agent stays out of any public Bindu discovery index — it's intended as a partner-only endpoint that interested parties learn about out-of-band, then fetch `/agent/private.json` to see the real surface.
+
+**Why use it**
+- Lets you advertise a generic public face (`greet`, `status`) while keeping proprietary capabilities (CBAM classification, EUDR due-diligence) reserved for partners you've explicitly authorized.
+- No fork in the handler logic, no separate agent — same Bindu agent, two visibility tiers on the catalog.
+
+## Dependencies
+
+```bash
+uv init
+uv add bindu
+# or, from inside a Bindu checkout:
+uv sync --extra agents
+```
+
+No LLM, no API key — pure protocol demo.
+
+## Environment Setup
+
+No environment variables are required to run the demo. To exercise the gated path with real auth, set:
+
+```bash
+AUTH__ENABLED=true
+# plus Hydra OAuth + DID-signing config — see docs/AUTHENTICATION.md
+```
+
+With `AUTH__ENABLED=false` the private endpoint is reachable without a token (the gate is skipped); flip auth on to enforce the allowlist.
+
+## Run
+
+```bash
+uv run acme-compliance-agent.py
+```
+
+Inspect both surfaces:
+
+```bash
+# Public catalog — only "greet" and "status"
+curl -s http://localhost:3773/.well-known/agent.json | jq .skills
+
+# Private catalog — 401 without auth
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3773/agent/private.json
+# 401
+```
+
+## Example API Calls
+
+<AccordionGroup>
+  <Accordion title="Public agent card (anyone)">
+```bash
+curl -s http://localhost:3773/.well-known/agent.json
+```
+
+Returns only the public skills:
+
+```json
+{
+  "name": "acme_compliance_agent",
+  "skills": [
+    { "id": "public-greet", "name": "greet" },
+    { "id": "public-status", "name": "status" }
+  ]
+}
+```
+  </Accordion>
+
+  <Accordion title="Private agent card (allowlisted DID only)">
+```bash
+curl -s http://localhost:3773/agent/private.json \
+  -H "Authorization: Bearer <hydra-issued-token>" \
+  -H "X-Bindu-DID: did:bindu:partner-bank:agent:abc123" \
+  -H "X-Bindu-Signature: <did-signature-of-request>"
+```
+
+Returns the merged catalog (public + private) when the DID is on `allowed_dids`:
+
+```json
+{
+  "name": "acme_compliance_agent",
+  "skills": [
+    { "id": "public-greet", "name": "greet" },
+    { "id": "public-status", "name": "status" },
+    { "id": "cbam-line-classify", "name": "cbam-line-classify" },
+    { "id": "eudr-due-diligence", "name": "eudr-due-diligence" }
+  ]
+}
+```
+
+Without the bearer token you get `401`; with a valid token from a DID not on the allowlist you get `403`.
+  </Accordion>
+
+  <Accordion title="Message Send Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "kind": "message",
+      "messageId": "9f11c870-5616-49ad-b187-d93cbb100001",
+      "contextId": "9f11c870-5616-49ad-b187-d93cbb100002",
+      "taskId": "9f11c870-5616-49ad-b187-d93cbb100003",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "hello"
+        }
+      ]
+    },
+    "skillId": "public-greet",
+    "configuration": {
+      "acceptedOutputModes": ["application/json"]
+    }
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100003"
+}
+```
+  </Accordion>
+
+  <Accordion title="Task get Request">
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "9f11c870-5616-49ad-b187-d93cbb100003"
+  },
+  "id": "9f11c870-5616-49ad-b187-d93cbb100004"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Setup
+
+```bash
+# Clone the Bindu repository
+git clone https://github.com/GetBindu/Bindu
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start frontend development server
+npm run dev
+```
+
+Open http://localhost:5173 and try to chat with the ACME compliance agent. The frontend will only see the public skills (`greet`, `status`) — to exercise the private surface, sign requests with a DID on the allowlist.
